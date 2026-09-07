@@ -1,0 +1,17 @@
+{
+  "app": {
+    "hello": "Hello, World!",
+    "welcome": "Welcome to NestForge API"
+  },
+  "validation": {
+    "required": "{field} is required",
+    "minLength": "{field} must be at least {length} characters",
+    "email": "Please provide a valid email address"
+  },
+  "auth": {
+    "loginSuccess": "Login successful",
+    "loginFailed": "Invalid credentials",
+    "unauthorized": "Unauthorized access",
+    "tokenExpired": "Token has expired"
+  }
+}

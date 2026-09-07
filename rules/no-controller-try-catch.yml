@@ -1,0 +1,19 @@
+id: no-controller-try-catch
+language: typescript
+message: "Controller 层严禁编写 try-catch，所有业务错误应直接抛出标准异常并由全局 HttpExceptionFilter 统一处理与脱敏。"
+severity: error
+files:
+  - "src/**/*.ts"
+rule:
+  kind: try_statement
+  inside:
+    stopBy: end
+    any:
+      - kind: class_declaration
+        has:
+          pattern: '@Controller($$$)'
+          stopBy: end
+      - kind: export_statement
+        has:
+          pattern: '@Controller($$$)'
+          stopBy: end

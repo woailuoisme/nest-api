@@ -1,0 +1,19 @@
+id: no-lodash-imports
+language: typescript
+message: "NestForge 统一使用 es-toolkit 作为现代高性能工具库，严禁引入 CommonJS 臃肿库 lodash / lodash-es / underscore。"
+severity: error
+files:
+  - "src/**/*.ts"
+rule:
+  any:
+    - kind: import_statement
+      has:
+        kind: string_fragment
+        regex: '^(lodash|lodash-es|underscore)(/.*)?$'
+        stopBy: end
+    - pattern: require('lodash')
+    - pattern: require("lodash")
+    - pattern: require('lodash-es')
+    - pattern: require("lodash-es")
+    - pattern: require('underscore')
+    - pattern: require("underscore")

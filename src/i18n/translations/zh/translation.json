@@ -1,0 +1,17 @@
+{
+  "app": {
+    "hello": "你好，世界！",
+    "welcome": "欢迎使用 NestForge API"
+  },
+  "validation": {
+    "required": "{field} 是必填项",
+    "minLength": "{field} 长度不能少于 {length} 个字符",
+    "email": "请提供有效的邮箱地址"
+  },
+  "auth": {
+    "loginSuccess": "登录成功",
+    "loginFailed": "用户名或密码错误",
+    "unauthorized": "未授权访问",
+    "tokenExpired": "令牌已过期"
+  }
+}

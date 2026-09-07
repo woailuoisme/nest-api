@@ -1,0 +1,74 @@
+# Dependencies
+node_modules/
+.bun/
+
+# Production & Build Output
+dist/
+build/
+*.tsbuildinfo
+
+# Test & Coverage
+coverage/
+.nyc_output/
+
+# Environment & Secrets
+.env
+.env.*
+!.env.example
+secret.ini
+*.ini
+!secret.example.ini
+!secret.ini.example
+
+# Logs
+*.log
+npm-debug.log*
+pnpm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Build & Generated Assets
+/generated
+
+# Storage (keep dirs via .gitignore, ignore runtime files)
+storage/cache/*
+!storage/cache/.gitignore
+storage/logs/*
+!storage/logs/.gitignore
+storage/tmp/*
+!storage/tmp/.gitignore
+storage/uploads/*
+!storage/uploads/.gitignore
+
+# System / OS Files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+Thumbs.db
+
+# IDEs & Editors
+.idea/
+*.swp
+*.swo
+*~
+.vscode/*
+!.vscode/settings.json
+!.vscode/tasks.json
+!.vscode/launch.json
+!.vscode/extensions.json
+
+# AI & Agent Tooling Cache
+.agents/skills
+.codegraph/
+.codex
+.rumdl_cache/
+.gemini/
+.speckit/
+.claude/
+.pi
+skills-lock.json
+.codebuddy
+docs/agents
+docs/adr

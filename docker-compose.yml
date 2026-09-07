@@ -1,0 +1,17 @@
+services:
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: nestforge-api
+    ports:
+      - "4300:4300"
+    env_file:
+      - .env.production
+    networks:
+      - backend
+    restart: unless-stopped
+
+networks:
+  backend:
+    external: true

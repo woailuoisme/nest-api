@@ -1,0 +1,5 @@
+<mj-section padding="0 0 16px 0">
+  <mj-column>
+    <mj-text align="center" font-size="22px" font-weight="bold" color="#4F46E5" padding-bottom="0">NestForge</mj-text>
+  </mj-column>
+</mj-section>

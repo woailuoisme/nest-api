@@ -1,0 +1,30 @@
+# Normalize line endings (matches biome: lf)
+* text=auto eol=lf
+
+# ─── Binary / Image ──────────────────────────────────────────
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.ico binary
+*.pdf binary
+*.svg binary
+
+# ─── Lockfiles ───────────────────────────────────────────────
+bun.lock text -diff
+bun.lockb binary -diff
+
+# ─── Generated / Vendored ────────────────────────────────────
+dist/              linguist-generated=true
+coverage/          linguist-generated=true
+.env              linguist-generated=true
+
+# ─── Runtime data (no diff) ──────────────────────────────────
+storage/**/*.log  -diff
+storage/cache/**  -diff
+
+# ─── Templates / Config / Schema ─────────────────────────────
+*.hbs             text eol=lf
+*.prisma          text eol=lf
+*.toml            text eol=lf
+*.env.example     text eol=lf

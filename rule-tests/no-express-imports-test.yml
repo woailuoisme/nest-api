@@ -1,0 +1,17 @@
+id: no-express-imports
+valid:
+  - |
+    import { FastifyRequest, FastifyReply } from 'fastify';
+  - |
+    import { Controller, Get } from '@nestjs/common';
+  - |
+    import { expressLikeHelper } from './express-util';
+invalid:
+  - |
+    import { Request, Response } from 'express';
+  - |
+    import express from 'express';
+  - |
+    import type { Application } from 'express/lib/application';
+  - |
+    const express = require('express');

@@ -1,0 +1,41 @@
+id: no-controller-try-catch
+valid:
+  - |
+    @Controller('users')
+    export class UsersController {
+      findAll() {
+        return this.usersService.findAll();
+      }
+    }
+  - |
+    @Injectable()
+    export class UsersService {
+      findAll() {
+        try {
+          return this.db.query.users.findMany();
+        } catch (error) {
+          throw new BadRequestException();
+        }
+      }
+    }
+invalid:
+  - |
+    @Controller('users')
+    export class UsersController {
+      findAll() {
+        try {
+          return this.usersService.findAll();
+        } catch (error) {
+          throw error;
+        }
+      }
+    }
+  - |
+    @Controller()
+    export class AuthController {
+      login() {
+        try {
+          return this.authService.login();
+        } catch (e) {}
+      }
+    }

@@ -1,0 +1,53 @@
+id: no-lodash-imports
+snapshots:
+  ? |
+    const _ = require('lodash');
+  : labels:
+    - source: require('lodash')
+      style: primary
+      start: 10
+      end: 27
+  ? |
+    import _ from 'lodash';
+  : labels:
+    - source: import _ from 'lodash';
+      style: primary
+      start: 0
+      end: 23
+    - source: lodash
+      style: secondary
+      start: 15
+      end: 21
+  ? |
+    import _ from 'underscore';
+  : labels:
+    - source: import _ from 'underscore';
+      style: primary
+      start: 0
+      end: 27
+    - source: underscore
+      style: secondary
+      start: 15
+      end: 25
+  ? |
+    import { omit } from 'lodash-es';
+  : labels:
+    - source: import { omit } from 'lodash-es';
+      style: primary
+      start: 0
+      end: 33
+    - source: lodash-es
+      style: secondary
+      start: 22
+      end: 31
+  ? |
+    import { pick } from 'lodash';
+  : labels:
+    - source: import { pick } from 'lodash';
+      style: primary
+      start: 0
+      end: 30
+    - source: lodash
+      style: secondary
+      start: 22
+      end: 28

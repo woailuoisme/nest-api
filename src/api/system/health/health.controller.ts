@@ -1,0 +1,64 @@
+import { Controller, Get, VERSION_NEUTRAL } from '@nestjs/common';
+import { ApiExcludeController } from '@nestjs/swagger';
+import { DiskHealthIndicator, HealthCheck, HealthCheckService, MemoryHealthIndicator } from '@nestjs/terminus';
+import { Public } from '@/common/decorators/public.decorator';
+import { DatabaseHealthIndicator } from './indicators/database-health.indicator';
+import { RedisHealthIndicator } from './indicators/redis-health.indicator';
+import { StorageHealthIndicator } from './indicators/storage-health.indicator';
+
+/** V8 堆内存上限 (500MB)：监控 JavaScript 堆对象分配，防范 JS 层面内存泄漏 */
+const MEMORY_HEAP_THRESHOLD_BYTES = 500 * 1024 * 1024;
+
+/** 进程常驻物理内存上限 (1GB)：涵盖 V8 堆、JIT 代码缓存、网络缓冲区以及 Argon2/Sharp 等 C++ 原生扩展内存，防范容器 OOM */
+const MEMORY_RSS_THRESHOLD_BYTES = 1024 * 1024 * 1024;
+
+/** 根目录磁盘空间使用率报警阈值 (90%)：超过该水位标记为不健康 */
+const DISK_THRESHOLD_PERCENT = 0.9;
+
+@ApiExcludeController()
+@Public()
+@Controller({ path: 'health', version: VERSION_NEUTRAL })
+export class HealthController {
+  constructor(
+    private readonly health: HealthCheckService,
+    private readonly dbIndicator: DatabaseHealthIndicator,
+    private readonly redisIndicator: RedisHealthIndicator,
+    private readonly storageIndicator: StorageHealthIndicator,
+    private readonly memory: MemoryHealthIndicator,
+    private readonly disk: DiskHealthIndicator,
+  ) {}
+
+  private get readinessIndicators() {
+    return [
+      () => this.dbIndicator.isHealthy('database'),
+      () => this.redisIndicator.isHealthy('redis'),
+      () => this.storageIndicator.isHealthy('storage'),
+    ];
+  }
+
+  private get livenessIndicators() {
+    return [
+      () => this.memory.checkHeap('memory_heap', MEMORY_HEAP_THRESHOLD_BYTES),
+      () => this.memory.checkRSS('memory_rss', MEMORY_RSS_THRESHOLD_BYTES),
+      () => this.disk.checkStorage('disk', { path: '/', thresholdPercent: DISK_THRESHOLD_PERCENT }),
+    ];
+  }
+
+  @Get()
+  @HealthCheck()
+  check() {
+    return this.health.check([...this.readinessIndicators, ...this.livenessIndicators]);
+  }
+
+  @Get('liveness')
+  @HealthCheck()
+  checkLiveness() {
+    return this.health.check(this.livenessIndicators);
+  }
+
+  @Get('readiness')
+  @HealthCheck()
+  checkReadiness() {
+    return this.health.check(this.readinessIndicators);
+  }
+}

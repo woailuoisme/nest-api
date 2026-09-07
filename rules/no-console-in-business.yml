@@ -1,0 +1,15 @@
+id: no-console-in-business
+language: typescript
+message: "业务逻辑中严禁使用 console.*，请注入 Pino Logger (this.logger.xxx) 进行结构化日志记录与脱敏。"
+severity: error
+files:
+  - "src/**/*.ts"
+ignores:
+  - "src/cli.ts"
+  - "src/commands/**"
+  - "src/database/seeds/**"
+rule:
+  pattern: console.$METHOD($$$)
+constraints:
+  METHOD:
+    regex: '^(log|error|warn|info|debug|trace|table|dir)$'

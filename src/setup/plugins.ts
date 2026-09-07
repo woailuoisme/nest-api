@@ -1,0 +1,123 @@
+import { mkdir } from 'node:fs/promises';
+import { join, posix } from 'node:path';
+import fastifyHelmet from '@fastify/helmet';
+import fastifyMultipart from '@fastify/multipart';
+import fastifyStatic from '@fastify/static';
+import { ConfigService } from '@nestjs/config';
+import { JwtService } from '@nestjs/jwt';
+import type { NestFastifyApplication } from '@nestjs/platform-fastify';
+import type { FastifyReply, FastifyRequest } from 'fastify';
+import { PATHS } from '@/common/constants/app.constants';
+import { extractIp, PinoLoggerService } from '@/setup/logger';
+
+/** 仅暴露所需 Hook 与路由 API 的最小 Fastify 接口（规避 platform-fastify 嵌套 fastify 类型差异） */
+type FastifyLike = {
+  addHook: (
+    event: 'onRequest' | 'onResponse',
+    hook: (request: FastifyRequest, reply: FastifyReply) => Promise<void> | void,
+  ) => void;
+  get: (url: string, handler: (request: FastifyRequest, reply: FastifyReply) => void | Promise<void>) => void;
+};
+
+/** /uploads/ 下无需鉴权的公开子目录（如产品图、公开头像） */
+const PUBLIC_UPLOAD_PREFIX = '/uploads/public/';
+
+/**
+ * 注册 Fastify 插件（Helmet, Static 文件服务, Multipart 文件上传）与原生全链路可观测性 Hooks。
+ *
+ * 1. 原生 Hooks 早于所有 Guard 与 Interceptor 执行，100% 捕获包括 401/403/404/429/500 在内的所有流量；
+ * 2. 自动透传并回写 x-request-id 响应头；
+ * 3. 私有上传文件需 JWT 鉴权（Authorization header 或 ?token= query），/uploads/public/ 子目录保持公开。
+ */
+export async function registerFastifyPlugins(app: NestFastifyApplication): Promise<void> {
+  type RegisterPlugin = Parameters<typeof app.register>[0];
+  const config = app.get(ConfigService);
+  const loggerService = app.get(PinoLoggerService);
+  const fastify = app.getHttpAdapter().getInstance() as unknown as FastifyLike;
+
+  // 1. 全链路 Request ID Hook（Fastify 原生，无 RxJS 流额外分配）
+  fastify.addHook('onRequest', async (request, reply) => {
+    const id = request.id;
+    if (typeof id === 'string' && id) {
+      request.headers['x-request-id'] = id;
+      reply.header('x-request-id', id);
+    }
+  });
+
+  // 2. 全链路 HTTP 访问日志 Hook（Fastify 原生 onResponse，100% 覆盖包括 401/403/404/429/500 在内的所有流量）
+  fastify.addHook('onResponse', async (request, reply) => {
+    const url = request.url?.split('?')[0] || '/';
+
+    loggerService.logHttp({
+      method: request.method,
+      url,
+      statusCode: reply.statusCode,
+      duration: Number(reply.elapsedTime.toFixed(1)),
+      ip: extractIp(request.raw),
+    });
+  });
+
+  // 3. 原生 204 No Content 拦截 /favicon.ico，彻底消除 404 告警与磁盘 I/O，24 小时浏览器缓存
+  fastify.get('/favicon.ico', (_request, reply) => {
+    reply.header('Cache-Control', 'public, max-age=86400, immutable');
+    reply.code(204).send();
+  });
+
+  // 确保上传目录存在，避免 fastifyStatic 因 root 缺失而启动失败
+  await mkdir(join(process.cwd(), PATHS.STORAGE_UPLOADS), { recursive: true });
+
+  await app.register(fastifyHelmet as unknown as RegisterPlugin, { contentSecurityPolicy: false });
+  await app.register(fastifyStatic as unknown as RegisterPlugin, {
+    root: join(process.cwd(), PATHS.STORAGE_UPLOADS),
+    prefix: '/uploads/',
+  });
+
+  // 私有上传文件鉴权：公开子目录放行，其余需合法 JWT
+  const jwtService = app.get(JwtService);
+  const jwtSecret = config.get('JWT_ACCESS_SECRET');
+
+  const sendUnauthorized = (reply: FastifyReply) =>
+    reply.code(401).send({
+      error: {
+        code: 'UNAUTHORIZED',
+        message: 'Unauthorized',
+      },
+    });
+
+  fastify.addHook('onRequest', async (request, reply) => {
+    const rawPath = request.url.split('?')[0];
+    let normalizedPath: string;
+    try {
+      normalizedPath = posix.normalize(decodeURIComponent(rawPath));
+    } catch {
+      // 畸形百分号编码（如 /uploads/%）：路由器解码同样会失败并以 400 拒绝，此处直接放行避免 500 透出
+      return;
+    }
+
+    if (!normalizedPath.startsWith('/uploads/') || normalizedPath.startsWith(PUBLIC_UPLOAD_PREFIX)) {
+      return;
+    }
+    const token =
+      (request.headers.authorization ?? '').replace(/^Bearer\s+/i, '') ||
+      ((request.query as { token?: string } | undefined)?.token ?? '');
+    if (!token) {
+      await sendUnauthorized(reply);
+      return;
+    }
+    try {
+      jwtService.verify(token, { secret: jwtSecret });
+    } catch {
+      await sendUnauthorized(reply);
+    }
+  });
+
+  // 全局上传限制（硬性兜底）：文件大小可配，field 数量/单个 field 大小/总 parts 数防内存与 CPU 耗尽
+  await app.register(fastifyMultipart as unknown as RegisterPlugin, {
+    limits: {
+      fileSize: config.get<number>('UPLOAD_MAX_FILE_SIZE_BYTES'),
+      fields: 20,
+      fieldSize: 1024 * 1024,
+      parts: 30,
+    },
+  });
+}

@@ -1,0 +1,14 @@
+[tools]
+bun = "latest"         # Fast all-in-one JavaScript/TypeScript runtime & package manager
+
+just = "latest"         # Handy command runner
+ast-grep = "latest"     # Structural search/lint/rewrite tool (successor to deprecated sg)
+ripgrep = "latest"      # Fast line-oriented search tool (rg)
+fd = "latest"           # Simple, fast and user-friendly alternative to find (fd)
+sd = "latest"           # Intuitive find & replace CLI tool (sd)
+
+hadolint = "latest"     # Dockerfile linter
+yq = "latest"           # YAML/JSON processor (jq for YAML)
+
+sops = "latest"         # Secret Operations tool for encrypting config files (Mozilla SOPS)
+age = "latest"          # Modern, simple and secure file encryption tool (Age)

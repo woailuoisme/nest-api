@@ -1,0 +1,26 @@
+# rumdl (Markdown Linter & Formatter) 配置文件
+
+[global]
+# Markdown 语法方言：使用 GitHub Flavored Markdown (GFM)
+flavor = "gfm"
+
+# 全局禁用的校验规则：
+# - MD024: 相同层级标题重复校验（允许相同内容的标题）
+# - MD033: HTML 标签校验（允许内嵌自定义 HTML 标签）
+# - MD057: 复杂表格结构校验
+disable = ["MD024", "MD033", "MD057","MD013"]
+
+# 忽略检查的目录与路径
+exclude = ["node_modules", "dist", ".git", "uploads", ".codebuddy"]
+
+[per-file-ignores]
+# 单独对指定文件排除校验规则：
+# - CHANGELOG.md: 允许变更日志中存在同名子标题（如多个版本下的 Added / Fixed）
+"CHANGELOG.md" = ["MD024"]
+
+# MD013: 单行字符长度限制规则
+[MD013]
+line_length = 300    # 文本段落最大单行长度为 300 字符
+code_blocks = false  # 忽略代码块内的行长限制
+tables = false       # 忽略表格行的行长限制
+headings = false     # 忽略标题行的行长限制

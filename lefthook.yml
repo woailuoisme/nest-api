@@ -1,0 +1,18 @@
+pre-commit:
+  parallel: true
+  jobs:
+    - name: biome
+      glob: "*.{js,ts,cjs,mjs,json,jsonc}"
+      run: bun x biome check --write --no-errors-on-unmatched {staged_files}
+      stage_fixed: true
+
+    - name: ast-grep
+      glob: "src/**/*.ts"
+      run: ast-grep scan {staged_files}
+
+    - name: helm
+      glob: "helm/**/{*.yaml,*.tpl,Chart.yaml}"
+      run: helm lint ./helm/forge
+
+    - run: bun x tsc --noEmit
+    # - run: bun x vitest run

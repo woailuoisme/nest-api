@@ -1,0 +1,12 @@
+[install]
+frozenLockfile = false
+peer = true
+trustedDependencies = [
+  "@swc/core",
+  "argon2",
+  "sharp",
+  "esbuild"
+]
+
+[run]
+silent = false
