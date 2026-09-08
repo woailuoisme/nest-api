@@ -1,4 +1,4 @@
-ARG BUN_VERSION=1-alpine
+ARG BUN_VERSION=1.4-alpine
 
 # --- Build Stage: 编译 TypeScript ---
 FROM oven/bun:${BUN_VERSION} AS build
@@ -6,7 +6,7 @@ WORKDIR /app
 
 # 1. 安装全量依赖（包含 devDependencies 与构建工具）
 COPY package.json bun.lock* bunfig.toml* ./
-RUN bun install --frozen-lockfile
+RUN bun install --frozen-lockfile --ignore-scripts
 
 # 2. 复制源码并构建
 COPY . .
@@ -17,7 +17,7 @@ FROM oven/bun:${BUN_VERSION} AS prod-deps
 WORKDIR /app
 
 COPY package.json bun.lock* bunfig.toml* ./
-RUN bun install --production --frozen-lockfile
+RUN bun install --production --frozen-lockfile --ignore-scripts
 
 # --- Production Stage: 最小运行时 (Bun) ---
 FROM oven/bun:${BUN_VERSION} AS production
