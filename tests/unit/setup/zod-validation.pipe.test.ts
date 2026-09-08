@@ -38,23 +38,22 @@ describe('CustomZodValidationPipe', () => {
       age: 16, // < 18
     };
 
-    expect(() => {
-      pipe.transform(invalidInput, { type: 'body', metatype: TestDto });
-    }).toThrow(UnprocessableEntityException);
-
+    let caughtError: UnprocessableEntityException | undefined;
     try {
       pipe.transform(invalidInput, { type: 'body', metatype: TestDto });
     } catch (e) {
-      const exception = e as UnprocessableEntityException;
-      expect(exception.getStatus()).toBe(422);
-
-      const response = exception.getResponse() as { message: string; errors: Record<string, string[]> };
-      expect(response.message).toBe('Validation failed');
-      expect(response.errors).toBeDefined();
-      expect(response.errors.name).toBeDefined();
-      expect(response.errors.email).toBeDefined();
-      expect(response.errors.age).toBeDefined();
+      caughtError = e as UnprocessableEntityException;
     }
+
+    expect(caughtError).toBeInstanceOf(UnprocessableEntityException);
+    expect(caughtError?.getStatus()).toBe(422);
+
+    const response = caughtError?.getResponse() as { message: string; errors: Record<string, string[]> };
+    expect(response.message).toBe('Validation failed');
+    expect(response.errors).toBeDefined();
+    expect(response.errors.name).toBeDefined();
+    expect(response.errors.email).toBeDefined();
+    expect(response.errors.age).toBeDefined();
   });
 
   it('非 ZodDto 类型的入参应直接透传，不触发校验', () => {

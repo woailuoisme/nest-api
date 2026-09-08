@@ -143,18 +143,7 @@ export class IdempotencyService {
 
     // 1. 检查记录是否已过期，过期则允许重新认领
     if (existing.expiresAt.getTime() <= Date.now()) {
-      await this.db
-        .update(idempotencyKeys)
-        .set({
-          requestParamsHash: payloadHash,
-          status: 'started',
-          lockedAt: new Date(),
-          expiresAt: newExpiresAt,
-          updatedAt: new Date(),
-        })
-        .where(eq(idempotencyKeys.id, existing.id));
-
-      return { acquired: true, recordId: existing.id };
+      return this.restartIdempotencyRecord(existing.id, payloadHash, newExpiresAt);
     }
 
     // 2. 严格校验 Payload SHA-256 哈希（防篡改反模式，API.md 3.3.3）
@@ -182,16 +171,23 @@ export class IdempotencyService {
     }
 
     // 5. 既有记录为 failed 时，允许重试
+    return this.restartIdempotencyRecord(existing.id, payloadHash, newExpiresAt);
+  }
+
+  /** 重启或重试认领幂等记录（过期或失败重试） */
+  private async restartIdempotencyRecord(id: number, payloadHash: string, expiresAt: Date): Promise<AcquireResult> {
+    const now = new Date();
     await this.db
       .update(idempotencyKeys)
       .set({
+        requestParamsHash: payloadHash,
         status: 'started',
-        lockedAt: new Date(),
-        expiresAt: newExpiresAt,
-        updatedAt: new Date(),
+        lockedAt: now,
+        expiresAt,
+        updatedAt: now,
       })
-      .where(eq(idempotencyKeys.id, existing.id));
+      .where(eq(idempotencyKeys.id, id));
 
-    return { acquired: true, recordId: existing.id };
+    return { acquired: true, recordId: id };
   }
 }

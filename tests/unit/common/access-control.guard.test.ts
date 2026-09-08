@@ -51,14 +51,16 @@ describe('AccessControlGuard', () => {
   });
 
   describe('@Roles() — 角色级约束', () => {
-    it('ADMIN 用户在任意角色限制下均应直接放行', () => {
-      const context = createMockContext({ role: Role.ADMIN });
+    it('ADMIN 与 SUPER_ADMIN 用户在任意角色限制下均应直接放行', () => {
+      const adminCtx = createMockContext({ role: Role.ADMIN });
+      const superAdminCtx = createMockContext({ role: Role.SUPER_ADMIN });
       vi.spyOn(reflector, 'getAllAndOverride').mockImplementation((key) => {
         if (key === ROLES_KEY) return [Role.OPERATOR];
         return undefined;
       });
 
-      expect(guard.canActivate(context)).toBe(true);
+      expect(guard.canActivate(adminCtx)).toBe(true);
+      expect(guard.canActivate(superAdminCtx)).toBe(true);
     });
 
     it('拥有允许角色的用户应成功放行', () => {

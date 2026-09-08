@@ -1,10 +1,10 @@
 import { FastifyAdapter, NestFastifyApplication } from '@nestjs/platform-fastify';
 import { Test, TestingModule } from '@nestjs/testing';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
-import { HealthModule } from '@/api/system/health/health.module';
-import { DatabaseHealthIndicator } from '@/api/system/health/indicators/database-health.indicator';
-import { RedisHealthIndicator } from '@/api/system/health/indicators/redis-health.indicator';
-import { StorageHealthIndicator } from '@/api/system/health/indicators/storage-health.indicator';
+import { HealthModule } from '@/features/system/health/health.module';
+import { DatabaseHealthIndicator } from '@/features/system/health/indicators/database-health.indicator';
+import { RedisHealthIndicator } from '@/features/system/health/indicators/redis-health.indicator';
+import { StorageHealthIndicator } from '@/features/system/health/indicators/storage-health.indicator';
 
 describe('HealthController (e2e)', () => {
   let app: NestFastifyApplication;

@@ -9,7 +9,7 @@ import { THUMBNAIL_PRESETS } from '@/common/media/interfaces/media.interface';
 import { MediaService } from '@/common/media/media.service';
 import type { UploadedFile } from '@/common/storage/interfaces/upload.interface';
 import { StorageService } from '@/common/storage/storage.service';
-import type { MediaJobs } from '@/queues/media/media.jobs';
+import type { MediaJobs } from '@/jobs/media/media.jobs';
 
 /** 创建测试用 PNG 图片 Buffer (400x300 红色图片) */
 async function createTestImageBuffer(width = 400, height = 300): Promise<Buffer> {

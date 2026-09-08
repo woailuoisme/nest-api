@@ -2,7 +2,7 @@ import { type CanActivate, type ExecutionContext, Injectable, UnauthorizedExcept
 import { fromNodeHeaders } from 'better-auth/node';
 import type { FastifyRequest } from 'fastify';
 import { auth } from '@/common/auth/better-auth';
-import type { Role } from '@/common/constants/roles';
+import { Role } from '@/common/constants/roles';
 import type { CurrentUserPayload } from '@/common/decorators/current-user.decorator';
 
 /**
@@ -43,7 +43,7 @@ export class SseAuthGuard implements CanActivate {
         id: user.id,
         email: user.email,
         name: user.name,
-        role: (user.role as Role) || ('user' as Role),
+        role: (user.role as Role) || Role.USER,
         image: user.image,
       };
 

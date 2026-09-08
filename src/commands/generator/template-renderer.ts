@@ -82,7 +82,8 @@ export const TemplateRenderer = {
     const FeatureName = toPascalCase(featureName);
     const tableName = pluralize(toSnakeCase(featureName));
     const resolvedScope: ModuleScope = scope === 'client' ? 'client' : 'admin';
-    const featureModulePath = resolvedScope === 'admin' ? `api/admin/${featureName}` : `api/client/${featureName}`;
+    const featureModulePath =
+      resolvedScope === 'admin' ? `features/admin/${featureName}` : `features/client/${featureName}`;
     const routePrefix = resolvedScope === 'admin' ? `admin/${tableName}` : tableName;
 
     const fields = TemplateRenderer.buildTemplateFields(fieldDefs);

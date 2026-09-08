@@ -5,7 +5,7 @@ import type { Queue } from 'bullmq';
 import { APP_ENV_VALUES } from '@/common/constants/app.constants';
 import { DEMO_QUEUE } from '@/common/constants/queues';
 import type { EnvConfig } from '@/config/env.validation';
-import { DemoJobName } from '@/queues/demo/demo.jobs';
+import { DemoJobName } from '@/jobs/demo/demo.jobs';
 
 /**
  * Demo 队列调度声明 — 应用启动时注册每分钟定时任务，并投递一个延迟 30 秒的演示 job。

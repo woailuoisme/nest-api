@@ -6,17 +6,10 @@
 
 **NestForge** — 生产级 NestJS 企业后端脚手架。
 
-- **包管理/运行时**: Bun (≥ 1.2, `bun.lock`) + Node.js ≥ 24 (纯 ESM, `"type": "module"`)
-- **框架**: NestJS 12 (Fastify 5 适配器，非 Express)
-- **ORM**: Drizzle ORM 0.45 (PostgreSQL，多文件 schema)
-- **队列/缓存**: Redis + BullMQ
-- **校验**: Zod 4 (环境变量 + DTO 校验 via `nestjs-zod`)
-- **构建**: SWC (via `@nestjs/cli` SWC builder + `resolveFully`)，类型检查用 `tsc --noEmit`
-- **测试**: Vitest 4 (单元 / E2E 独立配置)
-- **Lint/格式化**: Biome 2 (single quote, semicolon, 2-space, lineWidth 120)
-- **任务**: Just (`justfile`)
-- **工具库**: es-toolkit 1.52 (2~3x 极速、纯 ESM、类型安全，全面替代 Lodash)
-- **日志**: 原生 Pino (`pino-roll` 按日切割到 `storage/logs`，启动日志智能降噪)
+- 运行时: Bun ≥ 1.2 + Node ≥ 24，纯 ESM（`"type": "module"`）
+- 框架: NestJS 12 + Fastify 5（非 Express）· ORM: Drizzle 0.45（PostgreSQL 多文件 schema）· 校验: Zod 4 · Redis + BullMQ
+- 构建: SWC（`resolveFully`），类型检查 `tsc --noEmit` · 测试: Vitest 4 · Lint/格式: Biome 2 · 任务: Just
+- 工具库: es-toolkit（唯一首选，严禁 Lodash）· 日志: 原生 Pino（`pino-roll` 按日切割）
 
 ## 常用命令
 
@@ -61,7 +54,7 @@ just cli --help           # 运行生产构建 CLI (node dist/cli.js)
 ```text
 src/database/
 ├── drizzle/        # Drizzle 表定义 + 数据库服务
-│   ├── schema/     # 多文件 schema (auth.schema.ts, index.ts)
+│   ├── schema/     # 多文件 schema (better-auth.schema.ts, notifications.schema.ts 等, 汇总于 index.ts)
 │   ├── sql/        # 原生 PostgreSQL DDL (00_init.sql, 01_auth.sql 等按 00~99 命名，供 DBA 审计与独立建表)
 │   ├── drizzle.module.ts  # @Global() Drizzle 模块
 │   └── drizzle.service.ts # pg Pool + drizzle 客户端
@@ -77,17 +70,17 @@ src/
 ├── database/       # drizzle/ + bull.config.ts + redis.module.ts
 ├── commands/       # nest-commander CLI (route-list, db-seed, jwt-secret)
 ├── i18n/           # nestjs-i18n 配置
-├── api/            # 统一 API 端点层 (client: 客户端业务特性 / system: 系统基础设施 / admin: 后台管理自包含领域)
+├── features/       # 统一业务特性层 (client: 客户端业务特性 / system: 系统基础设施 / admin: 后台管理自包含领域)
 │   ├── client/     # 客户端特性模块 (auth, users)
 │   ├── system/     # 系统/基础设施模块 (health)
 │   ├── admin/      # 后台管理领域模块 (dashboard, notifications, users, admin.module.ts)
-│   └── index.ts    # 聚合导出 API_MODULES
-├── queues/         # 队列任务 (对齐 Laravel app/Jobs)：jobs 契约+生产者 / processor 消费者
+│   └── index.ts    # 聚合导出 FEATURE_MODULES
+├── jobs/           # 异步任务与队列 (对齐 Laravel app/Jobs)：jobs 契约+生产者 / processor 消费者
 │   ├── demo/           # 演示队列 (demo.jobs.ts, demo.processor.ts)
 │   ├── mail/           # 邮件队列
 │   ├── media/          # 媒体处理队列 (media.jobs.ts, media.processor.ts)
 │   ├── token-cleanup/  # Token 清理队列
-│   └── queues.module.ts # @Global 生产者侧（registerQueue + Jobs）
+│   └── jobs.module.ts  # @Global 生产者侧（registerQueue + Jobs）
 ├── realtime/       # 统一实时分发中枢 (对齐 Laravel Broadcasting)：深模块分发中枢与双通道适配
 │   ├── channels/           # 模式匹配频道鉴权 (channel-manager.service.ts, private/presence)
 │   ├── guards/             # 长连接鉴权 (sse-auth.guard.ts)
@@ -128,11 +121,11 @@ tests/
 
 ### 模块组织
 
-- 业务模块统一按端归入 `src/api/`：
-  - 客户端特性放 `src/api/client/<feature>/`，每个模块自带 `*.module.ts`、`*.controller.ts`、`*.service.ts`、`*.dto.ts`。
-  - 系统/基础设施端点（如健康检查）放 `src/api/system/<feature>/`。
-  - 管理后台领域放 `src/api/admin/<feature>/`，由 `src/api/admin/admin.module.ts` 聚合并强制 `/admin` 前缀与 `AdminPrefixGuard` 准入。
-- **Admin / 前端 API 边界**: 后台管理领域（users / notifications / dashboard / admins / auth）的 controller + service + DTO 全部自包含于 `src/api/admin/`，由 `AdminModule` 聚合成唯一管理面入口并纳入 `API_MODULES`；准入由全局 `AdminPrefixGuard` 默认拒绝式强制（仅限合法管理角色 SUPER_ADMIN / ADMIN / OPERATOR，支持显式 `@Public()` 白名单豁免如 `/admin/auth/login`）。前端自助模块 `src/api/client/users/` 自包含自有 service 与 DTO（仅 `/users/me`、`/users/:id`、头像上传），与 admin 管理面零依赖；`AuthModule` 基于 Drizzle 客户端直接原子落库，与 `AdminUsersModule` 彻底解耦零依赖。**新增管理端点必须落在 `src/api/admin/`，严禁混入前端 controller**；`crud:generate` 产物支持 `--scope=admin|client` 分流，admin 产物自动落入该边界（`src/api/admin/<feature>/`）并自动注册进 `AdminModule`。
+- 业务模块统一按端归入 `src/features/`：
+  - 客户端特性放 `src/features/client/<feature>/`，每个模块自带 `*.module.ts`、`*.controller.ts`、`*.service.ts`、`*.dto.ts`。
+  - 系统/基础设施端点（如健康检查）放 `src/features/system/<feature>/`。
+  - 管理后台领域放 `src/features/admin/<feature>/`，由 `src/features/admin/admin.module.ts` 聚合并强制 `/admin` 前缀与 `AdminPrefixGuard` 准入。
+- **Admin / 前端 API 边界**: 后台管理领域（users / notifications / dashboard / admins / auth）的 controller + service + DTO 全部自包含于 `src/features/admin/`，由 `AdminModule` 聚合成唯一管理面入口并纳入 `FEATURE_MODULES`；准入由全局 `AdminPrefixGuard` 默认拒绝式强制（仅限合法管理角色 SUPER_ADMIN / ADMIN / OPERATOR，支持显式 `@Public()` 白名单豁免如 `/admin/auth/login`）。前端自助模块 `src/features/client/users/` 自包含自有 service 与 DTO（仅 `/users/me`、`/users/:id`、头像上传），与 admin 管理面零依赖；`AuthModule` 基于 Drizzle 客户端直接原子落库，与 `AdminUsersModule` 彻底解耦零依赖。**新增管理端点必须落在 `src/features/admin/`，严禁混入前端 controller**；`crud:generate` 产物支持 `--scope=admin|client` 分流，admin 产物自动落入该边界（`src/features/admin/<feature>/`）并自动注册进 `AdminModule`。
 - **扁平数据访问**：Service 层直接使用 `@InjectDb() private readonly db: DrizzleDB` 注入数据库客户端，通过 `this.db.query...` / `this.db.insert...` 进行类型安全操作，不设多余的 Repository 样板层。
 - **多写原子事务 (Transaction)**：涉及多表关联写入（如创建用户并绑定 OAuth 账户）或多步更新时，使用显式原生闭包 `await this.db.transaction(async (tx) => { ... })` 保证强一致性与自动回滚。
 - 全局基础设施 (Storage/Excel/Mail/Drizzle/Redis) 放 `src/common/` 或 `src/database/`，用 `@Global()` 导出。
@@ -157,15 +150,15 @@ tests/
 
 ### 鉴权
 
-- JWT (access + refresh) + Passport，refresh token 哈希存库可吊销。
-- OAuth: Google (`src/api/client/auth/strategies/google.strategy.ts`)。
-- 权限: `@Roles(Role.ADMIN)` 角色级 + `@Permissions(Permission.UserCreate)` 细粒度。
-- 密码: `argon2` 哈希。
+- **Better Auth**（`src/common/auth/better-auth.ts`）：Drizzle 适配器，基础路径 `/v1/auth`，默认 `emailAndPassword`，会话 token 存库可吊销；邮件通过 `MailJobs` 队列分发。
+- 插件全家桶：`admin` (RBAC) / `twoFactor` / `username` / `phoneNumber` / `magicLink` / `emailOTP` / `genericOAuth` (Google) / `apiKey` / `organization` / `bearer` / `multiSession` / `lastLoginMethod` / `jwt` / `deviceAuthorization` / `openAPI`。
+- 角色: `SUPER_ADMIN / ADMIN / OPERATOR / USER`（`src/common/constants/roles.ts`），统一用户主表 `user`（UUID `uuidv7()`），前台用户与后台管理员聚合于同一张表。
+- 细粒度权限: `@Roles(Role.ADMIN)` 角色级 + `@Permissions(Permission.UserCreate)` 声明式，配合 `BetterAuthGuard` / `AccessControlGuard` 兜底。
 
 ### CLI 模块 (`src/cli.module.ts`)
 
-独立于 `AppModule` 且免除 HTTP 守卫与 Worker 额外开销。所有带 Controller 的业务模块统一在 `src/api/index.ts` 中的 `API_MODULES` 集中声明，`AppModule` 与 `CliModule` 统一展开引入，彻底消除路由发现缺失与模块漂移。
-BullMQ 队列由 `AuthModule → MailService` 依赖，CLI 模块也需 `BullModule.forRootAsync(...)`。
+独立于 `AppModule` 且免除 HTTP 守卫与 Worker 额外开销。所有带 Controller 的业务模块统一在 `src/features/index.ts` 中的 `FEATURE_MODULES` 集中声明，`AppModule` 与 `CliModule` 统一展开引入，彻底消除路由发现缺失与模块漂移。
+BullMQ 队列由 `AuthModule → MailJobs` 依赖，CLI 模块也需 `BullModule.forRootAsync(...)`。
 
 ## 编码规范
 
@@ -201,10 +194,10 @@ BullMQ 队列由 `AuthModule → MailService` 依赖，CLI 模块也需 `BullMod
 
 ### 高性能与高可用基础设施
 
-- **Fastify 5 原生全链路可观测性**: 请求追踪（`x-request-id`）下沉至 Fastify 原生 Hook，响应耗时统一采用 `reply.elapsedTime`，100% 覆盖包括 401/403/404/429/500 在内的所有流量，消除 RxJS 流额外堆栈开销。
-- **深模块 `RedisService`**: 封装分布式排他锁（`await this.redis.withLock('lock:key', ttlMs, async () => { ... })`）与读写穿透缓存（`remember`），保证集群多 Pod 场景下 Cron 调度幂等与防击穿。
-- **事务性媒体存储与零孤儿泄漏**: `StorageService` 与 `MediaService` 支持 Local 与 S3 双向 URL/Path 映射；`storeWithCompensation` 全自动处理「写盘 → 数据库更新 → 失败回滚清理 → 成功旧图回收」。
-- **CRUD 代码生成器解耦**: `src/commands/generator/` 分离为 `SchemaInspector`（AST 结构反解）、`TemplateRenderer`（纯内存无 I/O 模板变换）、`ArtifactWriter`（安全写盘、冲突保护与 AdminModule 幂等注册/注销）三层。
+- **全链路可观测性**: 请求追踪 `x-request-id` 下沉 Fastify Hook，耗时用 `reply.elapsedTime`，覆盖含 401/403/404/429/500 的所有流量。
+- **`RedisService`**: `withLock('lock:key', ttlMs, fn)` 分布式排他锁 + `remember` 读写穿透缓存，保证多 Pod 下 Cron 幂等与防击穿。
+- **事务性媒体存储**: `storeWithCompensation` 自动处理「写盘 → 落库 → 失败回滚清理 → 成功旧图回收」，支持 Local/S3 双向 URL/Path 映射。
+- **CRUD 生成器三层解耦**: `SchemaInspector`（AST 反解）/ `TemplateRenderer`（纯内存变换）/ `ArtifactWriter`（安全写盘 + AdminModule 幂等注册）。
 
 ## Git 工作流
 
@@ -221,9 +214,9 @@ BullMQ 队列由 `AuthModule → MailService` 依赖，CLI 模块也需 `BullMod
 
 ## 易踩坑
 
-1. **新增业务模块只需加入 `API_MODULES`** — 在 `src/api/index.ts` 中声明即可自动挂入 `AppModule` 与 `CliModule`，保障 CLI 路由发现完整。
-2. **新增管理端点必须落 `/admin` 前缀** — 在 `src/api/admin/{users,notifications,dashboard,admins}/` 对应领域子目录内新增/扩展；`AdminPrefixGuard` 已全局强制仅合法管理角色（SUPER_ADMIN / ADMIN / OPERATOR）可访问（登录端点通过 `@Public()` 豁免），业务端点级无需重复标注。前端自助端点（`/users/me` 等）不得迁入 `/admin`，否则普通用户将被守卫拦截。
-3. **`MailService` 隐式依赖 BullMQ** — 任何间接 import `AuthModule` 的场景都要配 `BullModule.forRootAsync`，否则队列连接报错。
+1. **新增业务模块只需加入 `FEATURE_MODULES`** — 在 `src/features/index.ts` 中声明即可自动挂入 `AppModule` 与 `CliModule`，保障 CLI 路由发现完整。
+2. **新增管理端点必须落 `/admin` 前缀** — 在 `src/features/admin/{users,notifications,dashboard,admins}/` 对应领域子目录内新增/扩展；`AdminPrefixGuard` 已全局强制仅合法管理角色（SUPER_ADMIN / ADMIN / OPERATOR）可访问（登录端点通过 `@Public()` 豁免），业务端点级无需重复标注。前端自助端点（`/users/me` 等）不得迁入 `/admin`，否则普通用户将被守卫拦截。
+3. **`MailJobs` 隐式依赖 BullMQ** — 任何间接 import `AuthModule` 的场景都要配 `BullModule.forRootAsync`，否则队列连接报错。
 4. **Fastify 5 ≠ Express** — 用 `@nestjs/platform-fastify`，第三方插件/中间件需 Fastify 5 兼容版本；`req`/`reply` 类型不同；响应耗时用 `reply.elapsedTime`（严禁使用已弃用的 `reply.getResponseTime()`）。
 5. **纯 ESM 运行时规范** — 项目已声明 `"type": "module"`，严禁直接使用 CJS 全局变量 `__dirname` / `__filename`，统一使用 `import.meta.dirname ?? path.dirname(fileURLToPath(import.meta.url))`；SWC 配置需保持 `module.resolveFully: true` 以确保相对导入携带 `.js` 扩展名。
 6. **SWC 构建与资源拷贝** — SWC 仅做转译，类型检查用 `tsc --noEmit`；构建时需通过 `tsconfig.build.json` 锁定 `"rootDir": "src"`，防止 Nest CLI 误判项目根目录导致 assets 资源拷贝偏移至 `dist/src/`。
@@ -252,60 +245,16 @@ BullMQ 队列由 `AuthModule → MailService` 依赖，CLI 模块也需 `BullMod
 
 ## 代码搜索与修改工作流
 
-按「定位 → 结构大纲 → 精准阅读 → 结构化修改 → 验证」推进，善用 rg 与 ast-grep：
+遵循「定位 → 结构大纲 → 精准阅读 → 结构化修改 → 验证」。
 
-### 1. 定位 — ripgrep / fd
-
-```bash
-rg "pattern" src --glob '*.ts' -C 3   # 全文/符号定位
-fd -e ts "service"                     # 按文件名查找
-```
-
-### 2. 结构透视与 Token 优化 — ast-grep outline
-
-在阅读 200+ 行的大文件前，**严禁直接全量 read**，先通过 outline 获取结构签名与行号：
-
-```bash
-just outline src/api/client/auth/auth.service.ts          # 单文件：查看方法、构造器与字段签名 + 行号
-just outline src/api/client/auth --items exports          # 目录：查看模块导出的 Controller/Service/DTO 契约
-just outline src/ --type class --match ".*Controller"       # 全局：快速过滤所有 Controller 类
-```
-
-### 3. 架构规则守卫 — ast-grep scan / rules
-
-项目在 `rules/` 中维护了强约束架构规则（如 Controller 禁 try-catch、业务逻辑禁 console、严禁引入 Express 等）：
-
-```bash
-just sg-lint                           # 全仓库运行架构规则扫描
-just sg-test                           # 运行 rule-tests 规则单测
-```
-
-### 4. 结构化修改与重构 — ast-grep run -U
-
-对 schema/import/装饰器等有语法结构的重复改动，优先编写规则，先验证再全量应用：
-
-```bash
-ast-grep run -r <rule-id> --inline <file>   # 单文件验证
-ast-grep run -r <rule-id> -U                # 全仓库批量重构应用
-ast-grep test                                # 确保规则单测通过
-```
-
-### 5. 验证
-
-- 改动前 `rg` 定位所有关联位置（定义、调用、引用），禁止只改一处。
-- 结构化改动用 ast-grep 规则 + 测试，`just sg-test` 通过后再全量应用。
-- 改动后执行 `just check`（自动串联 `fix` + `fmt` + `type` + `sg-lint` + `sg-test`）确保无代码与架构腐化。
+- **定位**: `rg "pattern" src -C 3` / `fd -e ts "service"` 全文与符号查找。
+- **结构透视**: 200+ 行大文件严禁直接全量 read，先用 `just outline <path>`（单文件签名）、`just outline <path> --items exports`（导出契约）、`just outline <path> --type class --match ".*Controller"`（过滤类）获取紧凑结构。
+- **架构规则**: `rules/` 维护强约束架构规则（Controller 禁 try-catch、业务禁 console、严禁 Express 等）；`just sg-lint` 扫描、`just sg-test` 运行规则单测。
+- **结构化批量重构**: 对 import/装饰器等有语法结构的重复改动，先写规则 `ast-grep run -r <rule-id> --inline <file>` 验证，再 `-U` 全量应用。
+- **验证**: 改动前 `rg` 定位所有关联位置防漏改；改动后 `just check`（fix + fmt + type + sg-lint + sg-test）。
 
 ## Agent skills
 
-### Issue tracker
-
-Issues live as markdown files under `.scratch/<feature-slug>/`. See `docs/agents/issue-tracker.md`.
-
-### Triage labels
-
-Five canonical roles: `needs-triage`, `needs-info`, `ready-for-agent`, `ready-for-human`, `wontfix`. See `docs/agents/triage-labels.md`.
-
-### Domain docs
-
-Single-context layout — `CONTEXT.md` + `docs/adr/` at repo root. See `docs/agents/domain.md`.
+- **Issue tracker**: issues 以 markdown 存于 `.scratch/<feature-slug>/`，见 `docs/agents/issue-tracker.md`。
+- **Triage labels**: `needs-triage` / `needs-info` / `ready-for-agent` / `ready-for-human` / `wontfix`，见 `docs/agents/triage-labels.md`。
+- **Domain docs**: `CONTEXT.md` + `docs/adr/` 单上下文布局，见 `docs/agents/domain.md`。

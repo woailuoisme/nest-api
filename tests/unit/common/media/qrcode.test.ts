@@ -1,6 +1,6 @@
 import sharp from 'sharp';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { calculateLogoGeometry, QrCodeService } from '@/common/media/qrcode.service';
+import { calculateLogoGeometry, QrCodeService } from '@/common/media';
 import { StorageService } from '@/common/storage/storage.service';
 
 describe('calculateLogoGeometry()', () => {

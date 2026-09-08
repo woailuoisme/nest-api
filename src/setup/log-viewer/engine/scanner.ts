@@ -76,6 +76,17 @@ export function invalidateLogFileCache(filename?: string): void {
   }
 }
 
+function recordLineLevel(line: string, countByLevel: Record<string, number>): void {
+  try {
+    const raw = JSON.parse(line);
+    const levelNum = typeof raw.level === 'number' ? raw.level : 30;
+    const lvl = LEVEL_MAP[levelNum] || 'info';
+    countByLevel[lvl] = (countByLevel[lvl] || 0) + 1;
+  } catch {
+    countByLevel.info = (countByLevel.info || 0) + 1;
+  }
+}
+
 /**
  * 获取或增量计算日志文件的元数据统计（含各级别统计与总行数）
  */
@@ -116,16 +127,7 @@ export async function getOrComputeLogFileStats(filePath: string, filename: strin
         for (const line of lines) {
           if (!line.trim()) continue;
           addedLines++;
-          try {
-            const raw = JSON.parse(line);
-            const levelNum = typeof raw.level === 'number' ? raw.level : 30;
-            const lvl = LEVEL_MAP[levelNum] || 'info';
-            if (countByLevel[lvl] !== undefined) {
-              countByLevel[lvl]++;
-            }
-          } catch {
-            countByLevel.info = (countByLevel.info || 0) + 1;
-          }
+          recordLineLevel(line, countByLevel);
         }
 
         const updatedCache: LogFileStatCache = {
@@ -160,16 +162,7 @@ export async function getOrComputeLogFileStats(filePath: string, filename: strin
   for await (const line of rl) {
     if (!line.trim()) continue;
     totalLines++;
-    try {
-      const raw = JSON.parse(line);
-      const levelNum = typeof raw.level === 'number' ? raw.level : 30;
-      const lvl = LEVEL_MAP[levelNum] || 'info';
-      if (countByLevel[lvl] !== undefined) {
-        countByLevel[lvl]++;
-      }
-    } catch {
-      countByLevel.info = (countByLevel.info || 0) + 1;
-    }
+    recordLineLevel(line, countByLevel);
   }
 
   const fullCache: LogFileStatCache = {

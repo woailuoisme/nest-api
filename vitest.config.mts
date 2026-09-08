@@ -37,6 +37,8 @@ export default defineConfig({
     clearMocks: true,
     /** 并行执行；fork 更隔离但启动慢，threads 适合单元测试 */
     pool: 'threads',
+    /** worker 内模块只求值一次以提速；依赖 restoreMocks/clearMocks 兜底，防止文件间污染 */
+    isolate: false,
     coverage: {
       reporter: ['text', 'html', 'lcov'],
       exclude: [

@@ -66,7 +66,6 @@ describe('Swagger & Scalar Split Integration Test', () => {
     expect(authJson.components.securitySchemes).toHaveProperty('bearerAuth');
     expect(authJson.components.securitySchemes).toHaveProperty('cookieAuth');
 
-    // 4. 客户端 Scalar HTML 校验
     // 4. 客户端 Scalar HTML 校验 (包含统一配置)
     const clientHtmlRes = await app.inject({ method: 'GET', url: '/docs' });
     expect(clientHtmlRes.statusCode).toBe(200);

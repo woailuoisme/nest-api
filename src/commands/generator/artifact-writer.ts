@@ -3,8 +3,7 @@ import { dirname, join, relative } from 'node:path';
 import { Logger } from '@nestjs/common';
 import { compact } from 'es-toolkit';
 import { toCamelCase, toPascalCase } from './string.utils';
-import type { RenderedArtifact } from './template-renderer';
-import { TEMPLATE_FILES, TemplateRenderer } from './template-renderer';
+import { type RenderedArtifact, TEMPLATE_FILES, TemplateRenderer } from './template-renderer';
 import type { ModuleScope, TemplateContext } from './types';
 
 /** 用于区分"生成模块"与"手写模块"的文件头标记 */
@@ -189,7 +188,7 @@ export const ArtifactWriter = {
    * import 行与 imports 数组项同步维护，生成/删除生命周期完全对称。
    */
   updateAdminModuleExport(projectRoot: string, featureName: string, action: 'register' | 'unregister'): void {
-    const adminModulePath = join(projectRoot, 'src', 'api', 'admin', 'admin.module.ts');
+    const adminModulePath = join(projectRoot, 'src', 'features', 'admin', 'admin.module.ts');
     if (!existsSync(adminModulePath)) return;
 
     const content = readFileSync(adminModulePath, 'utf8');
@@ -231,16 +230,16 @@ export const ArtifactWriter = {
   },
 
   /**
-   * 追加/移除指定客户端 feature 模块在 src/api/index.ts 中的注册与导出（幂等）。
+   * 追加/移除指定客户端 feature 模块在 src/features/index.ts 中的注册与导出（幂等）。
    */
   updateClientModuleExport(projectRoot: string, featureName: string, action: 'register' | 'unregister'): void {
-    const apiIndexPath = join(projectRoot, 'src', 'api', 'index.ts');
+    const apiIndexPath = join(projectRoot, 'src', 'features', 'index.ts');
     if (!existsSync(apiIndexPath)) return;
 
     const content = readFileSync(apiIndexPath, 'utf8');
     const moduleName = `${toPascalCase(featureName)}Module`;
-    const importLine = `import { ${moduleName} } from '@/api/client/${featureName}/${featureName}.module';`;
-    const exportLine = `export * from '@/api/client/${featureName}/${featureName}.module';`;
+    const importLine = `import { ${moduleName} } from '@/features/client/${featureName}/${featureName}.module';`;
+    const exportLine = `export * from '@/features/client/${featureName}/${featureName}.module';`;
     const present = content.includes(importLine);
 
     if (action === 'register' ? present : !present) return;
@@ -256,12 +255,15 @@ export const ArtifactWriter = {
 
       next = lines
         .join('\n')
-        .replace(/export const CLIENT_API_MODULES = \[([^\]]*)\]/, (_m, list: string) => {
-          const items = compact(list.split(',').map((s) => s.trim()));
-          items.push(moduleName);
-          return `export const CLIENT_API_MODULES = [${items.join(', ')}]`;
-        })
-        .replace(/export const API_MODULES = \[([^\]]*)\]/, (_m, list: string) => {
+        .replace(
+          /export const (CLIENT_FEATURE_MODULES|CLIENT_API_MODULES) = \[([^\]]*)\]/,
+          (_m, constName: string, list: string) => {
+            const items = compact(list.split(',').map((s) => s.trim()));
+            items.push(moduleName);
+            return `export const ${constName} = [${items.join(', ')}]`;
+          },
+        )
+        .replace(/export const (FEATURE_MODULES|API_MODULES) = \[([^\]]*)\]/, (_m, constName: string, list: string) => {
           const items = compact(list.split(',').map((s) => s.trim()));
           // 插入在 AdminModule 之前
           const adminIdx = items.indexOf('AdminModule');
@@ -270,7 +272,7 @@ export const ArtifactWriter = {
           } else {
             items.push(moduleName);
           }
-          return `export const API_MODULES = [${items.join(', ')}]`;
+          return `export const ${constName} = [${items.join(', ')}]`;
         });
       next = `${next.trimEnd()}\n${exportLine}\n`;
     } else {
@@ -278,19 +280,22 @@ export const ArtifactWriter = {
         .split('\n')
         .filter((line) => line.trim() !== importLine && line.trim() !== exportLine)
         .join('\n')
-        .replace(/export const CLIENT_API_MODULES = \[([^\]]*)\]/, (_m, list: string) => {
+        .replace(
+          /export const (CLIENT_FEATURE_MODULES|CLIENT_API_MODULES) = \[([^\]]*)\]/,
+          (_m, constName: string, list: string) => {
+            const items = list
+              .split(',')
+              .map((s) => s.trim())
+              .filter((s) => s && s !== moduleName);
+            return `export const ${constName} = [${items.join(', ')}]`;
+          },
+        )
+        .replace(/export const (FEATURE_MODULES|API_MODULES) = \[([^\]]*)\]/, (_m, constName: string, list: string) => {
           const items = list
             .split(',')
             .map((s) => s.trim())
             .filter((s) => s && s !== moduleName);
-          return `export const CLIENT_API_MODULES = [${items.join(', ')}]`;
-        })
-        .replace(/export const API_MODULES = \[([^\]]*)\]/, (_m, list: string) => {
-          const items = list
-            .split(',')
-            .map((s) => s.trim())
-            .filter((s) => s && s !== moduleName);
-          return `export const API_MODULES = [${items.join(', ')}]`;
+          return `export const ${constName} = [${items.join(', ')}]`;
         });
     }
 

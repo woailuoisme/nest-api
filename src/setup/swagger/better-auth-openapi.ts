@@ -1,4 +1,5 @@
 import type { PathItemObject, PathsObject, ReferenceObject, SchemaObject } from '@nestjs/swagger';
+import { compact } from 'es-toolkit';
 import { auth } from '@/common/auth/better-auth';
 
 /** 中文 Tag 元数据定义 */
@@ -160,17 +161,12 @@ export async function getProcessedBetterAuthOpenAPI(): Promise<ProcessedBetterAu
       }
     }
 
-    const clientTags = Array.from(usedClientTags)
-      .map((k) => BETTER_AUTH_TAG_MAP[k])
-      .filter((t): t is TagMetadata => Boolean(t));
+    const mapTags = (tagKeys: Set<string>): TagMetadata[] =>
+      compact(Array.from(tagKeys).map((k) => BETTER_AUTH_TAG_MAP[k]));
 
-    const adminTags = Array.from(usedAdminTags)
-      .map((k) => BETTER_AUTH_TAG_MAP[k])
-      .filter((t): t is TagMetadata => Boolean(t));
-
-    const allTags = Array.from(usedAllTags)
-      .map((k) => BETTER_AUTH_TAG_MAP[k])
-      .filter((t): t is TagMetadata => Boolean(t));
+    const clientTags = mapTags(usedClientTags);
+    const adminTags = mapTags(usedAdminTags);
+    const allTags = mapTags(usedAllTags);
 
     const schemas = rawSchema.components?.schemas || {};
 

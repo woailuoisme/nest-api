@@ -7,7 +7,7 @@ import type { OutputInfo } from 'sharp';
 import type { StorageDriver } from '@/common/storage/interfaces/storage.interface';
 import type { UploadedFile } from '@/common/storage/interfaces/upload.interface';
 import { StorageService } from '@/common/storage/storage.service';
-import { MediaJobs } from '@/queues/media/media.jobs';
+import { MediaJobs } from '@/jobs/media/media.jobs';
 import type {
   ImageMetadata,
   ImageResizeOptions,
@@ -296,14 +296,11 @@ export class MediaService {
     opts?: MediaSaveOptions,
   ): Promise<{ mainBuffer: Buffer; contentType: string; overrideExt?: string }> {
     if (opts?.convertToWebp) {
-      const webpResult = await this.img.convertToWebp(rawBuffer, { quality: opts.webpQuality });
-      return { mainBuffer: webpResult.buffer, contentType: 'image/webp', overrideExt: '.webp' };
+      const { buffer } = await this.img.convertToWebp(rawBuffer, { quality: opts.webpQuality });
+      return { mainBuffer: buffer, contentType: 'image/webp', overrideExt: '.webp' };
     }
-    if (opts?.optimize !== false) {
-      const optResult = await this.img.optimize(rawBuffer);
-      return { mainBuffer: optResult.buffer, contentType: defaultMime };
-    }
-    return { mainBuffer: rawBuffer, contentType: defaultMime };
+    const mainBuffer = opts?.optimize !== false ? (await this.img.optimize(rawBuffer)).buffer : rawBuffer;
+    return { mainBuffer, contentType: defaultMime };
   }
 
   private async generateVariants(

@@ -13,7 +13,7 @@ import { fromNodeHeaders } from 'better-auth/node';
 import type { Server, Socket } from 'socket.io';
 import { auth } from '@/common/auth/better-auth';
 import { isProductionEnv } from '@/common/constants/app.constants';
-import type { Role } from '@/common/constants/roles';
+import { Role } from '@/common/constants/roles';
 import type { CurrentUserPayload } from '@/common/decorators/current-user.decorator';
 import { ChannelManager } from './channels/channel-manager.service';
 import { extractSocketToken } from './guards/socket-auth.helper';
@@ -84,9 +84,11 @@ export class RealtimeGateway
       const sessionData = await auth.api.getSession({ headers });
 
       if (!sessionData?.user) {
-        this.logger.warn(`[RealtimeGateway] Unauthorized connection attempt rejected: ${client.id}`);
-        client.emit('error', { message: 'Authentication token is required to connect to /realtime' });
-        setTimeout(() => client.disconnect(true), 50);
+        this.rejectConnection(
+          client,
+          'Authentication token is required to connect to /realtime',
+          `[RealtimeGateway] Unauthorized connection attempt rejected: ${client.id}`,
+        );
         return;
       }
 
@@ -103,7 +105,7 @@ export class RealtimeGateway
         id: user.id,
         email: user.email,
         name: user.name,
-        role: (user.role as Role) || ('user' as Role),
+        role: (user.role as Role) || Role.USER,
         image: user.image,
       };
       client.join(`user:${user.id}`);
@@ -117,10 +119,18 @@ export class RealtimeGateway
         timestamp: Date.now(),
       });
     } catch {
-      this.logger.warn(`[RealtimeGateway] Invalid token handshake rejected: ${client.id}`);
-      client.emit('error', { message: 'Invalid or expired authentication token' });
-      setTimeout(() => client.disconnect(true), 50);
+      this.rejectConnection(
+        client,
+        'Invalid or expired authentication token',
+        `[RealtimeGateway] Invalid token handshake rejected: ${client.id}`,
+      );
     }
+  }
+
+  private rejectConnection(client: Socket, message: string, warnLog: string): void {
+    this.logger.warn(warnLog);
+    client.emit('error', { message });
+    setTimeout(() => client.disconnect(true), 50);
   }
 
   handleDisconnect(client: Socket): void {

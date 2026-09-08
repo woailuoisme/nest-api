@@ -78,30 +78,3 @@ export function createMockDrizzleService() {
     _stubs: db._stubs,
   };
 }
-
-/** 创建 MailJobs mock */
-export function createMockMailQueue(): Record<string, any> {
-  return {
-    queueVerificationEmail: vi.fn().mockResolvedValue(undefined),
-    queuePasswordResetEmail: vi.fn().mockResolvedValue(undefined),
-    queueWelcomeEmail: vi.fn().mockResolvedValue(undefined),
-  };
-}
-
-/** 创建 AuthTokenManager mock */
-export function createMockAuthTokenManager(): Record<string, any> {
-  return {
-    issueTokenPair: vi.fn().mockResolvedValue({ accessToken: 'mock-access', refreshToken: 'mock-refresh' }),
-    rotateRefreshToken: vi.fn().mockResolvedValue({ accessToken: 'mock-access-new', refreshToken: 'mock-refresh-new' }),
-    revokeRefreshToken: vi.fn().mockResolvedValue(undefined),
-    revokeAllForUser: vi.fn().mockResolvedValue(undefined),
-    issueEphemeralToken: vi.fn().mockResolvedValue({
-      rawToken: 'mock-raw-token',
-      tokenHash: 'mock-token-hash',
-      expiresAt: new Date(Date.now() + 3600_000),
-    }),
-    consumeEphemeralToken: vi.fn().mockResolvedValue({ userId: 1 }),
-    hashToken: vi.fn((t: string) => `hash:${t}`),
-    purgeExpiredTokens: vi.fn().mockResolvedValue(0),
-  };
-}

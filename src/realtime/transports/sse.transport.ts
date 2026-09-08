@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { Injectable, type MessageEvent, type OnModuleDestroy, Optional } from '@nestjs/common';
+import { isNil } from 'es-toolkit';
 import { concatMap, filter, map, type Observable, Subject } from 'rxjs';
 import { Role } from '@/common/constants/roles';
 import type { CurrentUserPayload } from '@/common/decorators/current-user.decorator';
@@ -40,7 +41,7 @@ export class SseTransport implements RealtimeTransport, OnModuleDestroy {
     return this.stream$.asObservable().pipe(
       concatMap(async (envelope) => {
         // 1. 用户定向单播
-        if (envelope.targetUserId !== null && envelope.targetUserId !== undefined) {
+        if (!isNil(envelope.targetUserId)) {
           return envelope.targetUserId === userPayload.id ? envelope : null;
         }
 
@@ -52,7 +53,7 @@ export class SseTransport implements RealtimeTransport, OnModuleDestroy {
           }
 
           // 无 ChannelManager 时的安全保底（Fail-Closed）：阻断所有 private / presence 频道
-          const normalized = envelope.channel.replace(/^private[-:]/, 'private:').replace(/^presence[-:]/, 'presence:');
+          const normalized = ChannelManager.normalizeChannel(envelope.channel);
           if (normalized.startsWith('private:') || normalized.startsWith('presence:')) {
             return null;
           }

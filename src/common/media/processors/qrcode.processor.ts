@@ -158,24 +158,13 @@ export class QrCodeProcessor {
     arg3?: QrCodeOptions | QrCodeSaveOptions,
     arg4?: QrCodeSaveOptions,
   ): Promise<UploadResult> {
-    let storage: StorageService;
-    let content: string;
-    let options: QrCodeOptions | undefined;
-    let saveOpts: QrCodeSaveOptions | undefined;
+    const [storage, content, options, saveOpts] =
+      typeof arg1 === 'string'
+        ? [this.storage, arg1, arg2 as QrCodeOptions | undefined, arg3 as QrCodeSaveOptions | undefined]
+        : [arg1, arg2 as string, arg3 as QrCodeOptions | undefined, arg4];
 
-    if (typeof arg1 === 'string') {
-      if (!this.storage) {
-        throw new Error('未注入 StorageService，必须通过参数传入 StorageService 实例');
-      }
-      storage = this.storage;
-      content = arg1;
-      options = arg2 as QrCodeOptions | undefined;
-      saveOpts = arg3 as QrCodeSaveOptions | undefined;
-    } else {
-      storage = arg1;
-      content = arg2 as string;
-      options = arg3 as QrCodeOptions | undefined;
-      saveOpts = arg4;
+    if (!storage) {
+      throw new Error('未注入 StorageService，必须通过参数传入 StorageService 实例');
     }
 
     const disk = storage.disk(saveOpts?.disk);

@@ -1,13 +1,35 @@
 import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
+import type { Type } from '@nestjs/common';
 import type { NestFastifyApplication } from '@nestjs/platform-fastify';
+import type { OpenAPIObject } from '@nestjs/swagger';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import { renderApiReference } from '@scalar/client-side-rendering';
 import { customThemeCSS } from '@scalar/nestjs-api-reference';
 import { cleanupOpenApiDoc } from 'nestjs-zod';
-import { ADMIN_API_MODULES, CLIENT_API_MODULES } from '@/api';
 import { APP_VERSION, OPENAPI_VERSION, PATHS, ROUTES } from '@/common/constants/app.constants';
+import { ADMIN_FEATURE_MODULES, CLIENT_FEATURE_MODULES } from '@/features';
 import { BETTER_AUTH_SECURITY_SCHEMES, getProcessedBetterAuthOpenAPI } from './swagger/better-auth-openapi';
+
+function createCleanDocument(
+  app: NestFastifyApplication,
+  config: Omit<OpenAPIObject, 'paths'>,
+  include: readonly Type<unknown>[],
+): OpenAPIObject {
+  const rawDocument = SwaggerModule.createDocument(app, config, { include: [...include] });
+  const doc = cleanupOpenApiDoc(rawDocument);
+  delete doc.paths['/auth/{path}'];
+  delete doc.paths['/v1/auth/{path}'];
+  delete doc.paths['/v1/auth/*'];
+  doc.components = {
+    ...doc.components,
+    securitySchemes: {
+      ...doc.components?.securitySchemes,
+      ...BETTER_AUTH_SECURITY_SCHEMES,
+    },
+  };
+  return doc;
+}
 
 export interface ApiDocUrls {
   clientDocsUrl: string;
@@ -58,22 +80,7 @@ export async function setupApiDocumentation(app: NestFastifyApplication, appUrl:
     .addTag('用户中心', '用户个人资料、头像上传与信息查询')
     .build();
 
-  const rawClientDocument = SwaggerModule.createDocument(app, clientDocConfig, {
-    include: [...CLIENT_API_MODULES],
-  });
-  const clientDocument = cleanupOpenApiDoc(rawClientDocument);
-
-  // 清理任何遗留的通配认证路由
-  delete clientDocument.paths['/auth/{path}'];
-  delete clientDocument.paths['/v1/auth/{path}'];
-  delete clientDocument.paths['/v1/auth/*'];
-  clientDocument.components = {
-    ...clientDocument.components,
-    securitySchemes: {
-      ...clientDocument.components?.securitySchemes,
-      ...BETTER_AUTH_SECURITY_SCHEMES,
-    },
-  };
+  const clientDocument = createCleanDocument(app, clientDocConfig, CLIENT_FEATURE_MODULES);
 
   // ─── 2. 管理后台 API 文档 (Admin API) ──────────────────────────────────
   const adminDocConfig = new DocumentBuilder()
@@ -90,22 +97,7 @@ export async function setupApiDocumentation(app: NestFastifyApplication, appUrl:
     .addTag('消息通知', '实时事件向指定用户或全局广播派发')
     .build();
 
-  const rawAdminDocument = SwaggerModule.createDocument(app, adminDocConfig, {
-    include: [...ADMIN_API_MODULES],
-  });
-  const adminDocument = cleanupOpenApiDoc(rawAdminDocument);
-
-  // 清理任何遗留的通配认证路由
-  delete adminDocument.paths['/auth/{path}'];
-  delete adminDocument.paths['/v1/auth/{path}'];
-  delete adminDocument.paths['/v1/auth/*'];
-  adminDocument.components = {
-    ...adminDocument.components,
-    securitySchemes: {
-      ...adminDocument.components?.securitySchemes,
-      ...BETTER_AUTH_SECURITY_SCHEMES,
-    },
-  };
+  const adminDocument = createCleanDocument(app, adminDocConfig, ADMIN_FEATURE_MODULES);
 
   // ─── 3. Better Auth 全量认证 API 文档 (Auth API) ───────────────────────
   const authDocument = {
@@ -201,55 +193,26 @@ export async function setupApiDocumentation(app: NestFastifyApplication, appUrl:
   const httpAdapter = app.getHttpAdapter();
   const fastifyInstance = httpAdapter.getInstance();
 
-  // OpenAPI JSON Spec 数据源 (设置 60 秒客户端缓存加速文档加载)
-  fastifyInstance.get(
-    `/${ROUTES.DOCS_JSON}`,
-    (_req: unknown, reply: { header?: (k: string, v: string) => void; send: (data: unknown) => void }) => {
-      reply.header?.('Cache-Control', 'public, max-age=60');
-      reply.send(clientDocument);
-    },
-  );
+  const registerDocRoutePair = (jsonRoute: string, doc: unknown, htmlRoute: string, html: string) => {
+    fastifyInstance.get(
+      `/${jsonRoute}`,
+      (_req: unknown, reply: { header?: (k: string, v: string) => void; send: (data: unknown) => void }) => {
+        reply.header?.('Cache-Control', 'public, max-age=60');
+        reply.send(doc);
+      },
+    );
+    fastifyInstance.get(
+      `/${htmlRoute}`,
+      (_req: unknown, reply: { type?: (k: string) => void; send: (data: unknown) => void }) => {
+        reply.type?.('text/html; charset=utf-8');
+        reply.send(html);
+      },
+    );
+  };
 
-  fastifyInstance.get(
-    `/${ROUTES.ADMIN_DOCS_JSON}`,
-    (_req: unknown, reply: { header?: (k: string, v: string) => void; send: (data: unknown) => void }) => {
-      reply.header?.('Cache-Control', 'public, max-age=60');
-      reply.send(adminDocument);
-    },
-  );
-
-  fastifyInstance.get(
-    `/${ROUTES.AUTH_DOCS_JSON}`,
-    (_req: unknown, reply: { header?: (k: string, v: string) => void; send: (data: unknown) => void }) => {
-      reply.header?.('Cache-Control', 'public, max-age=60');
-      reply.send(authDocument);
-    },
-  );
-
-  // Scalar API Reference UI (使用 Fastify 原生路由精确匹配，杜绝 prefix 拦截冲突)
-  fastifyInstance.get(
-    `/${ROUTES.DOCS}`,
-    (_req: unknown, reply: { type?: (k: string) => void; send: (data: unknown) => void }) => {
-      reply.type?.('text/html; charset=utf-8');
-      reply.send(clientScalarHtml);
-    },
-  );
-
-  fastifyInstance.get(
-    `/${ROUTES.ADMIN_DOCS}`,
-    (_req: unknown, reply: { type?: (k: string) => void; send: (data: unknown) => void }) => {
-      reply.type?.('text/html; charset=utf-8');
-      reply.send(adminScalarHtml);
-    },
-  );
-
-  fastifyInstance.get(
-    `/${ROUTES.AUTH_DOCS}`,
-    (_req: unknown, reply: { type?: (k: string) => void; send: (data: unknown) => void }) => {
-      reply.type?.('text/html; charset=utf-8');
-      reply.send(authScalarHtml);
-    },
-  );
+  registerDocRoutePair(ROUTES.DOCS_JSON, clientDocument, ROUTES.DOCS, clientScalarHtml);
+  registerDocRoutePair(ROUTES.ADMIN_DOCS_JSON, adminDocument, ROUTES.ADMIN_DOCS, adminScalarHtml);
+  registerDocRoutePair(ROUTES.AUTH_DOCS_JSON, authDocument, ROUTES.AUTH_DOCS, authScalarHtml);
 
   return {
     clientDocsUrl: `${appUrl}/${ROUTES.DOCS}`,

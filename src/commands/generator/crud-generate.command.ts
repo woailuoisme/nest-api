@@ -6,7 +6,7 @@ import type { CommandOptions } from './types';
 /**
  * crud:generate CLI 命令 — 生成/覆盖/删除完整 CRUD 模块（恒定落入 /admin 后台边界）。
  *
- * 产物落 src/api/admin/<feature>/ 并自动注册进 AdminModule（受 AdminPrefixGuard 保护）。
+ * 产物落 src/features/admin/<feature>/ 并自动注册进 AdminModule（受 AdminPrefixGuard 保护）。
  *
  * 使用示例:
  *   just cmd crud:generate -n product --from-schema auth --from-entity users
@@ -154,7 +154,7 @@ export class CrudGenerateCommand extends CommandRunner {
         `1. 模块已自动注册进 AdminModule（/${routePrefix} 路由受 AdminPrefixGuard 保护，仅 ADMIN 可访问）`,
       );
     } else {
-      this.logger.log(`1. 模块已自动注册进 src/api/index.ts（/${routePrefix} 路由挂载于客户端 API 清单）`);
+      this.logger.log(`1. 模块已自动注册进 src/features/index.ts（/${routePrefix} 路由挂载于客户端特性清单）`);
     }
     this.logger.log('2. 请运行 just db-gen && just db-migrate 应用新表迁移');
     this.logger.log(

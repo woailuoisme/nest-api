@@ -7,12 +7,12 @@ import { StorageModule } from '@/common/storage/storage.module';
 import { validateEnv } from '@/config/env.validation';
 import { createBullModuleConfig } from '@/database/bull.config';
 import { DatabaseModule } from '@/database/drizzle/drizzle.module';
-import { DemoProcessor } from '@/queues/demo/demo.processor';
-import { MailHandlers } from '@/queues/mail/mail.handlers';
-import { MailProcessor } from '@/queues/mail/mail.processor';
-import { MailTemplateService } from '@/queues/mail/mail.template.service';
-import { MediaProcessor } from '@/queues/media/media.processor';
-import { TokenCleanupProcessor } from '@/queues/token-cleanup/token-cleanup.processor';
+import { DemoProcessor } from '@/jobs/demo/demo.processor';
+import { MailHandlers } from '@/jobs/mail/mail.handlers';
+import { MailProcessor } from '@/jobs/mail/mail.processor';
+import { MailTemplateService } from '@/jobs/mail/mail.template.service';
+import { MediaProcessor } from '@/jobs/media/media.processor';
+import { TokenCleanupProcessor } from '@/jobs/token-cleanup/token-cleanup.processor';
 import { SchedulesModule } from '@/schedules/schedules.module';
 import { LoggerModule } from '@/setup/logger/logger.module';
 

@@ -9,7 +9,7 @@ import type { ConfigService } from '@nestjs/config';
 import type { Queue } from 'bullmq';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { EnvConfig } from '@/config/env.validation';
-import { DemoJobName } from '@/queues/demo/demo.jobs';
+import { DemoJobName } from '@/jobs/demo/demo.jobs';
 import { DemoSchedule } from '@/schedules/demo.schedule';
 
 describe('DemoSchedule', () => {

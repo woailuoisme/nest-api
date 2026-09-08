@@ -45,13 +45,7 @@ export function parsePusherDsn(dsn: string): PusherConfig {
  * 将内部频道名称标准化为 Pusher 官方要求的合法前缀 (private- 与 presence-)
  */
 export function toPusherChannel(channel: string): string {
-  if (channel.startsWith('private:')) {
-    return `private-${channel.slice(8)}`;
-  }
-  if (channel.startsWith('presence:')) {
-    return `presence-${channel.slice(9)}`;
-  }
-  return channel;
+  return channel.replace(/^(private|presence):/, '$1-');
 }
 
 /**
@@ -80,22 +74,15 @@ export class PusherTransport implements RealtimeTransport {
 
     try {
       const config = parsePusherDsn(dsn);
-      const options: Pusher.Options = config.host
-        ? {
-            appId: config.appId,
-            key: config.key,
-            secret: config.secret,
-            host: config.host,
-            port: config.port ? String(config.port) : undefined,
-            useTLS: config.useTLS,
-          }
-        : {
-            appId: config.appId,
-            key: config.key,
-            secret: config.secret,
-            cluster: config.cluster ?? 'mt1',
-            useTLS: config.useTLS,
-          };
+      const options: Pusher.Options = {
+        appId: config.appId,
+        key: config.key,
+        secret: config.secret,
+        useTLS: config.useTLS,
+        ...(config.host
+          ? { host: config.host, port: config.port ? String(config.port) : undefined }
+          : { cluster: config.cluster ?? 'mt1' }),
+      };
 
       this.client = new Pusher(options);
       this.logger.log(

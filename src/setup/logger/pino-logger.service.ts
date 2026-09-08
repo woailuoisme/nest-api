@@ -52,12 +52,7 @@ export class PinoLoggerService implements LoggerService {
   }
 
   error(message: unknown, stack?: string, context?: string): void {
-    if (!this.pino) return;
-    if (typeof message === 'object' && message !== null) {
-      this.pino.error({ context, err: stack, ...message }, (message as { message?: string }).message ?? '');
-    } else {
-      this.pino.error({ context, err: stack }, String(message));
-    }
+    this.callPino('error', message, context, stack);
   }
 
   warn(message: unknown, context?: string): void {
@@ -73,12 +68,7 @@ export class PinoLoggerService implements LoggerService {
   }
 
   fatal(message: unknown, stack?: string, context?: string): void {
-    if (!this.pino) return;
-    if (typeof message === 'object' && message !== null) {
-      this.pino.fatal({ context, err: stack, ...message }, (message as { message?: string }).message ?? '');
-    } else {
-      this.pino.fatal({ context, err: stack }, String(message));
-    }
+    this.callPino('fatal', message, context, stack);
   }
 
   setLogLevels(levels: LogLevel[]): void {
@@ -112,15 +102,21 @@ export class PinoLoggerService implements LoggerService {
     }
   }
 
-  private callPino(level: 'info' | 'warn' | 'debug' | 'trace', message: unknown, context?: string): void {
+  private callPino(
+    level: 'info' | 'warn' | 'debug' | 'trace' | 'error' | 'fatal',
+    message: unknown,
+    context?: string,
+    err?: unknown,
+  ): void {
     if (!this.pino) return;
     if (level === 'info' && context && SILENT_BOOTSTRAP_CONTEXTS.has(context)) {
       return;
     }
+    const base = err === undefined ? { context } : { context, err };
     if (typeof message === 'object' && message !== null) {
-      this.pino[level]({ context, ...message }, (message as { message?: string }).message ?? '');
+      this.pino[level]({ ...base, ...message }, (message as { message?: string }).message ?? '');
     } else {
-      this.pino[level]({ context }, String(message));
+      this.pino[level](base, String(message));
     }
   }
 }

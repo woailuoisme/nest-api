@@ -159,11 +159,8 @@ export function buildSpatieConditions<TTable extends PgTable>(
 
   // 兜底默认排序
   if (orderClauses.length === 0 && options.defaultOrderBy) {
-    if (Array.isArray(options.defaultOrderBy)) {
-      orderClauses.push(...options.defaultOrderBy);
-    } else {
-      orderClauses.push(options.defaultOrderBy);
-    }
+    const defaults = Array.isArray(options.defaultOrderBy) ? options.defaultOrderBy : [options.defaultOrderBy];
+    orderClauses.push(...defaults);
   }
 
   return {

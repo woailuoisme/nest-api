@@ -1,10 +1,12 @@
 import { type CanActivate, type ExecutionContext, Injectable } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
-import { AdminRole, Role } from '@/common/constants/roles';
+import { Role } from '@/common/constants/roles';
 import { IS_PUBLIC_KEY } from '@/common/decorators/public.decorator';
 
 /** 管理后台路由前缀（精确匹配 '/admin' 或 '/admin/...'，避免 '/admin-xxx' 误伤） */
 const ADMIN_PREFIX = '/admin';
+
+const VALID_ADMIN_ROLES: readonly Role[] = [Role.SUPER_ADMIN, Role.ADMIN, Role.OPERATOR];
 
 /**
  * 管理前缀默认拒绝守卫 (AdminPrefixGuard)
@@ -38,7 +40,6 @@ export class AdminPrefixGuard implements CanActivate {
     const user = request.user;
     if (!user) return false;
 
-    const validRoles: string[] = [AdminRole.SUPER_ADMIN, AdminRole.ADMIN, AdminRole.OPERATOR, Role.ADMIN];
-    return validRoles.includes(user.role);
+    return VALID_ADMIN_ROLES.includes(user.role);
   }
 }

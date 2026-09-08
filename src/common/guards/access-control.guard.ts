@@ -49,7 +49,7 @@ export class AccessControlGuard implements CanActivate {
     if (!userRole) return false;
 
     // 超级管理员默认拥有全部权限与角色访问权
-    if (userRole === Role.ADMIN) return true;
+    if (userRole === Role.SUPER_ADMIN || userRole === Role.ADMIN) return true;
 
     // 角色校验（若有定义）
     if (requiredRoles?.length && !requiredRoles.includes(userRole)) {

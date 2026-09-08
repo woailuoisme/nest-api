@@ -3,11 +3,6 @@ import { Reflector } from '@nestjs/core';
 import { map, type Observable } from 'rxjs';
 import { BYPASS_TRANSFORM_KEY } from '@/common/decorators/response.decorator';
 
-export interface SuccessResponse<T> {
-  data: T;
-  meta?: Record<string, unknown>;
-}
-
 /**
  * 全局成功响应拦截器：遵循 API.md 工业级 RESTful 响应契约：
  * - 仅分页列表采用 `{"items": [...], "pagination": {...}}` 信封（空数据时保底为空数组 `[]`，杜绝前端空指针）

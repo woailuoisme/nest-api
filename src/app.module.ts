@@ -4,10 +4,10 @@ import { ConfigModule, ConfigService } from '@nestjs/config';
 import { APP_GUARD } from '@nestjs/core';
 import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
 import { I18nModule } from 'nestjs-i18n';
-import { API_MODULES } from '@/api';
 import { AccessControlGuard } from '@/common/guards/access-control.guard';
 import { AdminPrefixGuard } from '@/common/guards/admin-prefix.guard';
 import { BetterAuthGuard } from '@/common/guards/better-auth.guard';
+import { FEATURE_MODULES } from '@/features';
 import { CommandsModule } from './commands/commands.module';
 import { ExcelModule } from './common/excel/excel.module';
 import { IdempotencyModule } from './common/idempotency';
@@ -18,7 +18,7 @@ import { createBullModuleConfig } from './database/bull.config';
 import { DatabaseModule } from './database/drizzle/drizzle.module';
 import { RedisModule } from './database/redis.module';
 import { createI18nModuleConfig } from './i18n/i18n.config';
-import { QueuesModule } from './queues/queues.module';
+import { JobsModule } from './jobs/jobs.module';
 import { RealtimeModule } from './realtime/realtime.module';
 import { LoggerModule } from './setup/logger/logger.module';
 import { WorkerModule } from './workers/worker.module';
@@ -50,9 +50,9 @@ const isWorkerEmbedded = ['true', '1', 'yes', 'on'].includes(String(process.env.
     MediaModule,
     ExcelModule,
     IdempotencyModule,
-    ...API_MODULES,
+    ...FEATURE_MODULES,
     RealtimeModule,
-    QueuesModule,
+    JobsModule,
     CommandsModule,
     ...(isWorkerEmbedded ? [WorkerModule] : []),
   ],

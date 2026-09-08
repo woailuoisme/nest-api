@@ -23,7 +23,7 @@ describe('CrudGeneratorService', () => {
       expect(ctx.featureName).toBe('sampleProduct');
       expect(ctx.FeatureName).toBe('SampleProduct');
       expect(ctx.tableName).toBe('sample_products');
-      expect(ctx.featureModulePath).toBe('api/admin/sampleProduct');
+      expect(ctx.featureModulePath).toBe('features/admin/sampleProduct');
       expect(ctx.fields).toHaveLength(2);
       expect(ctx.fields[0].apiProperty).toContain('产品标题');
 
@@ -33,7 +33,7 @@ describe('CrudGeneratorService', () => {
       expect(artifacts.length).toBeGreaterThan(0);
       const serviceArtifact = artifacts.find((a) => a.outputPath.endsWith('.service.ts'));
       expect(serviceArtifact).toBeDefined();
-      expect(serviceArtifact!.outputPath).toBe('src/api/admin/sampleProduct/sampleProduct.service.ts');
+      expect(serviceArtifact!.outputPath).toBe('src/features/admin/sampleProduct/sampleProduct.service.ts');
       expect(serviceArtifact!.content).toContain('class SampleProductService');
       expect(serviceArtifact!.content).toContain('@InjectDb() private readonly db: DrizzleDB');
 
@@ -42,8 +42,8 @@ describe('CrudGeneratorService', () => {
       expect(controllerArtifact!.content).toContain("@ApiTags('SampleProduct')");
 
       const testArtifact = artifacts.find((a) => a.outputPath.endsWith('.service.test.ts'));
-      expect(testArtifact!.outputPath).toBe('tests/unit/api/admin/sampleProduct/sampleProduct.service.test.ts');
-      expect(testArtifact!.content).toContain("from '@/api/admin/sampleProduct/sampleProduct.service'");
+      expect(testArtifact!.outputPath).toBe('tests/unit/features/admin/sampleProduct/sampleProduct.service.test.ts');
+      expect(testArtifact!.content).toContain("from '@/features/admin/sampleProduct/sampleProduct.service'");
     });
   });
 
@@ -90,7 +90,7 @@ describe('CrudGeneratorService', () => {
     it('当目标文件存在且包含 @generated 标记时允许覆盖（无冲突）', () => {
       const ctx = TemplateRenderer.buildContext('sample_product', [{ name: 'title', type: 'string', required: true }]);
       const tempDir = join(process.cwd(), PATHS.STORAGE_TMP, 'gen-test-root');
-      const targetFile = join(tempDir, 'src', 'admin', 'sampleProduct', 'sampleProduct.service.ts');
+      const targetFile = join(tempDir, 'src', 'features', 'admin', 'sampleProduct', 'sampleProduct.service.ts');
 
       mkdirSync(dirname(targetFile), { recursive: true });
       writeFileSync(targetFile, '// @generated crud:generate\nexport class TestService {}', 'utf8');
@@ -105,7 +105,7 @@ describe('CrudGeneratorService', () => {
     it('当目标文件存在但缺少 @generated 标记时报告冲突', () => {
       const ctx = TemplateRenderer.buildContext('sample_product', [{ name: 'title', type: 'string', required: true }]);
       const tempDir = join(process.cwd(), PATHS.STORAGE_TMP, 'conflict-test-root');
-      const targetFile = join(tempDir, 'src', 'api', 'admin', 'sampleProduct', 'sampleProduct.service.ts');
+      const targetFile = join(tempDir, 'src', 'features', 'admin', 'sampleProduct', 'sampleProduct.service.ts');
 
       mkdirSync(dirname(targetFile), { recursive: true });
       writeFileSync(targetFile, '// 手写核心业务代码，不可覆盖\nexport class CustomService {}', 'utf8');
@@ -137,7 +137,7 @@ describe('CrudGeneratorService', () => {
 
     beforeEach(() => {
       tempDir = join(process.cwd(), PATHS.STORAGE_TMP, 'admin-reg-test-root');
-      adminModulePath = join(tempDir, 'src', 'api', 'admin', 'admin.module.ts');
+      adminModulePath = join(tempDir, 'src', 'features', 'admin', 'admin.module.ts');
       mkdirSync(dirname(adminModulePath), { recursive: true });
       writeFileSync(adminModulePath, adminModuleSource, 'utf8');
     });
@@ -175,7 +175,7 @@ describe('CrudGeneratorService', () => {
       );
 
       expect(ctx.scope).toBe('client');
-      expect(ctx.featureModulePath).toBe('api/client/product');
+      expect(ctx.featureModulePath).toBe('features/client/product');
       expect(ctx.routePrefix).toBe('products');
 
       const tmplDir = resolve(process.cwd(), 'src/commands/generator/templates');
@@ -183,21 +183,21 @@ describe('CrudGeneratorService', () => {
 
       const controllerArtifact = artifacts.find((a) => a.outputPath.endsWith('.controller.ts'));
       expect(controllerArtifact!.content).toContain("@Controller('products')");
-      expect(controllerArtifact!.outputPath).toBe('src/api/client/product/product.controller.ts');
+      expect(controllerArtifact!.outputPath).toBe('src/features/client/product/product.controller.ts');
     });
 
-    it('updateClientModuleExport 应在 src/api/index.ts 中追加/移除模块（幂等）', () => {
+    it('updateClientModuleExport 应在 src/features/index.ts 中追加/移除模块（幂等）', () => {
       const tempDir = join(process.cwd(), PATHS.STORAGE_TMP, 'client-reg-test-root');
-      const apiIndexPath = join(tempDir, 'src', 'api', 'index.ts');
+      const apiIndexPath = join(tempDir, 'src', 'features', 'index.ts');
       const apiIndexSource = [
-        "import { AdminModule } from '@/api/admin/admin.module';",
-        "import { UsersModule } from '@/api/client/users/users.module';",
+        "import { AdminModule } from '@/features/admin/admin.module';",
+        "import { UsersModule } from '@/features/client/users/users.module';",
         '',
-        'export const CLIENT_API_MODULES = [UsersModule] as const;',
-        'export const API_MODULES = [UsersModule, AdminModule] as const;',
+        'export const CLIENT_FEATURE_MODULES = [UsersModule] as const;',
+        'export const FEATURE_MODULES = [UsersModule, AdminModule] as const;',
         '',
-        "export * from '@/api/admin/admin.module';",
-        "export * from '@/api/client/users/users.module';",
+        "export * from '@/features/admin/admin.module';",
+        "export * from '@/features/client/users/users.module';",
         '',
       ].join('\n');
 
@@ -207,17 +207,17 @@ describe('CrudGeneratorService', () => {
       // 注册
       ArtifactWriter.updateClientModuleExport(tempDir, 'product', 'register');
       let content = readFileSync(apiIndexPath, 'utf8');
-      expect(content).toContain("import { ProductModule } from '@/api/client/product/product.module';");
-      expect(content).toContain('export const CLIENT_API_MODULES = [UsersModule, ProductModule] as const;');
-      expect(content).toContain('export const API_MODULES = [UsersModule, ProductModule, AdminModule] as const;');
-      expect(content).toContain("export * from '@/api/client/product/product.module';");
+      expect(content).toContain("import { ProductModule } from '@/features/client/product/product.module';");
+      expect(content).toContain('export const CLIENT_FEATURE_MODULES = [UsersModule, ProductModule] as const;');
+      expect(content).toContain('export const FEATURE_MODULES = [UsersModule, ProductModule, AdminModule] as const;');
+      expect(content).toContain("export * from '@/features/client/product/product.module';");
 
       // 注销
       ArtifactWriter.updateClientModuleExport(tempDir, 'product', 'unregister');
       content = readFileSync(apiIndexPath, 'utf8');
       expect(content).not.toContain('ProductModule');
-      expect(content).toContain('export const CLIENT_API_MODULES = [UsersModule] as const;');
-      expect(content).toContain('export const API_MODULES = [UsersModule, AdminModule] as const;');
+      expect(content).toContain('export const CLIENT_FEATURE_MODULES = [UsersModule] as const;');
+      expect(content).toContain('export const FEATURE_MODULES = [UsersModule, AdminModule] as const;');
 
       rmSync(tempDir, { recursive: true, force: true });
     });

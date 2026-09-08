@@ -55,15 +55,15 @@ export class ChannelManager {
   /**
    * 规范化频道名称前缀（透明桥接 private: 与 private-，presence: 与 presence-）
    */
-  normalizeChannel(channelName: string): string {
-    return channelName.replace(/^private[-:]/, 'private:').replace(/^presence[-:]/, 'presence:');
+  static normalizeChannel(channelName: string): string {
+    return channelName.replace(/^(private|presence)[-:]/, '$1:');
   }
 
   /**
    * 校验当前用户是否有权订阅目标频道
    */
   async canSubscribe(user: CurrentUserPayload, channelName: string): Promise<ChannelAuthResult> {
-    const normalized = this.normalizeChannel(channelName);
+    const normalized = ChannelManager.normalizeChannel(channelName);
 
     for (const rule of this.rules) {
       const match = normalized.match(rule.regex);

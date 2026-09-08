@@ -5,7 +5,7 @@ import type { Queue } from 'bullmq';
 import { APP_ENV_VALUES } from '@/common/constants/app.constants';
 import { TOKEN_CLEANUP_QUEUE } from '@/common/constants/queues';
 import type { EnvConfig } from '@/config/env.validation';
-import { TokenCleanupJobName } from '@/queues/token-cleanup/token-cleanup.jobs';
+import { TokenCleanupJobName } from '@/jobs/token-cleanup/token-cleanup.jobs';
 
 /**
  * Token 清理调度声明 — 应用启动时注册每日定时清理任务。

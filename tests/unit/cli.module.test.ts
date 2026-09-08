@@ -27,12 +27,12 @@ describe('CliModule', () => {
     }
   });
 
-  it('AppModule 与 CliModule 均应完整引入 API_MODULES', async () => {
-    const { API_MODULES } = await import('@/api');
+  it('AppModule 与 CliModule 均应完整引入 FEATURE_MODULES', async () => {
+    const { FEATURE_MODULES } = await import('@/features');
     const appImports = new Set(Reflect.getMetadata(MODULE_METADATA.IMPORTS, AppModule) || []);
     const cliImports = new Set(Reflect.getMetadata(MODULE_METADATA.IMPORTS, CliModule) || []);
 
-    for (const mod of API_MODULES) {
+    for (const mod of FEATURE_MODULES) {
       expect(appImports.has(mod), `AppModule 应包含 ${mod.name}`).toBe(true);
       expect(cliImports.has(mod), `CliModule 应包含 ${mod.name}`).toBe(true);
     }

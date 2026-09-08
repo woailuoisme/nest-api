@@ -51,7 +51,7 @@ export class CrudGeneratorService {
     // 4. 注册 Drizzle Schema 导出
     ArtifactWriter.updateSchemaExport(projectRoot, ctx.featureName, 'register');
 
-    // 5. 注册进对应端入口（AdminModule 或 src/api/index.ts）
+    // 5. 注册进对应端入口（AdminModule 或 src/features/index.ts）
     ArtifactWriter.updateModuleRegistration(projectRoot, ctx.featureName, ctx.scope, 'register');
 
     return { ctx, files: writtenFiles };
