@@ -1,6 +1,7 @@
 import { Body, Controller, Post } from '@nestjs/common';
-import { ApiBearerAuth, ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
-import { type NotificationPayload, SendNotificationDto } from './notifications.dto';
+import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
+import { ApiSuccessResponse } from '@/common/decorators/swagger-response.decorator';
+import { NotificationEntity, type NotificationPayload, SendNotificationDto } from './notifications.dto';
 import { NotificationsService } from './notifications.service';
 
 /**
@@ -15,7 +16,7 @@ export class AdminNotificationsController {
   constructor(private readonly notificationsService: NotificationsService) {}
 
   @ApiOperation({ summary: '发送通知' })
-  @ApiResponse({ status: 201, description: '事件推送成功' })
+  @ApiSuccessResponse(NotificationEntity, { status: 201, description: '事件推送成功' })
   @Post('send')
   send(@Body() dto: SendNotificationDto): NotificationPayload {
     return this.notificationsService.sendToUser(dto.userId, {

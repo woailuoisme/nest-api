@@ -22,25 +22,28 @@ describe('setupApiDocumentation', () => {
     } as unknown as ReturnType<typeof SwaggerModule.createDocument>);
   });
 
-  it('应成功构建客户端与管理后台双 OpenAPI 文档、注册对应 json 路由与 Scalar 路由，并返回文档 URLs', () => {
+  it('应成功构建客户端、管理后台与认证专有三 OpenAPI 文档、注册对应 json 路由与 Scalar 路由，并返回文档 URLs', async () => {
     const appUrl = 'http://localhost:4300';
-    const returnedUrls = setupApiDocumentation(fakeApp, appUrl);
+    const returnedUrls = await setupApiDocumentation(fakeApp, appUrl);
 
-    // 1. 断言 SwaggerModule.createDocument 被调用两次（Client 与 Admin）
+    // 1. 断言 SwaggerModule.createDocument 被调用两次（Client 与 Admin，Auth 专本文档直接基于 Better Auth OpenAPI 规范构建）
     expect(SwaggerModule.createDocument).toHaveBeenCalledTimes(2);
 
-    // 2. 断言注册了客户端与管理后台 JSON 数据源路由
+    // 2. 断言注册了客户端、管理后台与认证专用 JSON 数据源路由
     expect(getMock).toHaveBeenCalledWith(`/${ROUTES.DOCS_JSON}`, expect.any(Function));
     expect(getMock).toHaveBeenCalledWith(`/${ROUTES.ADMIN_DOCS_JSON}`, expect.any(Function));
+    expect(getMock).toHaveBeenCalledWith(`/${ROUTES.AUTH_DOCS_JSON}`, expect.any(Function));
 
-    // 3. 断言注册了客户端与管理后台 Scalar HTML 页面路由
+    // 3. 断言注册了客户端、管理后台与认证专用 Scalar HTML 页面路由
     expect(getMock).toHaveBeenCalledWith(`/${ROUTES.DOCS}`, expect.any(Function));
     expect(getMock).toHaveBeenCalledWith(`/${ROUTES.ADMIN_DOCS}`, expect.any(Function));
+    expect(getMock).toHaveBeenCalledWith(`/${ROUTES.AUTH_DOCS}`, expect.any(Function));
 
-    // 4. 断言返回了两个标准的文档 URL
+    // 4. 断言返回了三个标准的文档 URL
     expect(returnedUrls).toEqual({
       clientDocsUrl: `${appUrl}/${ROUTES.DOCS}`,
       adminDocsUrl: `${appUrl}/${ROUTES.ADMIN_DOCS}`,
+      authDocsUrl: `${appUrl}/${ROUTES.AUTH_DOCS}`,
     });
   });
 });

@@ -1,6 +1,5 @@
 import { Global, Module } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { JwtModule } from '@nestjs/jwt';
 import type { EnvConfig } from '@/config/env.validation';
 import { RedisModule } from '@/database/redis.module';
 import { ChannelManager } from './channels/channel-manager.service';
@@ -20,7 +19,7 @@ import { SseTransport } from './transports/sse.transport';
  */
 @Global()
 @Module({
-  imports: [JwtModule.register({}), RedisModule],
+  imports: [RedisModule],
   controllers: [RealtimeController, BroadcastingController],
   providers: [
     ChannelManager,

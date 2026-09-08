@@ -48,7 +48,7 @@ describe('LocalCompositeTransport', () => {
   it('sendToUser 应同时向 SSE 和 WebSocket 派发并发布到 Redis', async () => {
     const envelope = {
       event: 'user:alert',
-      targetUserId: 10,
+      targetUserId: '01931234-0000-7000-8000-000000000010',
       data: { msg: 'test' },
       timestamp: Date.now(),
     };

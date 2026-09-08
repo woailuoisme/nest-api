@@ -1,4 +1,4 @@
-import { bigint, index, integer, jsonb, pgTable, timestamp, uniqueIndex, varchar } from 'drizzle-orm/pg-core';
+import { bigint, index, integer, jsonb, pgTable, timestamp, uniqueIndex, uuid, varchar } from 'drizzle-orm/pg-core';
 
 /**
  * 幂等键状态枚举
@@ -23,7 +23,7 @@ export const idempotencyKeys = pgTable(
   {
     id: bigint('id', { mode: 'number' }).primaryKey().generatedAlwaysAsIdentity(),
     key: varchar('key', { length: 255 }).notNull(),
-    userId: bigint('user_id', { mode: 'number' }),
+    userId: uuid('user_id'),
     actorType: varchar('actor_type', { length: 50 }).notNull().default('user'),
     requestMethod: varchar('request_method', { length: 10 }).notNull(),
     requestPath: varchar('request_path', { length: 512 }).notNull(),

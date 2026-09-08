@@ -6,7 +6,7 @@ import {
   HttpCode,
   HttpStatus,
   Param,
-  ParseIntPipe,
+  ParseUUIDPipe,
   Patch,
   Post,
   Query,
@@ -19,6 +19,7 @@ import {
   ApiPageResponse,
   ApiSuccessResponse,
 } from '@/common/decorators/swagger-response.decorator';
+import { Idempotent } from '@/common/idempotency';
 import { ChangeRoleRequest, CreateUserRequest, FindUsersRequest, UpdateUserRequest, UserEntity } from './users.dto';
 import { UsersService } from './users.service';
 
@@ -34,9 +35,10 @@ import { UsersService } from './users.service';
 export class AdminUsersController {
   constructor(private readonly usersService: UsersService) {}
 
-  /** 创建新用户（需 UserCreate 权限） */
+  /** 创建新用户（需 UserCreate 权限，支持 Idempotency-Key 幂等写入） */
   @Post()
   @HttpCode(HttpStatus.CREATED)
+  @Idempotent()
   @Permissions(Permission.UserCreate)
   @ApiOperation({ summary: '创建用户' })
   @ApiSuccessResponse(UserEntity, { status: 201, description: '用户创建成功' })
@@ -58,7 +60,7 @@ export class AdminUsersController {
   @Permissions(Permission.UserUpdate)
   @ApiOperation({ summary: '更新用户' })
   @ApiSuccessResponse(UserEntity, { description: '用户信息更新成功' })
-  update(@Param('id', ParseIntPipe) id: number, @Body() dto: UpdateUserRequest) {
+  update(@Param('id', ParseUUIDPipe) id: string, @Body() dto: UpdateUserRequest) {
     return this.usersService.update(id, dto);
   }
 
@@ -66,7 +68,7 @@ export class AdminUsersController {
   @Patch(':id/role')
   @ApiOperation({ summary: '变更角色' })
   @ApiSuccessResponse(UserEntity, { description: '用户角色更新成功' })
-  changeRole(@Param('id', ParseIntPipe) id: number, @Body() dto: ChangeRoleRequest) {
+  changeRole(@Param('id', ParseUUIDPipe) id: string, @Body() dto: ChangeRoleRequest) {
     return this.usersService.changeRole(id, dto.role);
   }
 
@@ -76,7 +78,7 @@ export class AdminUsersController {
   @Permissions(Permission.UserDelete)
   @ApiOperation({ summary: '删除用户' })
   @ApiNoContentResponse({ description: '用户删除成功' })
-  remove(@Param('id', ParseIntPipe) id: number) {
-    return this.usersService.remove(id);
+  async remove(@Param('id', ParseUUIDPipe) id: string): Promise<void> {
+    await this.usersService.remove(id);
   }
 }

@@ -108,7 +108,7 @@ export class RealtimeService {
    * @param event 事件名
    * @param data 业务载荷
    */
-  sendToUser<T = unknown>(userId: number, event: string, data: T): RealtimeEnvelope<T> {
+  sendToUser<T = unknown>(userId: string, event: string, data: T): RealtimeEnvelope<T> {
     const envelope: RealtimeEnvelope<T> = {
       event,
       targetUserId: userId,
@@ -145,7 +145,7 @@ export class RealtimeService {
   /**
    * 暴露给 SSE Controller 的订阅流工厂（支持完整用户上下文过滤）
    */
-  subscribe(user: CurrentUserPayload | number): Observable<MessageEvent> {
+  subscribe(user: CurrentUserPayload | string): Observable<MessageEvent> {
     return this.sseTransport.subscribe(user);
   }
 

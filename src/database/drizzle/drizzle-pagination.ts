@@ -8,7 +8,7 @@ export interface PaginateQueryOptions<TColumns = undefined> {
   page?: number;
   pageSize?: number;
   where?: SQL | undefined;
-  orderBy?: SQL | SQL[];
+  orderBy?: SQL | PgColumn | (SQL | PgColumn)[];
   /** 可选列投影字典 — 仅查询指定列（如 { id: users.id, name: users.name }），避免敏感字段载入内存 */
   columns?: TColumns;
 }
@@ -65,4 +65,33 @@ export async function paginateQuery<
   ]);
 
   return { rows: rows as unknown as TSelect[], total };
+}
+
+/**
+ * 结合 Spatie 风格参数的类型安全通用 Drizzle 分页查询函数
+ */
+export async function paginateSpatieQuery<
+  TSchema extends Record<string, unknown>,
+  TTable extends PgTable,
+  TColumns extends Record<string, PgColumn | SQL | SQL.Aliased> | undefined = undefined,
+  TSelect = TColumns extends Record<string, PgColumn | SQL | SQL.Aliased>
+    ? { [K in keyof TColumns]: TColumns[K] extends PgColumn<infer C> ? C['data'] : unknown }
+    : TTable['$inferSelect'],
+>(
+  db: NodePgDatabase<TSchema>,
+  table: TTable,
+  parsedQuery: import('@/common/query/spatie-query').ParsedSpatieQuery,
+  mappingOptions: import('@/common/query/spatie-query').SpatieMappingOptions<TTable>,
+  columns?: TColumns,
+): Promise<PaginatedRows<TSelect>> {
+  const { buildSpatieConditions } = await import('@/common/query/spatie-query');
+  const { where, orderBy } = buildSpatieConditions(table, parsedQuery, mappingOptions);
+
+  return paginateQuery(db, table, {
+    page: parsedQuery.page,
+    pageSize: parsedQuery.pageSize,
+    where,
+    orderBy,
+    columns,
+  });
 }

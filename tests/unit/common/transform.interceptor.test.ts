@@ -6,7 +6,7 @@ import { BYPASS_TRANSFORM_KEY } from '@/common/decorators/response.decorator';
 import { TransformInterceptor } from '@/common/interceptors/transform.interceptor';
 
 describe('TransformInterceptor', () => {
-  it('should wrap single object response into { data } format', async () => {
+  it('should return bare JSON entity for single object response', async () => {
     const reflector = new Reflector();
     vi.spyOn(reflector, 'getAllAndOverride').mockImplementation((key: any) => {
       if (key === BYPASS_TRANSFORM_KEY) return false;
@@ -30,12 +30,10 @@ describe('TransformInterceptor', () => {
       interceptor.intercept(mockContext, mockCallHandler).subscribe(resolve);
     });
 
-    expect(result).toEqual({
-      data: { id: 1, name: 'Test' },
-    });
+    expect(result).toEqual({ id: 1, name: 'Test' });
   });
 
-  it('should unwrap items and meta into root-level { data, meta } format for paginated responses', async () => {
+  it('should unwrap paginated responses into root-level { items, pagination } format', async () => {
     const reflector = new Reflector();
     vi.spyOn(reflector, 'getAllAndOverride').mockImplementation((key: any) => {
       if (key === BYPASS_TRANSFORM_KEY) return false;
@@ -65,8 +63,8 @@ describe('TransformInterceptor', () => {
     });
 
     expect(result).toEqual({
-      data: [{ id: 1, name: 'Test' }],
-      meta: { page: 1, pageSize: 20, total: 1, totalPages: 1 },
+      items: [{ id: 1, name: 'Test' }],
+      pagination: { page: 1, pageSize: 20, total: 1, totalPages: 1 },
     });
   });
 

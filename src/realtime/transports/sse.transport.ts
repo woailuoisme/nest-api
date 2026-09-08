@@ -34,8 +34,8 @@ export class SseTransport implements RealtimeTransport, OnModuleDestroy {
    * 为指定用户订阅专属 SSE 消息流（支持 ChannelManager 频道权限动态拦截）
    * @param user 目标用户上下文或用户 ID
    */
-  subscribe(user: CurrentUserPayload | number): Observable<MessageEvent> {
-    const userPayload: CurrentUserPayload = typeof user === 'number' ? { id: user, email: '', role: Role.USER } : user;
+  subscribe(user: CurrentUserPayload | string): Observable<MessageEvent> {
+    const userPayload: CurrentUserPayload = typeof user === 'string' ? { id: user, email: '', role: Role.USER } : user;
 
     return this.stream$.asObservable().pipe(
       concatMap(async (envelope) => {

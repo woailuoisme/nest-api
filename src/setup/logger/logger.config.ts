@@ -4,8 +4,8 @@ import { Writable } from 'node:stream';
 import pino from 'pino';
 import pretty from 'pino-pretty';
 import pinoRoll from 'pino-roll';
+import { v7 as uuidv7 } from 'uuid';
 import { isProductionEnv, PATHS } from '@/common/constants/app.constants';
-import { uuidv7 } from '@/common/utils/uuid.util';
 
 /** 敏感 Token 查询参数脱敏正则（预编译复用） */
 export const AUTH_QUERY_REGEX = /([?&](?:token|access_token|refresh_token)=)[^&\s]*/g;

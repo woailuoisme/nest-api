@@ -18,14 +18,14 @@ describe('NotificationsService', () => {
   });
 
   it('sendToUser 应组装结构化负载并委托给 RealtimeService.sendToUser', () => {
-    const payload = service.sendToUser(1, {
+    const payload = service.sendToUser('user-uuid-1', {
       title: '账户变动',
       message: '您的密码已修改',
       type: 'warning',
     });
 
     expect(mockRealtimeService.sendToUser).toHaveBeenCalledWith(
-      1,
+      'user-uuid-1',
       'notification',
       expect.objectContaining({
         title: '账户变动',

@@ -53,17 +53,17 @@ export class ApiErrorResponseResource {
 }
 
 export class ApiPaginatedResponseResource<T = unknown> {
-  @ApiProperty({ isArray: true, description: 'List items data' })
-  data: T[];
+  @ApiProperty({ isArray: true, description: '列表数据集合（空数据时保底为空数组 []）' })
+  items: T[];
 
-  @ApiProperty({ type: PageMetaResource, description: 'Pagination metadata' })
-  meta: PageMetaResource;
+  @ApiProperty({ type: PageMetaResource, description: 'Offset 分页元数据' })
+  pagination: PageMetaResource;
 }
 
 export class ApiCursorPaginatedResponseResource<T = unknown> {
-  @ApiProperty({ isArray: true, description: 'List items data' })
-  data: T[];
+  @ApiProperty({ isArray: true, description: '列表数据集合（空数据时保底为空数组 []）' })
+  items: T[];
 
-  @ApiProperty({ type: CursorPageMetaResource, description: 'Cursor pagination metadata' })
-  meta: CursorPageMetaResource;
+  @ApiProperty({ type: CursorPageMetaResource, description: 'Cursor 游标分页元数据' })
+  pagination: CursorPageMetaResource;
 }

@@ -54,7 +54,7 @@ describe('AccessControlGuard', () => {
     it('ADMIN 用户在任意角色限制下均应直接放行', () => {
       const context = createMockContext({ role: Role.ADMIN });
       vi.spyOn(reflector, 'getAllAndOverride').mockImplementation((key) => {
-        if (key === ROLES_KEY) return [Role.MANAGER];
+        if (key === ROLES_KEY) return [Role.OPERATOR];
         return undefined;
       });
 
@@ -62,9 +62,9 @@ describe('AccessControlGuard', () => {
     });
 
     it('拥有允许角色的用户应成功放行', () => {
-      const context = createMockContext({ role: Role.MANAGER });
+      const context = createMockContext({ role: Role.OPERATOR });
       vi.spyOn(reflector, 'getAllAndOverride').mockImplementation((key) => {
-        if (key === ROLES_KEY) return [Role.MANAGER, Role.ADMIN];
+        if (key === ROLES_KEY) return [Role.OPERATOR, Role.ADMIN];
         return undefined;
       });
 
@@ -74,7 +74,7 @@ describe('AccessControlGuard', () => {
     it('不具备允许角色的用户应被拦截', () => {
       const context = createMockContext({ role: Role.USER });
       vi.spyOn(reflector, 'getAllAndOverride').mockImplementation((key) => {
-        if (key === ROLES_KEY) return [Role.MANAGER, Role.ADMIN];
+        if (key === ROLES_KEY) return [Role.OPERATOR, Role.ADMIN];
         return undefined;
       });
 
@@ -103,8 +103,8 @@ describe('AccessControlGuard', () => {
       expect(guard.canActivate(context)).toBe(true);
     });
 
-    it('MANAGER 拥有 UserRead 权限时应放行', () => {
-      const context = createMockContext({ role: Role.MANAGER });
+    it('OPERATOR 拥有 UserRead 权限时应放行', () => {
+      const context = createMockContext({ role: Role.OPERATOR });
       vi.spyOn(reflector, 'getAllAndOverride').mockImplementation((key) => {
         if (key === PERMISSIONS_KEY) return [Permission.UserRead];
         return undefined;
@@ -113,8 +113,8 @@ describe('AccessControlGuard', () => {
       expect(guard.canActivate(context)).toBe(true);
     });
 
-    it('MANAGER 缺少 UserDelete 权限时应拦截', () => {
-      const context = createMockContext({ role: Role.MANAGER });
+    it('OPERATOR 缺少 UserDelete 权限时应拦截', () => {
+      const context = createMockContext({ role: Role.OPERATOR });
       vi.spyOn(reflector, 'getAllAndOverride').mockImplementation((key) => {
         if (key === PERMISSIONS_KEY) return [Permission.UserDelete];
         return undefined;

@@ -7,10 +7,17 @@ import { notifications } from '@/database/drizzle/schema/notifications.schema';
 describe('Drizzle Schemas Integrity', () => {
   describe('schema/index.ts 统一聚合导出', () => {
     it('应完整导出所有领域表定义', () => {
-      expect(schema.users).toBeDefined();
-      expect(schema.refreshTokens).toBeDefined();
-      expect(schema.ephemeralTokens).toBeDefined();
-      expect(schema.adminUsers).toBeDefined();
+      expect(schema.user).toBeDefined();
+      expect(schema.session).toBeDefined();
+      expect(schema.account).toBeDefined();
+      expect(schema.verification).toBeDefined();
+      expect(schema.twoFactor).toBeDefined();
+      expect(schema.apikey).toBeDefined();
+      expect(schema.organization).toBeDefined();
+      expect(schema.member).toBeDefined();
+      expect(schema.invitation).toBeDefined();
+      expect(schema.jwks).toBeDefined();
+      expect(schema.deviceCode).toBeDefined();
       expect(schema.idempotencyKeys).toBeDefined();
       expect(schema.media).toBeDefined();
       expect(schema.notifications).toBeDefined();

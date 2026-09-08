@@ -7,9 +7,10 @@ import { I18nModule } from 'nestjs-i18n';
 import { API_MODULES } from '@/api';
 import { AccessControlGuard } from '@/common/guards/access-control.guard';
 import { AdminPrefixGuard } from '@/common/guards/admin-prefix.guard';
-import { JwtAuthGuard } from './api/client/auth/auth.guard';
+import { BetterAuthGuard } from '@/common/guards/better-auth.guard';
 import { CommandsModule } from './commands/commands.module';
 import { ExcelModule } from './common/excel/excel.module';
+import { IdempotencyModule } from './common/idempotency';
 import { MediaModule } from './common/media/media.module';
 import { StorageModule } from './common/storage/storage.module';
 import { type EnvConfig, validateEnv } from './config/env.validation';
@@ -48,6 +49,7 @@ const isWorkerEmbedded = ['true', '1', 'yes', 'on'].includes(String(process.env.
     StorageModule,
     MediaModule,
     ExcelModule,
+    IdempotencyModule,
     ...API_MODULES,
     RealtimeModule,
     QueuesModule,
@@ -56,7 +58,7 @@ const isWorkerEmbedded = ['true', '1', 'yes', 'on'].includes(String(process.env.
   ],
   providers: [
     { provide: APP_GUARD, useClass: ThrottlerGuard },
-    { provide: APP_GUARD, useClass: JwtAuthGuard },
+    { provide: APP_GUARD, useClass: BetterAuthGuard },
     { provide: APP_GUARD, useClass: AdminPrefixGuard },
     { provide: APP_GUARD, useClass: AccessControlGuard },
   ],

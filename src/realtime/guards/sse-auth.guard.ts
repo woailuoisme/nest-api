@@ -1,59 +1,58 @@
 import { type CanActivate, type ExecutionContext, Injectable, UnauthorizedException } from '@nestjs/common';
-import { ConfigService } from '@nestjs/config';
-import { JwtService } from '@nestjs/jwt';
+import { fromNodeHeaders } from 'better-auth/node';
 import type { FastifyRequest } from 'fastify';
-import type { JwtPayload } from '@/api/client/auth/strategies/jwt.strategy';
-import type { EnvConfig } from '@/config/env.validation';
+import { auth } from '@/common/auth/better-auth';
+import type { Role } from '@/common/constants/roles';
+import type { CurrentUserPayload } from '@/common/decorators/current-user.decorator';
 
 /**
  * 专为 Server-Sent Events (SSE) 长连接设计的双通道鉴权守卫：
- * 1. 优先提取 Query 参数 `?token=<jwt>`（适配浏览器原生 EventSource 无法自定义请求头的限制）
- * 2. 降级提取标准请求头 `Authorization: Bearer <jwt>`
+ * 1. 优先从请求头（Cookie、Authorization: Bearer）提取凭证；
+ * 2. 兼容提取 Query 参数 `?token=<token>` 并转化为 Bearer 头；
+ * 3. 通过 Better Auth 会话接口验证会话有效性。
  */
 @Injectable()
 export class SseAuthGuard implements CanActivate {
-  constructor(
-    private readonly jwtService: JwtService,
-    private readonly configService: ConfigService<EnvConfig, true>,
-  ) {}
-
   async canActivate(context: ExecutionContext): Promise<boolean> {
     const request = context.switchToHttp().getRequest<FastifyRequest>();
-    const token = this.extractToken(request);
+    const headers = fromNodeHeaders(request.headers);
 
-    if (!token) {
-      throw new UnauthorizedException('Authentication token is required to establish SSE stream');
+    const query = request.query as Record<string, unknown> | undefined;
+    if (query?.token && typeof query.token === 'string' && !headers.has('authorization')) {
+      headers.set('authorization', `Bearer ${query.token.trim()}`);
     }
 
     try {
-      const payload = await this.jwtService.verifyAsync<JwtPayload>(token, {
-        secret: this.configService.get('JWT_ACCESS_SECRET'),
-      });
+      const sessionData = await auth.api.getSession({ headers });
 
-      // 将解码后的用户信息挂载到 request.user
-      (request as FastifyRequest & { user: unknown }).user = {
-        id: Number(payload.sub),
-        email: payload.email,
-        role: payload.role,
+      if (!sessionData?.user) {
+        throw new UnauthorizedException('Authentication token is required to establish SSE stream');
+      }
+
+      const user = sessionData.user as typeof sessionData.user & {
+        banned?: boolean | null;
+        banReason?: string | null;
+        role?: Role | null;
+      };
+
+      if (user.banned) {
+        throw new UnauthorizedException(user.banReason || 'Account suspended');
+      }
+
+      (request as FastifyRequest & { user: CurrentUserPayload }).user = {
+        id: user.id,
+        email: user.email,
+        name: user.name,
+        role: (user.role as Role) || ('user' as Role),
+        image: user.image,
       };
 
       return true;
-    } catch {
+    } catch (err) {
+      if (err instanceof UnauthorizedException) {
+        throw err;
+      }
       throw new UnauthorizedException('Invalid or expired authentication token');
     }
-  }
-
-  private extractToken(request: FastifyRequest): string | null {
-    const query = request.query as Record<string, unknown> | undefined;
-    if (query && typeof query.token === 'string' && query.token.trim().length > 0) {
-      return query.token.trim();
-    }
-
-    const authHeader = request.headers.authorization;
-    if (authHeader?.startsWith('Bearer ')) {
-      return authHeader.slice(7).trim();
-    }
-
-    return null;
   }
 }

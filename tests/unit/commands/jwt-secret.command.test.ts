@@ -1,4 +1,4 @@
-import { existsSync, readFileSync, unlinkSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, unlinkSync, writeFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { JwtSecretCommand } from '@/commands/jwt-secret.command';
@@ -10,6 +10,7 @@ describe('JwtSecretCommand', () => {
 
   beforeEach(() => {
     command = new JwtSecretCommand();
+    mkdirSync(resolve(process.cwd(), PATHS.STORAGE_TMP), { recursive: true });
     if (existsSync(testEnvPath)) {
       unlinkSync(testEnvPath);
     }
@@ -28,21 +29,25 @@ describe('JwtSecretCommand', () => {
     await command.run([], { env: testEnvPath });
 
     const updatedContent = readFileSync(testEnvPath, 'utf8');
+    expect(updatedContent).toContain('BETTER_AUTH_SECRET=');
     expect(updatedContent).toContain('JWT_ACCESS_SECRET=');
     expect(updatedContent).toContain('JWT_REFRESH_SECRET=');
 
+    const betterAuthMatch = updatedContent.match(/BETTER_AUTH_SECRET=([A-Za-z0-9_-]+)/);
     const accessMatch = updatedContent.match(/JWT_ACCESS_SECRET=([A-Za-z0-9_-]+)/);
     const refreshMatch = updatedContent.match(/JWT_REFRESH_SECRET=([A-Za-z0-9_-]+)/);
+    expect(betterAuthMatch).not.toBeNull();
     expect(accessMatch).not.toBeNull();
     expect(refreshMatch).not.toBeNull();
     expect(accessMatch?.[1]).not.toBe(refreshMatch?.[1]);
   });
 
-  it('当目标 .env 不存在时应自动创建并写入两个 JWT 密钥', async () => {
+  it('当目标 .env 不存在时应自动创建并写入密钥', async () => {
     await command.run([], { env: testEnvPath });
 
     expect(existsSync(testEnvPath)).toBe(true);
     const createdContent = readFileSync(testEnvPath, 'utf8');
+    expect(createdContent).toMatch(/BETTER_AUTH_SECRET=.+/);
     expect(createdContent).toMatch(/JWT_ACCESS_SECRET=.+/);
     expect(createdContent).toMatch(/JWT_REFRESH_SECRET=.+/);
   });
@@ -52,7 +57,8 @@ describe('JwtSecretCommand', () => {
 
     await command.run([], { env: testEnvPath, show: true });
 
-    expect(logSpy).toHaveBeenCalledWith(expect.stringContaining('[jwt:secret]'));
+    expect(logSpy).toHaveBeenCalledWith(expect.stringContaining('[auth:secret]'));
+    expect(logSpy).toHaveBeenCalledWith(expect.stringContaining('BETTER_AUTH_SECRET:'));
     expect(logSpy).toHaveBeenCalledWith(expect.stringContaining('JWT_ACCESS_SECRET:'));
     expect(logSpy).toHaveBeenCalledWith(expect.stringContaining('JWT_REFRESH_SECRET:'));
   });

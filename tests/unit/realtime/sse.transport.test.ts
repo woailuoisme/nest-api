@@ -10,8 +10,16 @@ describe('SseTransport', () => {
   let transport: SseTransport;
   let channelManager: ChannelManager;
 
-  const normalUser: CurrentUserPayload = { id: 1, email: 'user@example.com', role: Role.USER };
-  const adminUser: CurrentUserPayload = { id: 99, email: 'admin@example.com', role: Role.ADMIN };
+  const normalUser: CurrentUserPayload = {
+    id: '01931234-0000-7000-8000-000000000001',
+    email: 'user@example.com',
+    role: Role.USER,
+  };
+  const adminUser: CurrentUserPayload = {
+    id: '01931234-0000-7000-8000-000000000099',
+    email: 'admin@example.com',
+    role: Role.ADMIN,
+  };
 
   beforeEach(() => {
     channelManager = new ChannelManager();
@@ -22,13 +30,13 @@ describe('SseTransport', () => {
     const user1Events: any[] = [];
     const user2Events: any[] = [];
 
-    const sub1 = transport.subscribe(1).subscribe((e) => user1Events.push(e));
-    const sub2 = transport.subscribe(2).subscribe((e) => user2Events.push(e));
+    const sub1 = transport.subscribe('01931234-0000-7000-8000-000000000001').subscribe((e) => user1Events.push(e));
+    const sub2 = transport.subscribe('01931234-0000-7000-8000-000000000002').subscribe((e) => user2Events.push(e));
 
     // 用户 1 专属事件
     transport.sendToUser({
       event: 'user:alert',
-      targetUserId: 1,
+      targetUserId: '01931234-0000-7000-8000-000000000001',
       data: { msg: 'hello user 1' },
       timestamp: Date.now(),
     });
@@ -81,7 +89,7 @@ describe('SseTransport', () => {
     // 2. 向用户 1 私有频道广播
     transport.broadcast({
       event: 'user:secret',
-      channel: 'private:user.1',
+      channel: 'private:user.01931234-0000-7000-8000-000000000001',
       data: { token: 'secret-123' },
       timestamp: Date.now(),
     });
@@ -89,7 +97,7 @@ describe('SseTransport', () => {
     // 3. 向用户 2 私有频道广播
     transport.broadcast({
       event: 'user:secret',
-      channel: 'private:user.2',
+      channel: 'private:user.01931234-0000-7000-8000-000000000002',
       data: { token: 'secret-456' },
       timestamp: Date.now(),
     });
@@ -110,7 +118,7 @@ describe('SseTransport', () => {
 
   it('onModuleDestroy 应触发流 complete', () => {
     let completed = false;
-    transport.subscribe(1).subscribe({
+    transport.subscribe('01931234-0000-7000-8000-000000000001').subscribe({
       complete: () => {
         completed = true;
       },

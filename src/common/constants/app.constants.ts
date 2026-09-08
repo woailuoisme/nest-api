@@ -34,6 +34,8 @@ export const ROUTES = {
   DOCS_JSON: 'docs-json',
   ADMIN_DOCS: 'docs/admin',
   ADMIN_DOCS_JSON: 'docs-admin-json',
+  AUTH_DOCS: 'docs/auth',
+  AUTH_DOCS_JSON: 'docs-auth-json',
   QUEUES: 'queues',
 } as const;
 
@@ -45,6 +47,8 @@ export const EXCLUDED_ROUTES = [
   ROUTES.DOCS_JSON,
   ROUTES.ADMIN_DOCS,
   ROUTES.ADMIN_DOCS_JSON,
+  ROUTES.AUTH_DOCS,
+  ROUTES.AUTH_DOCS_JSON,
   ROUTES.QUEUES,
 ] as const;
 

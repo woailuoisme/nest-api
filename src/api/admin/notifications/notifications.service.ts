@@ -14,7 +14,7 @@ export class NotificationsService {
   /**
    * 向特定用户发送实时通知
    */
-  sendToUser(userId: number, dto: Omit<SendNotificationDto, 'userId'>): NotificationPayload {
+  sendToUser(userId: string, dto: Omit<SendNotificationDto, 'userId'>): NotificationPayload {
     const payload = this.createPayload(dto);
     this.realtimeService.sendToUser(userId, 'notification', payload);
     return payload;

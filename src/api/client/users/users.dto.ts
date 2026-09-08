@@ -11,8 +11,8 @@ import { Role } from '@/common/constants/roles';
  * （如自助面将来可隐藏 role 等管理语义字段）。
  */
 export class UserEntity {
-  @ApiProperty({ example: 1, description: '用户ID' })
-  id: number;
+  @ApiProperty({ example: '018e3d60-0000-7000-8000-000000000001', description: '用户ID' })
+  id: string;
 
   @ApiProperty({ example: '张三', description: '用户名' })
   name: string;
@@ -24,10 +24,13 @@ export class UserEntity {
   role: Role;
 
   @ApiProperty({ example: 'http://example.com/avatar.jpg', nullable: true, description: '头像URL' })
+  image: string | null;
+
+  @ApiProperty({ example: 'http://example.com/avatar.jpg', nullable: true, description: '头像URL (别名)' })
   avatarUrl: string | null;
 
-  @ApiProperty({ example: '2024-01-15T10:30:00.000Z', nullable: true, description: '邮箱验证时间' })
-  emailVerifiedAt: Date | null;
+  @ApiProperty({ example: true, description: '邮箱是否已验证' })
+  emailVerified: boolean;
 
   @ApiProperty({ example: '2024-01-15T10:30:00.000Z', description: '创建时间' })
   createdAt: Date;
@@ -38,7 +41,16 @@ export class UserEntity {
   @Exclude()
   passwordHash?: string | null;
 
-  constructor(partial: Partial<UserEntity>) {
+  constructor(
+    partial: Partial<UserEntity> & {
+      image?: string | null;
+      avatarUrl?: string | null;
+      emailVerifiedAt?: Date | null;
+    },
+  ) {
     Object.assign(this, partial);
+    this.avatarUrl = partial.avatarUrl ?? partial.image ?? null;
+    this.image = partial.image ?? partial.avatarUrl ?? null;
+    this.emailVerified = partial.emailVerified ?? Boolean(partial.emailVerifiedAt);
   }
 }

@@ -45,7 +45,7 @@ describe('RedisPubSubAdapter', () => {
   it('publish 应将事件包装 originPodId 后写入 Redis 频道', async () => {
     await adapter.publish({
       event: 'user:login',
-      targetUserId: 1,
+      targetUserId: '01931234-0000-7000-8000-000000000001',
       data: { ip: '127.0.0.1' },
       timestamp: Date.now(),
     });

@@ -1,6 +1,4 @@
 import { Injectable, Logger, type OnModuleDestroy } from '@nestjs/common';
-import { ConfigService } from '@nestjs/config';
-import { JwtService } from '@nestjs/jwt';
 import {
   ConnectedSocket,
   MessageBody,
@@ -11,11 +9,12 @@ import {
   WebSocketGateway,
   WebSocketServer,
 } from '@nestjs/websockets';
+import { fromNodeHeaders } from 'better-auth/node';
 import type { Server, Socket } from 'socket.io';
-import type { JwtPayload } from '@/api/client/auth/strategies/jwt.strategy';
+import { auth } from '@/common/auth/better-auth';
 import { isProductionEnv } from '@/common/constants/app.constants';
+import type { Role } from '@/common/constants/roles';
 import type { CurrentUserPayload } from '@/common/decorators/current-user.decorator';
-import type { EnvConfig } from '@/config/env.validation';
 import { ChannelManager } from './channels/channel-manager.service';
 import { extractSocketToken } from './guards/socket-auth.helper';
 import type { RealtimeEnvelope } from './realtime.dto';
@@ -53,11 +52,7 @@ export class RealtimeGateway
 
   private readonly logger = new Logger(RealtimeGateway.name);
 
-  constructor(
-    private readonly jwtService: JwtService,
-    private readonly configService: ConfigService<EnvConfig, true>,
-    private readonly channelManager: ChannelManager,
-  ) {}
+  constructor(private readonly channelManager: ChannelManager) {}
 
   afterInit(_server: Server): void {
     this.logger.log('[RealtimeGateway] Socket.IO gateway initialized on namespace /realtime');
@@ -78,33 +73,47 @@ export class RealtimeGateway
    */
   async handleConnection(client: Socket): Promise<void> {
     const token = extractSocketToken(client);
+    const rawHeaders = (client.handshake.headers ?? {}) as Record<string, string | string[] | undefined>;
+    const headers = fromNodeHeaders(rawHeaders);
 
-    if (!token) {
-      this.logger.warn(`[RealtimeGateway] Unauthorized connection attempt rejected: ${client.id}`);
-      client.emit('error', { message: 'Authentication token is required to connect to /realtime' });
-      setTimeout(() => client.disconnect(true), 50);
-      return;
+    if (token && !headers.has('authorization')) {
+      headers.set('authorization', `Bearer ${token}`);
     }
 
     try {
-      const payload = await this.jwtService.verifyAsync<JwtPayload>(token, {
-        secret: this.configService.get('JWT_ACCESS_SECRET'),
-      });
+      const sessionData = await auth.api.getSession({ headers });
+
+      if (!sessionData?.user) {
+        this.logger.warn(`[RealtimeGateway] Unauthorized connection attempt rejected: ${client.id}`);
+        client.emit('error', { message: 'Authentication token is required to connect to /realtime' });
+        setTimeout(() => client.disconnect(true), 50);
+        return;
+      }
+
+      const user = sessionData.user as {
+        id: string;
+        email: string;
+        name: string;
+        role?: Role | null;
+        image?: string | null;
+      };
 
       // 绑定身份并自动加入该用户专属房间（支持同账号多设备广播）
       client.data.user = {
-        id: Number(payload.sub),
-        email: payload.email,
-        role: payload.role,
+        id: user.id,
+        email: user.email,
+        name: user.name,
+        role: (user.role as Role) || ('user' as Role),
+        image: user.image,
       };
-      client.join(`user:${payload.sub}`);
+      client.join(`user:${user.id}`);
 
-      this.logger.log(`[RealtimeGateway] Client connected: ${client.id} (userId=${payload.sub})`);
+      this.logger.log(`[RealtimeGateway] Client connected: ${client.id} (userId=${user.id})`);
 
       client.emit('connected', {
         status: 'connected',
         socketId: client.id,
-        userId: Number(payload.sub),
+        userId: user.id,
         timestamp: Date.now(),
       });
     } catch {

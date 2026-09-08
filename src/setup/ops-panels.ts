@@ -26,12 +26,13 @@ export async function registerOpsPanels(app: NestFastifyApplication): Promise<Mo
     logViewerUser: config.get('LOG_VIEWER_USER'),
     logViewerPassword: config.get('LOG_VIEWER_PASSWORD'),
   });
-  const docUrls = config.get('SWAGGER_ENABLED') ? setupApiDocumentation(app, appUrl) : null;
+  const docUrls = config.get('SWAGGER_ENABLED') ? await setupApiDocumentation(app, appUrl) : null;
 
   const panels: MountedPanel[] = [];
   if (docUrls) {
     panels.push({ label: 'Scalar Client API Document', url: docUrls.clientDocsUrl });
     panels.push({ label: 'Scalar Admin API Document', url: docUrls.adminDocsUrl });
+    panels.push({ label: 'Scalar Auth API Document', url: docUrls.authDocsUrl });
   }
   if (bullBoardUrl) {
     panels.push({ label: 'BullMQ Queue Dashboard', url: bullBoardUrl });

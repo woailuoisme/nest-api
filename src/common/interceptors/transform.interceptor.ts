@@ -9,18 +9,17 @@ export interface SuccessResponse<T> {
 }
 
 /**
- * 全局成功响应拦截器：将所有 HTTP 成功响应统一格式化为纯正 RESTful JSON 结构：
- * - 单体资源：`{ data: T }`
- * - 分页列表：`{ data: T[], meta: PageMetaResource }`
- *
- * 协议状态完全由 HTTP Status Code (200 / 201 / 204) 表征，避免在 Body 内包裹冗余的 success/code/message。
- * 支持通过 `@BypassTransform()` 装饰器跳过包装（如文件流、SSE、健康检查等）。
+ * 全局成功响应拦截器：遵循 API.md 工业级 RESTful 响应契约：
+ * - 仅分页列表采用 `{"items": [...], "pagination": {...}}` 信封（空数据时保底为空数组 `[]`，杜绝前端空指针）
+ * - 其余所有单资源、业务操作结果一律直接返回裸 JSON 业务对象，彻底废除无意义的 `{ data: ... }` / `{ success: ... }` 外层包装
+ * - 204 No Content 保持 0 字节裸响应
+ * - 支持通过 `@BypassTransform()` 装饰器跳过包装（如文件流、SSE、健康检查等）
  */
 @Injectable()
-export class TransformInterceptor<T> implements NestInterceptor<T, SuccessResponse<T> | T> {
+export class TransformInterceptor<T> implements NestInterceptor<T, unknown> {
   constructor(private readonly reflector: Reflector) {}
 
-  intercept(context: ExecutionContext, next: CallHandler): Observable<SuccessResponse<T> | T> {
+  intercept(context: ExecutionContext, next: CallHandler): Observable<unknown> {
     const bypass = this.reflector.getAllAndOverride<boolean>(BYPASS_TRANSFORM_KEY, [
       context.getHandler(),
       context.getClass(),
@@ -39,18 +38,19 @@ export class TransformInterceptor<T> implements NestInterceptor<T, SuccessRespon
           return data;
         }
 
-        // 如果返回值是 PaginatedResultResource 或包含 items 与 meta 的分页对象，自动解构为顶级 data 与 meta
-        if (data && typeof data === 'object' && 'items' in data && 'meta' in data) {
-          const { items, meta } = data as { items: unknown; meta: unknown };
-          return {
-            data: items as T,
-            meta: meta as Record<string, unknown>,
-          };
+        // 分页对象自动归一化为标准的 items 与 pagination 信封
+        if (data && typeof data === 'object' && 'items' in data) {
+          const obj = data as { items: unknown; pagination?: unknown; meta?: unknown };
+          if (obj.pagination || obj.meta) {
+            return {
+              items: Array.isArray(obj.items) ? obj.items : [],
+              pagination: obj.pagination ?? obj.meta,
+            };
+          }
         }
 
-        return {
-          data: (data ?? null) as T,
-        };
+        // 规范对齐：非分页单资源 / 业务操作结果，一律直接返回裸 JSON 对象
+        return data;
       }),
     );
   }

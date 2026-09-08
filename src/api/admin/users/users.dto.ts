@@ -19,6 +19,8 @@ export class CreateUserRequest extends createZodDto(CreateUserSchema) {}
 export const FindUsersSchema = PageOptionsSchema.extend({
   search: z.string().optional().describe('按姓名或邮箱模糊搜索'),
   role: z.enum(Role).optional().describe('按角色筛选'),
+  sort: z.string().optional().describe('排序表达式 (如 -createdAt,name)'),
+  filter: z.record(z.string(), z.string()).optional().describe('Spatie 风格过滤对象'),
 });
 
 export class FindUsersRequest extends createZodDto(FindUsersSchema) {}
@@ -39,8 +41,8 @@ export class ChangeRoleRequest extends createZodDto(ChangeRoleSchema) {}
 // ─── 响应 DTO ────────────────────────────────────────────
 
 export class UserEntity {
-  @ApiProperty({ example: 1, description: '用户ID' })
-  id: number;
+  @ApiProperty({ example: '018e3d60-0000-7000-8000-000000000001', description: '用户ID' })
+  id: string;
 
   @ApiProperty({ example: '张三', description: '用户名' })
   name: string;
@@ -52,10 +54,19 @@ export class UserEntity {
   role: Role;
 
   @ApiProperty({ example: 'http://example.com/avatar.jpg', nullable: true, description: '头像URL' })
+  image: string | null;
+
+  @ApiProperty({ example: 'http://example.com/avatar.jpg', nullable: true, description: '头像URL (别名)' })
   avatarUrl: string | null;
 
-  @ApiProperty({ example: '2024-01-15T10:30:00.000Z', nullable: true, description: '邮箱验证时间' })
-  emailVerifiedAt: Date | null;
+  @ApiProperty({ example: true, description: '邮箱是否已验证' })
+  emailVerified: boolean;
+
+  @ApiProperty({ example: false, nullable: true, description: '是否被封禁' })
+  banned: boolean | null;
+
+  @ApiProperty({ example: null, nullable: true, description: '封禁原因' })
+  banReason: string | null;
 
   @ApiProperty({ example: '2024-01-15T10:30:00.000Z', description: '创建时间' })
   createdAt: Date;
@@ -66,7 +77,16 @@ export class UserEntity {
   @Exclude()
   passwordHash?: string | null;
 
-  constructor(partial: Partial<UserEntity>) {
+  constructor(
+    partial: Partial<UserEntity> & {
+      image?: string | null;
+      avatarUrl?: string | null;
+      emailVerifiedAt?: Date | null;
+    },
+  ) {
     Object.assign(this, partial);
+    this.avatarUrl = partial.avatarUrl ?? partial.image ?? null;
+    this.image = partial.image ?? partial.avatarUrl ?? null;
+    this.emailVerified = partial.emailVerified ?? Boolean(partial.emailVerifiedAt);
   }
 }

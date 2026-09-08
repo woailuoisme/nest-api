@@ -1,5 +1,5 @@
 import { isNull, sql } from 'drizzle-orm';
-import { bigint, index, jsonb, pgTable, timestamp, uuid, varchar } from 'drizzle-orm/pg-core';
+import { index, jsonb, pgTable, timestamp, uuid, varchar } from 'drizzle-orm/pg-core';
 
 /**
  * 数据库通知表 (notifications)
@@ -18,7 +18,7 @@ export const notifications = pgTable(
     id: uuid('id').primaryKey().default(sql`uuidv7()`),
     type: varchar('type', { length: 255 }).notNull(),
     notifiableType: varchar('notifiable_type', { length: 255 }).notNull(),
-    notifiableId: bigint('notifiable_id', { mode: 'number' }).notNull(),
+    notifiableId: uuid('notifiable_id').notNull(),
     data: jsonb('data').notNull().$type<Record<string, unknown>>(),
     readAt: timestamp('read_at', { withTimezone: true }),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),

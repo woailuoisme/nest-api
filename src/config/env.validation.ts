@@ -33,10 +33,12 @@ const envSchema = z.object({
   MAIL_FROM_ADDRESS: z.string().min(1).default('no-reply@nestforge.dev'),
   MAIL_FROM_NAME: z.string().default('NestForge'),
 
-  JWT_ACCESS_SECRET: z.string().min(16),
-  JWT_ACCESS_EXPIRES_IN: z.string().default('15m'),
-  JWT_REFRESH_SECRET: z.string().min(16),
-  JWT_REFRESH_EXPIRES_IN: z.string().default('7d'),
+  BETTER_AUTH_SECRET: z.string().min(16).default('nestforge-better-auth-secret-key-32-chars!'),
+  BETTER_AUTH_URL: z.string().default('http://localhost:4300'),
+
+  /** @deprecated 遗留 JWT 配置，已由 BETTER_AUTH_SECRET 统一替代 */
+  JWT_ACCESS_SECRET: z.string().min(16).optional(),
+  JWT_REFRESH_SECRET: z.string().min(16).optional(),
 
   BULL_BOARD_USER: z.string().optional(),
   BULL_BOARD_PASSWORD: z.string().optional(),

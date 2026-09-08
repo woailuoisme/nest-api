@@ -1,25 +1,17 @@
 /**
- * 用户角色枚举 — 客户端用户角色
+ * 统一用户与管理员角色枚举
  */
 export enum Role {
-  ADMIN = 'ADMIN',
-  MANAGER = 'MANAGER',
-  USER = 'USER',
-}
-
-/**
- * 管理后台专属角色枚举
- */
-export enum AdminRole {
   SUPER_ADMIN = 'SUPER_ADMIN',
   ADMIN = 'ADMIN',
   OPERATOR = 'OPERATOR',
+  USER = 'USER',
 }
 
-/**
- * 管理员账号状态枚举
- */
-export enum AdminStatus {
-  ACTIVE = 'ACTIVE',
-  DISABLED = 'DISABLED',
-}
+/** 向后兼容别名 */
+export const AdminRole = {
+  SUPER_ADMIN: Role.SUPER_ADMIN,
+  ADMIN: Role.ADMIN,
+  OPERATOR: Role.OPERATOR,
+} as const;
+export type AdminRole = (typeof AdminRole)[keyof typeof AdminRole];

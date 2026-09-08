@@ -56,12 +56,16 @@ describe('PusherTransport & parsePusherDsn', () => {
     it('sendToUser 应向 private-user.{id} 频道投递', async () => {
       await transport.sendToUser({
         event: 'order:status',
-        targetUserId: 42,
+        targetUserId: '01931234-0000-7000-8000-000000000042',
         data: { status: 'paid' },
         timestamp: Date.now(),
       });
 
-      expect(mockClient.trigger).toHaveBeenCalledWith('private-user.42', 'order:status', { status: 'paid' });
+      expect(mockClient.trigger).toHaveBeenCalledWith(
+        'private-user.01931234-0000-7000-8000-000000000042',
+        'order:status',
+        { status: 'paid' },
+      );
     });
 
     it('broadcast 应将 private: 与 presence: 规范化为 Pusher 前缀后向目标频道广播', async () => {

@@ -48,8 +48,8 @@ describe('CrudGeneratorService', () => {
   });
 
   describe('parseSchemaFields()', () => {
-    it('应能正确解析 auth.schema.ts 中的 users 表字段', () => {
-      const result = service.parseSchemaFields('auth', 'users');
+    it('应能正确解析 better-auth.schema.ts 中的 user 表字段', () => {
+      const result = service.parseSchemaFields('better-auth', 'user');
 
       expect(result.errors).toHaveLength(0);
       expect(result.fieldDefs).not.toBeNull();
@@ -70,7 +70,7 @@ describe('CrudGeneratorService', () => {
     });
 
     it('当 schema 存在但表名不存在时应返回错误', () => {
-      const result = service.parseSchemaFields('auth', 'non_existent_table');
+      const result = service.parseSchemaFields('better-auth', 'non_existent_table');
 
       expect(result.fieldDefs).toBeNull();
       expect(result.errors.length).toBeGreaterThan(0);

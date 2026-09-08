@@ -11,6 +11,7 @@ import type { NestFastifyApplication } from '@nestjs/platform-fastify';
 import { createZodValidationPipe } from 'nestjs-zod';
 import type { ZodError } from 'zod';
 import { HttpExceptionFilter } from '@/common/filters/http-exception.filter';
+import { IdempotencyInterceptor } from '@/common/idempotency';
 import { MultipartInterceptor } from '@/common/interceptors/multipart.interceptor';
 import { TransformInterceptor } from '@/common/interceptors/transform.interceptor';
 import type { EnvConfig } from '@/config/env.validation';
@@ -48,7 +49,9 @@ export function setupGlobalMiddleware(app: NestFastifyApplication): void {
   app.useGlobalFilters(new HttpExceptionFilter(app.get(ConfigService<EnvConfig, true>).get('APP_DEBUG')));
 
   const reflector = app.get(Reflector);
+  const idempotencyInterceptor = app.get(IdempotencyInterceptor);
   app.useGlobalInterceptors(
+    idempotencyInterceptor,
     new TransformInterceptor(reflector),
     new ClassSerializerInterceptor(reflector),
     new MultipartInterceptor(reflector),

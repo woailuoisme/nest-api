@@ -3,7 +3,6 @@ import { ApiBearerAuth, ApiExcludeController, ApiOperation, ApiQuery, ApiRespons
 import { SkipThrottle } from '@nestjs/throttler';
 import type { FastifyRequest } from 'fastify';
 import type { Observable } from 'rxjs';
-import { JwtAuthGuard } from '@/api/client/auth/auth.guard';
 import { CurrentUser, type CurrentUserPayload } from '@/common/decorators/current-user.decorator';
 import { Public } from '@/common/decorators/public.decorator';
 import { BypassTransform } from '@/common/decorators/response.decorator';
@@ -45,7 +44,6 @@ export class RealtimeController {
   @ApiBearerAuth()
   @ApiResponse({ status: 200, description: '返回合法的 Pusher Auth 签名凭证' })
   @ApiResponse({ status: 403, description: '当前用户无权订阅目标频道' })
-  @UseGuards(JwtAuthGuard)
   @Post('auth')
   authenticate(@CurrentUser() user: CurrentUserPayload, @Body() dto: PusherAuthDto) {
     return this.realtimeService.authenticatePusher(user, dto);
@@ -62,7 +60,6 @@ export class BroadcastingController {
 
   @ApiOperation({ summary: '广播频道鉴权' })
   @ApiBearerAuth()
-  @UseGuards(JwtAuthGuard)
   @Post('auth')
   authenticate(@CurrentUser() user: CurrentUserPayload, @Body() dto: PusherAuthDto) {
     return this.realtimeService.authenticatePusher(user, dto);

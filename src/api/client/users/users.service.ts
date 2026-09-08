@@ -3,7 +3,7 @@ import { eq } from 'drizzle-orm';
 import { MediaService } from '@/common/media/media.service';
 import type { UploadedFile } from '@/common/storage/interfaces/upload.interface';
 import { type DrizzleDB, InjectDb } from '@/database/drizzle/drizzle.service';
-import { users } from '@/database/drizzle/schema';
+import { user } from '@/database/drizzle/schema';
 import { UserEntity } from './users.dto';
 
 /**
@@ -19,14 +19,14 @@ export class UsersService {
     private readonly mediaService: MediaService,
   ) {}
 
-  async findOne(id: number) {
-    const user = await this.db.query.users.findFirst({
-      where: eq(users.id, id),
+  async findOne(id: string) {
+    const foundUser = await this.db.query.user.findFirst({
+      where: eq(user.id, id),
     });
-    if (!user) {
+    if (!foundUser) {
       throw new NotFoundException('User not found');
     }
-    return new UserEntity(user);
+    return new UserEntity(foundUser as unknown as Partial<UserEntity>);
   }
 
   /**
@@ -35,9 +35,9 @@ export class UsersService {
    * 2. WebP 优化转码存盘 + 数据库更新；
    * 3. 失败自动回滚新写入文件，成功自动回收旧头像（支持 Local 与 S3）。
    */
-  async updateAvatar(id: number, file: UploadedFile) {
-    const current = await this.db.query.users.findFirst({
-      where: eq(users.id, id),
+  async updateAvatar(id: string, file: UploadedFile) {
+    const current = await this.db.query.user.findFirst({
+      where: eq(user.id, id),
     });
     if (!current) {
       throw new NotFoundException('User not found');
@@ -47,19 +47,19 @@ export class UsersService {
       file,
       { prefix: 'avatars', convertToWebp: true, webpQuality: 85 },
       async (saved) => {
-        const [user] = await this.db
-          .update(users)
-          .set({ avatarUrl: saved.url, updatedAt: new Date() })
-          .where(eq(users.id, id))
+        const [updatedUser] = await this.db
+          .update(user)
+          .set({ image: saved.url, updatedAt: new Date() })
+          .where(eq(user.id, id))
           .returning();
 
-        if (!user) {
+        if (!updatedUser) {
           throw new NotFoundException('User not found');
         }
 
-        return new UserEntity(user);
+        return new UserEntity(updatedUser as unknown as Partial<UserEntity>);
       },
-      { oldUrl: current.avatarUrl },
+      { oldUrl: current.image },
     );
   }
 }

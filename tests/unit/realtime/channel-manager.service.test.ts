@@ -10,25 +10,25 @@ describe('ChannelManager', () => {
 
   beforeEach(() => {
     manager = new ChannelManager();
-    user = { id: 42, email: 'user@example.com', role: Role.USER };
-    admin = { id: 1, email: 'admin@example.com', role: Role.ADMIN };
+    user = { id: '01931234-0000-7000-8000-000000000042', email: 'user@example.com', role: Role.USER };
+    admin = { id: '01931234-0000-7000-8000-000000000001', email: 'admin@example.com', role: Role.ADMIN };
   });
 
   describe('内置用户私有频道规则: private:user.{userId}', () => {
     it('当前认证用户订阅自身私有频道应允许', async () => {
-      const result = await manager.canSubscribe(user, 'private:user.42');
+      const result = await manager.canSubscribe(user, `private:user.${user.id}`);
       expect(result.authorized).toBe(true);
     });
 
     it('当前认证用户试图订阅其他用户私有频道应拒绝', async () => {
-      const result = await manager.canSubscribe(user, 'private:user.99');
+      const result = await manager.canSubscribe(user, 'private:user.01931234-0000-7000-8000-999999999999');
       expect(result.authorized).toBe(false);
       expect(result.reason).toContain('forbidden');
     });
 
-    it('Pusher 标准 private-user.42 连字符前缀应与 private:user.{userId} 规则完全等价识别', async () => {
-      const allowed = await manager.canSubscribe(user, 'private-user.42');
-      const denied = await manager.canSubscribe(user, 'private-user.99');
+    it('Pusher 标准 private-user.{userId} 连字符前缀应与 private:user.{userId} 规则完全等价识别', async () => {
+      const allowed = await manager.canSubscribe(user, `private-user.${user.id}`);
+      const denied = await manager.canSubscribe(user, 'private-user.01931234-0000-7000-8000-999999999999');
       expect(allowed.authorized).toBe(true);
       expect(denied.authorized).toBe(false);
     });
@@ -64,7 +64,7 @@ describe('ChannelManager', () => {
   describe('动态自定义规则注册', () => {
     it('支持多级参数解析与异步授权校验', async () => {
       manager.register('private:org.{orgId}.project.{projectId}', async (currentUser, params) => {
-        return params.orgId === '10' && params.projectId === '20' && currentUser.id === 42;
+        return params.orgId === '10' && params.projectId === '20' && currentUser.id === user.id;
       });
 
       const success = await manager.canSubscribe(user, 'private:org.10.project.20');

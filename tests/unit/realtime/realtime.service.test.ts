@@ -80,12 +80,12 @@ describe('RealtimeService (Multi-Driver Facade)', () => {
     it('sendToUser 应委托给 primaryTransport', () => {
       const payload = { orderId: 'ORD-999', status: 'shipped' };
 
-      const result = service.sendToUser(42, 'order:updated', payload);
+      const result = service.sendToUser('01931234-0000-7000-8000-000000000042', 'order:updated', payload);
 
       expect(primaryTransport.sendToUser).toHaveBeenCalledWith(
         expect.objectContaining({
           event: 'order:updated',
-          targetUserId: 42,
+          targetUserId: '01931234-0000-7000-8000-000000000042',
           data: payload,
         }),
       );
@@ -109,16 +109,24 @@ describe('RealtimeService (Multi-Driver Facade)', () => {
   });
 
   describe('authenticatePusher() 频道鉴权', () => {
-    const user: CurrentUserPayload = { id: 1, email: 'user@example.com', role: Role.USER };
+    const user: CurrentUserPayload = {
+      id: '01931234-0000-7000-8000-000000000001',
+      email: 'user@example.com',
+      role: Role.USER,
+    };
 
     it('合法私有频道订阅应成功返回签名', async () => {
       const sig = await service.authenticatePusher(user, {
         socket_id: '123.456',
-        channel_name: 'private-user.1',
+        channel_name: 'private-user.01931234-0000-7000-8000-000000000001',
       });
 
       expect(sig).toEqual({ auth: 'mock:auth:sig' });
-      expect(pusherTransport.authorizeChannel).toHaveBeenCalledWith('123.456', 'private-user.1', undefined);
+      expect(pusherTransport.authorizeChannel).toHaveBeenCalledWith(
+        '123.456',
+        'private-user.01931234-0000-7000-8000-000000000001',
+        undefined,
+      );
     });
 
     it('在场频道订阅应正确传递 presenceData 用户信息', async () => {
@@ -131,7 +139,7 @@ describe('RealtimeService (Multi-Driver Facade)', () => {
       });
 
       expect(pusherTransport.authorizeChannel).toHaveBeenCalledWith('123.456', 'presence:room.default', {
-        user_id: '1',
+        user_id: '01931234-0000-7000-8000-000000000001',
         user_info: { email: 'user@example.com', role: Role.USER },
       });
     });
@@ -151,7 +159,7 @@ describe('RealtimeService (Multi-Driver Facade)', () => {
       await expect(
         service.authenticatePusher(user, {
           socket_id: '123.456',
-          channel_name: 'private-user.1',
+          channel_name: 'private-user.01931234-0000-7000-8000-000000000001',
         }),
       ).rejects.toThrow(BadRequestException);
     });
@@ -162,7 +170,11 @@ describe('RealtimeService (Multi-Driver Facade)', () => {
       sseTransport.subscribe.mockReturnValue(of());
       const mockRaw = new EventEmitter();
       const mockReq = { raw: mockRaw } as any;
-      const user: CurrentUserPayload = { id: 1, email: 'u@example.com', role: Role.USER };
+      const user: CurrentUserPayload = {
+        id: '01931234-0000-7000-8000-000000000001',
+        email: 'u@example.com',
+        role: Role.USER,
+      };
 
       const stream$ = service.createSseStream(user, mockReq);
       const messagesPromise = firstValueFrom(stream$.pipe(toArray()));

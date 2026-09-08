@@ -31,9 +31,10 @@ describe('registerOpsPanels', () => {
     });
     vi.mocked(setupBullBoard).mockResolvedValue('http://localhost:4300/queues');
     vi.mocked(setupLogViewer).mockResolvedValue('http://localhost:4300/logs');
-    vi.mocked(setupApiDocumentation).mockReturnValue({
+    vi.mocked(setupApiDocumentation).mockResolvedValue({
       clientDocsUrl: 'http://localhost:4300/docs',
       adminDocsUrl: 'http://localhost:4300/docs/admin',
+      authDocsUrl: 'http://localhost:4300/docs/auth',
     });
 
     const panels = await registerOpsPanels(app);
@@ -47,6 +48,7 @@ describe('registerOpsPanels', () => {
     expect(panels).toEqual([
       { label: 'Scalar Client API Document', url: 'http://localhost:4300/docs' },
       { label: 'Scalar Admin API Document', url: 'http://localhost:4300/docs/admin' },
+      { label: 'Scalar Auth API Document', url: 'http://localhost:4300/docs/auth' },
       { label: 'BullMQ Queue Dashboard', url: 'http://localhost:4300/queues' },
       { label: 'Web Log Viewer', url: 'http://localhost:4300/logs' },
     ]);
@@ -56,9 +58,10 @@ describe('registerOpsPanels', () => {
     const app = createApp({ APP_URL: 'http://localhost:4300', SWAGGER_ENABLED: true });
     vi.mocked(setupBullBoard).mockResolvedValue('');
     vi.mocked(setupLogViewer).mockResolvedValue('');
-    vi.mocked(setupApiDocumentation).mockReturnValue({
+    vi.mocked(setupApiDocumentation).mockResolvedValue({
       clientDocsUrl: 'http://localhost:4300/docs',
       adminDocsUrl: 'http://localhost:4300/docs/admin',
+      authDocsUrl: 'http://localhost:4300/docs/auth',
     });
 
     const panels = await registerOpsPanels(app);
@@ -66,6 +69,7 @@ describe('registerOpsPanels', () => {
     expect(panels).toEqual([
       { label: 'Scalar Client API Document', url: 'http://localhost:4300/docs' },
       { label: 'Scalar Admin API Document', url: 'http://localhost:4300/docs/admin' },
+      { label: 'Scalar Auth API Document', url: 'http://localhost:4300/docs/auth' },
     ]);
   });
 

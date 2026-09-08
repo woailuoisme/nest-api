@@ -1,105 +1,35 @@
-import { Body, Controller, Get, HttpCode, HttpStatus, Post, Query, Req, UseGuards } from '@nestjs/common';
-import { ApiBearerAuth, ApiExcludeEndpoint, ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
-import type { FastifyRequest } from 'fastify';
-import { I18N } from '@/common/constants/app.constants';
+import { All, Controller, Req, Res } from '@nestjs/common';
+import { ApiExcludeController, ApiOperation, ApiTags } from '@nestjs/swagger';
+import { fromNodeHeaders } from 'better-auth/node';
+import type { FastifyReply, FastifyRequest } from 'fastify';
 import { Public } from '@/common/decorators/public.decorator';
-import { ApiNoContentResponse, ApiSuccessResponse } from '@/common/decorators/swagger-response.decorator';
-import {
-  ForgotPasswordRequest,
-  LoginRequest,
-  RefreshTokenRequest,
-  RegisterRequest,
-  ResetPasswordRequest,
-  TokenPairResponse,
-  VerifyEmailRequest,
-} from './auth.dto';
-import { GoogleAuthGuard } from './auth.guard';
 import { AuthService } from './auth.service';
-import type { OAuthProfile } from './strategies/oauth-profile.interface';
 
+@ApiExcludeController()
 @ApiTags('认证')
-@ApiBearerAuth()
 @Controller('auth')
 export class AuthController {
   constructor(private readonly authService: AuthService) {}
 
   @Public()
-  @Post('register')
-  @HttpCode(HttpStatus.CREATED)
-  @ApiOperation({ summary: '注册' })
-  @ApiSuccessResponse(TokenPairResponse, { status: 201, description: '注册成功' })
-  register(@Body() dto: RegisterRequest): Promise<TokenPairResponse> {
-    return this.authService.register(dto);
-  }
+  @All('*')
+  @ApiOperation({ summary: 'Better Auth 统一认证分发端点' })
+  async handleAuth(@Req() request: FastifyRequest, @Res() reply: FastifyReply): Promise<void> {
+    const protocol = request.protocol || 'http';
+    const host = request.headers.host || 'localhost:4300';
+    const rawUrl = request.raw.url || request.url;
+    const url = new URL(rawUrl, `${protocol}://${host}`);
 
-  @Public()
-  @Post('login')
-  @HttpCode(HttpStatus.OK)
-  @ApiOperation({ summary: '登录' })
-  @ApiSuccessResponse(TokenPairResponse, { description: '登录成功' })
-  login(@Body() dto: LoginRequest): Promise<TokenPairResponse> {
-    return this.authService.login(dto);
-  }
+    const headers = fromNodeHeaders(request.headers);
+    const body = request.body ? JSON.stringify(request.body) : undefined;
 
-  @Public()
-  @Post('refresh')
-  @HttpCode(HttpStatus.OK)
-  @ApiOperation({ summary: '刷新令牌' })
-  @ApiSuccessResponse(TokenPairResponse, { description: '刷新成功' })
-  refresh(@Body() dto: RefreshTokenRequest): Promise<TokenPairResponse> {
-    return this.authService.refreshToken(dto.refreshToken);
-  }
+    const webReq = new Request(url.toString(), {
+      method: request.method,
+      headers,
+      body: ['GET', 'HEAD'].includes(request.method) ? undefined : body,
+    });
 
-  @Public()
-  @Post('logout')
-  @HttpCode(HttpStatus.NO_CONTENT)
-  @ApiOperation({ summary: '退出登录' })
-  @ApiNoContentResponse({ description: '注销成功' })
-  logout(@Body() dto: RefreshTokenRequest): Promise<void> {
-    return this.authService.logout(dto.refreshToken);
-  }
-
-  @Public()
-  @Post('forgot-password')
-  @HttpCode(HttpStatus.NO_CONTENT)
-  @ApiOperation({ summary: '忘记密码' })
-  @ApiNoContentResponse({ description: '重置邮件已发送' })
-  forgotPassword(@Body() dto: ForgotPasswordRequest): Promise<void> {
-    return this.authService.forgotPassword(dto.email, dto.locale ?? I18N.FALLBACK_LANG);
-  }
-
-  @Public()
-  @Post('reset-password')
-  @HttpCode(HttpStatus.NO_CONTENT)
-  @ApiOperation({ summary: '重置密码' })
-  @ApiNoContentResponse({ description: '密码重置成功' })
-  resetPassword(@Body() dto: ResetPasswordRequest): Promise<void> {
-    return this.authService.resetPassword(dto.token, dto.password);
-  }
-
-  @Public()
-  @Get('verify-email')
-  @HttpCode(HttpStatus.NO_CONTENT)
-  @ApiOperation({ summary: '验证邮箱' })
-  @ApiNoContentResponse({ description: '邮箱验证成功' })
-  verifyEmail(@Query() query: VerifyEmailRequest): Promise<void> {
-    return this.authService.verifyEmail(query.token);
-  }
-
-  @Public()
-  @Get('google')
-  @UseGuards(GoogleAuthGuard)
-  @ApiOperation({ summary: 'Google 登录' })
-  @ApiResponse({ status: 302, description: '重定向至 Google 授权页面' })
-  googleLogin(): void {
-    // GoogleAuthGuard 会自动重定向至 Google 授权页面，此处无需额外处理
-  }
-
-  @Public()
-  @Get('google/callback')
-  @UseGuards(GoogleAuthGuard)
-  @ApiExcludeEndpoint()
-  googleCallback(@Req() req: FastifyRequest & { user?: OAuthProfile }): Promise<TokenPairResponse> {
-    return this.authService.validateOAuthLogin(req.user as OAuthProfile);
+    const response = await this.authService.auth.handler(webReq);
+    await this.authService.pipeResponse(response, reply);
   }
 }

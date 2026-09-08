@@ -18,12 +18,11 @@ describe('UsersController', () => {
   };
 
   const mockUser = new UserEntity({
-    id: 1,
+    id: 'user-uuid-1',
     name: '张三',
     email: 'zhangsan@example.com',
     role: Role.USER,
     avatarUrl: null,
-    emailVerifiedAt: null,
     createdAt: new Date('2024-01-01'),
     updatedAt: new Date('2024-01-01'),
   });
@@ -44,26 +43,26 @@ describe('UsersController', () => {
 
   describe('GET /users/me — 当前用户', () => {
     it('应调用 UsersService.findOne 获取当前用户信息', async () => {
-      const currentUser = { id: 1 };
-      const result = await usersController.findMe(currentUser);
+      const currentUser = { id: 'user-uuid-1' };
+      const result = await usersController.findMe(currentUser as any);
 
-      expect(usersService.findOne).toHaveBeenCalledWith(1);
+      expect(usersService.findOne).toHaveBeenCalledWith('user-uuid-1');
       expect(result).toEqual(mockUser);
     });
   });
 
   describe('GET /users/:id — 用户详情', () => {
     it('应调用 UsersService.findOne 获取指定用户', async () => {
-      const result = await usersController.findOne(1);
+      const result = await usersController.findOne('user-uuid-1');
 
-      expect(usersService.findOne).toHaveBeenCalledWith(1);
+      expect(usersService.findOne).toHaveBeenCalledWith('user-uuid-1');
       expect(result).toEqual(mockUser);
     });
 
     it('应正确传递不同 ID', async () => {
-      await usersController.findOne(999);
+      await usersController.findOne('user-uuid-999');
 
-      expect(usersService.findOne).toHaveBeenCalledWith(999);
+      expect(usersService.findOne).toHaveBeenCalledWith('user-uuid-999');
     });
   });
 
@@ -78,14 +77,16 @@ describe('UsersController', () => {
         size: 8,
       };
 
-      const result = await usersController.uploadAvatar({ id: 1 }, file);
+      const result = await usersController.uploadAvatar({ id: 'user-uuid-1' } as any, file);
 
-      expect(usersService.updateAvatar).toHaveBeenCalledWith(1, file);
+      expect(usersService.updateAvatar).toHaveBeenCalledWith('user-uuid-1', file);
       expect(result.avatarUrl).toBe('/uploads/avatars/avatar.png');
     });
 
     it('未接收到文件时应抛 BadRequestException', async () => {
-      await expect(usersController.uploadAvatar({ id: 1 }, undefined as never)).rejects.toThrow('未接收到文件');
+      await expect(usersController.uploadAvatar({ id: 'user-uuid-1' } as any, undefined as never)).rejects.toThrow(
+        '未接收到文件',
+      );
     });
   });
 });

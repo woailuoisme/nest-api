@@ -48,15 +48,20 @@ export class PageMetaResource {
 }
 
 export class PaginatedResultResource<T> {
-  @ApiProperty({ isArray: true })
+  @ApiProperty({ isArray: true, description: '列表数据集合（空数据时保底为空数组 []）' })
   readonly items: T[];
 
-  @ApiProperty({ type: PageMetaResource })
-  readonly meta: PageMetaResource;
+  @ApiProperty({ type: PageMetaResource, description: 'Offset 分页元数据' })
+  readonly pagination: PageMetaResource;
 
-  constructor(items: T[], meta: PageMetaResource) {
-    this.items = items;
-    this.meta = meta;
+  /** 向后兼容别名 */
+  get meta(): PageMetaResource {
+    return this.pagination;
+  }
+
+  constructor(items: T[], pagination: PageMetaResource) {
+    this.items = Array.isArray(items) ? items : [];
+    this.pagination = pagination;
   }
 }
 
@@ -97,14 +102,19 @@ export class CursorPageMetaResource {
 }
 
 export class CursorPaginatedResultResource<T> {
-  @ApiProperty({ isArray: true })
+  @ApiProperty({ isArray: true, description: '列表数据集合（空数据时保底为空数组 []）' })
   readonly items: T[];
 
-  @ApiProperty({ type: CursorPageMetaResource })
-  readonly meta: CursorPageMetaResource;
+  @ApiProperty({ type: CursorPageMetaResource, description: 'Cursor 游标分页元数据' })
+  readonly pagination: CursorPageMetaResource;
 
-  constructor(items: T[], meta: CursorPageMetaResource) {
-    this.items = items;
-    this.meta = meta;
+  /** 向后兼容别名 */
+  get meta(): CursorPageMetaResource {
+    return this.pagination;
+  }
+
+  constructor(items: T[], pagination: CursorPageMetaResource) {
+    this.items = Array.isArray(items) ? items : [];
+    this.pagination = pagination;
   }
 }

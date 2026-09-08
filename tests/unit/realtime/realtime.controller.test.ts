@@ -22,7 +22,7 @@ describe('RealtimeController & BroadcastingController', () => {
 
     controller = new RealtimeController(mockRealtimeService as unknown as RealtimeService);
     broadcastingController = new BroadcastingController(mockRealtimeService as unknown as RealtimeService);
-    mockUser = { id: 1, email: 'test@example.com', role: Role.USER };
+    mockUser = { id: '01931234-0000-7000-8000-000000000001', email: 'test@example.com', role: Role.USER };
   });
 
   describe('stream()', () => {

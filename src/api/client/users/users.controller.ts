@@ -1,4 +1,4 @@
-import { BadRequestException, Controller, Get, HttpCode, HttpStatus, Param, ParseIntPipe, Post } from '@nestjs/common';
+import { BadRequestException, Controller, Get, HttpCode, HttpStatus, Param, ParseUUIDPipe, Post } from '@nestjs/common';
 import { ApiBearerAuth, ApiBody, ApiConsumes, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { ALLOWED_MIME_TYPES, UPLOAD } from '@/common/constants/app.constants';
 import { Permission } from '@/common/constants/permissions';
@@ -69,7 +69,7 @@ export class UsersController {
   @Permissions(Permission.UserRead)
   @ApiOperation({ summary: '用户详情' })
   @ApiSuccessResponse(UserEntity, { description: '用户信息获取成功' })
-  findOne(@Param('id', ParseIntPipe) id: number) {
+  findOne(@Param('id', ParseUUIDPipe) id: string) {
     return this.usersService.findOne(id);
   }
 }

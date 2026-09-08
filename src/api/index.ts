@@ -1,6 +1,4 @@
 import { AdminModule } from '@/api/admin/admin.module';
-import { AdminsModule } from '@/api/admin/admins/admins.module';
-import { AdminAuthModule } from '@/api/admin/auth/admin-auth.module';
 import { AdminDashboardModule } from '@/api/admin/dashboard/dashboard.module';
 import { AdminNotificationsModule } from '@/api/admin/notifications/notifications.module';
 import { AdminUsersModule } from '@/api/admin/users/users.module';
@@ -23,8 +21,6 @@ export const SYSTEM_API_MODULES = [SystemModule] as const;
  */
 export const ADMIN_API_MODULES = [
   AdminModule,
-  AdminAuthModule,
-  AdminsModule,
   AdminUsersModule,
   AdminNotificationsModule,
   AdminDashboardModule,
@@ -43,8 +39,6 @@ export const API_MODULES = [AuthModule, UsersModule, SystemModule, AdminModule] 
 export const FEATURE_MODULES = API_MODULES;
 
 export * from '@/api/admin/admin.module';
-export * from '@/api/admin/admins/admins.module';
-export * from '@/api/admin/auth/admin-auth.module';
 export * from '@/api/admin/dashboard/dashboard.module';
 export * from '@/api/admin/notifications/notifications.module';
 export * from '@/api/admin/users/users.module';

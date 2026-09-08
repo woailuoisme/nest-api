@@ -109,12 +109,12 @@ export class ChannelManager {
   private registerDefaultRules(): void {
     // 1. 用户私有频道：仅允许当前同名用户接入
     this.register('private:user.{userId}', (user, params) => {
-      return user.id === Number(params.userId);
+      return user.id === params.userId;
     });
 
-    // 2. 管理员专属私有频道：仅具备 ADMIN 角色的用户可订阅
+    // 2. 管理员专属私有频道：仅具备管理角色的用户可订阅
     this.register('private:admin.*', (user) => {
-      return user.role === Role.ADMIN;
+      return [Role.SUPER_ADMIN, Role.ADMIN, Role.OPERATOR].includes(user.role);
     });
   }
 }

@@ -63,9 +63,9 @@ describe('AdminPrefixGuard', () => {
       expect(guard.canActivate(createContext('/admin', Role.ADMIN))).toBe(true);
     });
 
-    it('非管理员角色（USER / MANAGER）一律拒绝', () => {
+    it('非管理员角色（USER / 其他）一律拒绝', () => {
       expect(guard.canActivate(createContext('/admin/users', Role.USER))).toBe(false);
-      expect(guard.canActivate(createContext('/admin/dashboard/metrics', Role.MANAGER))).toBe(false);
+      expect(guard.canActivate(createContext('/admin/dashboard/metrics', 'GUEST' as any))).toBe(false);
     });
 
     it('未登录（无 user）一律拒绝', () => {

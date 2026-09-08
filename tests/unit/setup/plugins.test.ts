@@ -1,9 +1,17 @@
 import { ConfigService } from '@nestjs/config';
-import { JwtService } from '@nestjs/jwt';
 import type { NestFastifyApplication } from '@nestjs/platform-fastify';
 import { describe, expect, it, vi } from 'vitest';
+import { auth } from '@/common/auth/better-auth';
 import { PinoLoggerService } from '@/setup/logger/pino-logger.service';
 import { registerFastifyPlugins } from '@/setup/plugins';
+
+vi.mock('@/common/auth/better-auth', () => ({
+  auth: {
+    api: {
+      getSession: vi.fn(),
+    },
+  },
+}));
 
 describe('registerFastifyPlugins', () => {
   it('应正确注册 onRequest 与 onResponse hook，并在请求完成时记录访问日志', async () => {
@@ -31,21 +39,15 @@ describe('registerFastifyPlugins', () => {
 
     const mockConfigService = {
       get: vi.fn((key: string) => {
-        if (key === 'JWT_ACCESS_SECRET') return 'test-secret';
         if (key === 'UPLOAD_MAX_FILE_SIZE_BYTES') return 10 * 1024 * 1024;
         return undefined;
       }),
-    };
-
-    const mockJwtService = {
-      verify: vi.fn(),
     };
 
     const mockApp = {
       get: vi.fn((token: unknown) => {
         if (token === ConfigService) return mockConfigService;
         if (token === PinoLoggerService) return mockLoggerService;
-        if (token === JwtService) return mockJwtService;
         return undefined;
       }),
       getHttpAdapter: () => ({

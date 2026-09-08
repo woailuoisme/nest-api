@@ -7,7 +7,7 @@ import { z } from 'zod';
 export interface RealtimeEnvelope<T = unknown> {
   event: string;
   channel?: string;
-  targetUserId?: number | null;
+  targetUserId?: string | null;
   data: T;
   timestamp: number;
 }

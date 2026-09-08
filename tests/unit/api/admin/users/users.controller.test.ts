@@ -27,12 +27,11 @@ describe('AdminUsersController', () => {
   };
 
   const mockUser = new UserEntity({
-    id: 1,
+    id: 'user-uuid-1',
     name: '张三',
     email: 'zhangsan@example.com',
     role: Role.USER,
     avatarUrl: null,
-    emailVerifiedAt: null,
     createdAt: new Date('2024-01-01'),
     updatedAt: new Date('2024-01-01'),
   });
@@ -48,7 +47,7 @@ describe('AdminUsersController', () => {
       findAll: vi.fn().mockResolvedValue(mockPaginatedResult),
       update: vi.fn().mockResolvedValue(mockUser),
       changeRole: vi.fn().mockResolvedValue({ ...mockUser, role: Role.ADMIN }),
-      remove: vi.fn().mockResolvedValue({ message: 'Usuário removido com sucesso' }),
+      remove: vi.fn().mockResolvedValue(undefined),
     };
 
     const module = await Test.createTestingModule({
@@ -95,9 +94,9 @@ describe('AdminUsersController', () => {
   describe('PATCH /admin/users/:id — 更新用户', () => {
     it('应调用 UsersService.update 更新用户信息', async () => {
       const dto = { name: '李四' };
-      const result = await controller.update(1, dto);
+      const result = await controller.update('user-uuid-1', dto);
 
-      expect(usersService.update).toHaveBeenCalledWith(1, dto);
+      expect(usersService.update).toHaveBeenCalledWith('user-uuid-1', dto);
       expect(result).toEqual(mockUser);
     });
   });
@@ -105,19 +104,19 @@ describe('AdminUsersController', () => {
   describe('PATCH /admin/users/:id/role — 变更用户角色', () => {
     it('应调用 UsersService.changeRole 变更角色', async () => {
       const dto: ChangeRoleRequest = { role: Role.ADMIN };
-      const result = await controller.changeRole(1, dto);
+      const result = await controller.changeRole('user-uuid-1', dto);
 
-      expect(usersService.changeRole).toHaveBeenCalledWith(1, Role.ADMIN);
+      expect(usersService.changeRole).toHaveBeenCalledWith('user-uuid-1', Role.ADMIN);
       expect(result.role).toBe(Role.ADMIN);
     });
   });
 
   describe('DELETE /admin/users/:id — 删除用户', () => {
     it('应调用 UsersService.remove 删除用户', async () => {
-      const result = await controller.remove(1);
+      const result = await controller.remove('user-uuid-1');
 
-      expect(usersService.remove).toHaveBeenCalledWith(1);
-      expect(result).toEqual({ message: 'Usuário removido com sucesso' });
+      expect(usersService.remove).toHaveBeenCalledWith('user-uuid-1');
+      expect(result).toBeUndefined();
     });
   });
 });

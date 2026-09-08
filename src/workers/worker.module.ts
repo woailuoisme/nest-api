@@ -1,8 +1,6 @@
 import { BullModule } from '@nestjs/bullmq';
 import { Module } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
-import { JwtModule } from '@nestjs/jwt';
-import { AuthTokenManager } from '@/api/client/auth/auth-token.manager';
 import { DEMO_QUEUE, MAIL_QUEUE, MEDIA_QUEUE, TOKEN_CLEANUP_QUEUE } from '@/common/constants/queues';
 import { MediaModule } from '@/common/media/media.module';
 import { StorageModule } from '@/common/storage/storage.module';
@@ -26,7 +24,6 @@ import { LoggerModule } from '@/setup/logger/logger.module';
   imports: [
     ConfigModule.forRoot({ isGlobal: true, validate: validateEnv }),
     LoggerModule,
-    JwtModule.register({}),
     BullModule.forRootAsync({
       inject: [ConfigService],
       useFactory: createBullModuleConfig,
@@ -42,14 +39,6 @@ import { LoggerModule } from '@/setup/logger/logger.module';
     MediaModule,
     SchedulesModule,
   ],
-  providers: [
-    AuthTokenManager,
-    MailTemplateService,
-    MailHandlers,
-    MailProcessor,
-    TokenCleanupProcessor,
-    DemoProcessor,
-    MediaProcessor,
-  ],
+  providers: [MailTemplateService, MailHandlers, MailProcessor, TokenCleanupProcessor, DemoProcessor, MediaProcessor],
 })
 export class WorkerModule {}

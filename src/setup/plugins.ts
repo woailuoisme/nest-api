@@ -4,9 +4,10 @@ import fastifyHelmet from '@fastify/helmet';
 import fastifyMultipart from '@fastify/multipart';
 import fastifyStatic from '@fastify/static';
 import { ConfigService } from '@nestjs/config';
-import { JwtService } from '@nestjs/jwt';
 import type { NestFastifyApplication } from '@nestjs/platform-fastify';
+import { fromNodeHeaders } from 'better-auth/node';
 import type { FastifyReply, FastifyRequest } from 'fastify';
+import { auth } from '@/common/auth/better-auth';
 import { PATHS } from '@/common/constants/app.constants';
 import { extractIp, PinoLoggerService } from '@/setup/logger';
 
@@ -72,10 +73,7 @@ export async function registerFastifyPlugins(app: NestFastifyApplication): Promi
     prefix: '/uploads/',
   });
 
-  // 私有上传文件鉴权：公开子目录放行，其余需合法 JWT
-  const jwtService = app.get(JwtService);
-  const jwtSecret = config.get('JWT_ACCESS_SECRET');
-
+  // 私有上传文件鉴权：公开子目录放行，其余需合法 Better Auth 会话凭证
   const sendUnauthorized = (reply: FastifyReply) =>
     reply.code(401).send({
       error: {
@@ -97,17 +95,23 @@ export async function registerFastifyPlugins(app: NestFastifyApplication): Promi
     if (!normalizedPath.startsWith('/uploads/') || normalizedPath.startsWith(PUBLIC_UPLOAD_PREFIX)) {
       return;
     }
-    const token =
-      (request.headers.authorization ?? '').replace(/^Bearer\s+/i, '') ||
-      ((request.query as { token?: string } | undefined)?.token ?? '');
-    if (!token) {
-      await sendUnauthorized(reply);
-      return;
+
+    const headers = fromNodeHeaders(request.headers);
+    const query = request.query as { token?: string } | undefined;
+    if (query?.token && !headers.has('authorization')) {
+      headers.set('authorization', `Bearer ${query.token.trim()}`);
     }
+
     try {
-      jwtService.verify(token, { secret: jwtSecret });
+      const sessionData = await auth.api.getSession({ headers });
+      const user = sessionData?.user as { banned?: boolean | null } | undefined;
+      if (!user || user.banned) {
+        await sendUnauthorized(reply);
+        return;
+      }
     } catch {
       await sendUnauthorized(reply);
+      return;
     }
   });
 

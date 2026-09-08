@@ -26,13 +26,13 @@ describe('UsersService (前端自助面)', () => {
   };
 
   const mockUser = {
-    id: 1,
+    id: 'user-uuid-1',
     name: '张三',
     email: 'zhangsan@example.com',
-    passwordHash: 'hashed:secret',
     role: 'USER',
+    image: null,
     avatarUrl: null,
-    emailVerifiedAt: new Date('2024-01-01'),
+    emailVerified: true,
     createdAt: new Date('2024-01-01'),
     updatedAt: new Date('2024-01-01'),
   };
@@ -83,10 +83,10 @@ describe('UsersService (前端自助面)', () => {
     it('应返回 UserEntity 且序列化后安全剥离 passwordHash', async () => {
       db._stubs.findFirstUser.mockResolvedValue(mockUser);
 
-      const result = await usersService.findOne(1);
+      const result = await usersService.findOne('user-uuid-1');
 
       expect(result).toBeInstanceOf(UserEntity);
-      expect(result.id).toBe(1);
+      expect(result.id).toBe('user-uuid-1');
       expect(result).toHaveProperty('name', '张三');
       const plain = instanceToPlain(result);
       expect(plain).not.toHaveProperty('passwordHash');
@@ -95,7 +95,7 @@ describe('UsersService (前端自助面)', () => {
     it('用户不存在时应抛出 NotFoundException', async () => {
       db._stubs.findFirstUser.mockResolvedValue(null);
 
-      await expect(usersService.findOne(999)).rejects.toBeInstanceOf(NotFoundException);
+      await expect(usersService.findOne('non-existent')).rejects.toBeInstanceOf(NotFoundException);
     });
   });
 
@@ -108,13 +108,13 @@ describe('UsersService (前端自助面)', () => {
       buffer: Buffer.from('png-data'),
       size: 8,
     };
-    const userWithOldAvatar = { ...mockUser, avatarUrl: '/uploads/avatars/old.png' };
+    const userWithOldAvatar = { ...mockUser, image: '/uploads/avatars/old.png' };
 
     it('应先预检用户，再存盘更新头像 URL', async () => {
       db._stubs.findFirstUser.mockResolvedValue(mockUser);
-      db._stubs.updateReturning.mockResolvedValue([{ ...mockUser, avatarUrl: '/uploads/avatars/20260813/abc.png' }]);
+      db._stubs.updateReturning.mockResolvedValue([{ ...mockUser, image: '/uploads/avatars/20260813/abc.png' }]);
 
-      const result = await usersService.updateAvatar(1, avatarFile);
+      const result = await usersService.updateAvatar('user-uuid-1', avatarFile);
 
       expect(db._stubs.findFirstUser).toHaveBeenCalled();
       expect(mediaService.save).toHaveBeenCalledWith(avatarFile, {
@@ -122,13 +122,13 @@ describe('UsersService (前端自助面)', () => {
         convertToWebp: true,
         webpQuality: 85,
       });
-      expect(result.avatarUrl).toBe('/uploads/avatars/20260813/abc.png');
+      expect(result.image).toBe('/uploads/avatars/20260813/abc.png');
     });
 
     it('预检用户不存在时应抛 NotFoundException，不触盘', async () => {
       db._stubs.findFirstUser.mockResolvedValue(null);
 
-      await expect(usersService.updateAvatar(999, avatarFile)).rejects.toBeInstanceOf(NotFoundException);
+      await expect(usersService.updateAvatar('non-existent', avatarFile)).rejects.toBeInstanceOf(NotFoundException);
       expect(mediaService.save).not.toHaveBeenCalled();
     });
 
@@ -136,26 +136,26 @@ describe('UsersService (前端自助面)', () => {
       db._stubs.findFirstUser.mockResolvedValue(mockUser);
       db._stubs.updateReturning.mockResolvedValue([]);
 
-      await expect(usersService.updateAvatar(1, avatarFile)).rejects.toBeInstanceOf(NotFoundException);
+      await expect(usersService.updateAvatar('user-uuid-1', avatarFile)).rejects.toBeInstanceOf(NotFoundException);
       expect(mediaService.deleteStored).toHaveBeenCalledWith('avatars/20260813/abc.png');
     });
 
     it('更新成功后应删除旧头像', async () => {
       db._stubs.findFirstUser.mockResolvedValue(userWithOldAvatar);
       db._stubs.updateReturning.mockResolvedValue([
-        { ...userWithOldAvatar, avatarUrl: '/uploads/avatars/20260813/abc.png' },
+        { ...userWithOldAvatar, image: '/uploads/avatars/20260813/abc.png' },
       ]);
 
-      await usersService.updateAvatar(1, avatarFile);
+      await usersService.updateAvatar('user-uuid-1', avatarFile);
 
       expect(mediaService.deleteByUrl).toHaveBeenCalledWith('/uploads/avatars/old.png');
     });
 
     it('无旧头像时不触发删除', async () => {
       db._stubs.findFirstUser.mockResolvedValue(mockUser);
-      db._stubs.updateReturning.mockResolvedValue([{ ...mockUser, avatarUrl: '/uploads/avatars/20260813/abc.png' }]);
+      db._stubs.updateReturning.mockResolvedValue([{ ...mockUser, image: '/uploads/avatars/20260813/abc.png' }]);
 
-      await usersService.updateAvatar(1, avatarFile);
+      await usersService.updateAvatar('user-uuid-1', avatarFile);
 
       expect(mediaService.deleteByUrl).not.toHaveBeenCalled();
     });

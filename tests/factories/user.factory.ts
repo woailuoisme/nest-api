@@ -7,13 +7,15 @@
 import { faker } from '@faker-js/faker';
 
 export interface MockUser {
-  id: number;
+  id: string;
   name: string;
   email: string;
   role: string;
-  passwordHash: string;
-  avatarUrl: string | null;
-  emailVerifiedAt: Date | null;
+  passwordHash?: string;
+  image?: string | null;
+  avatarUrl?: string | null;
+  emailVerified: boolean;
+  emailVerifiedAt?: Date | null;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -22,12 +24,14 @@ export interface MockUser {
 export function createMockUser(overrides: Partial<MockUser> = {}): MockUser {
   const password = faker.internet.password();
   return {
-    id: faker.number.int({ min: 1, max: 999999 }),
+    id: faker.string.uuid(),
     name: faker.person.fullName(),
     email: faker.internet.email(),
     role: 'USER',
     passwordHash: `hashed:${password}`,
+    image: null,
     avatarUrl: null,
+    emailVerified: false,
     emailVerifiedAt: null,
     createdAt: faker.date.past(),
     updatedAt: faker.date.recent(),

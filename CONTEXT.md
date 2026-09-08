@@ -6,34 +6,30 @@ This document establishes the ubiquitous language and domain glossary for NestFo
 
 ### Identity & Access
 
-- **User**: The primary account identity in the system, identified by a BIGINT ID and unique email. Supports role-based access (`Role`: ADMIN, MANAGER, USER) and fine-grained permissions.
-- **Role**: Coarse-grained access tier assigned to users (`ADMIN`, `MANAGER`, `USER`).
+- **User**: The unified account identity across client and back-office management, identified by a UUIDv7 primary key and unique email. Supports role-based access (`Role`: SUPER_ADMIN, ADMIN, OPERATOR, USER).
+- **Role**: Coarse-grained access tier assigned to users (`SUPER_ADMIN`, `ADMIN`, `OPERATOR`, `USER`).
 - **Permission**: Fine-grained capability string (e.g., `users.create`, `users.read`) derived deterministically from role mapping (`ROLE_PERMISSIONS`).
-- **AccessControlGuard**: Unified high-performance authorization guard evaluating `@Public()`, `@Roles()`, and `@Permissions()` in a single pass with ADMIN super-role short-circuiting.
+- **AccessControlGuard**: Unified high-performance authorization guard evaluating `@Public()`, `@Roles()`, and `@Permissions()` in a single pass with ADMIN/SUPER_ADMIN super-role short-circuiting.
 
 ### Identifiers & Traceability
 
-- **UUIDv7 Standard (RFC 9562)**: Time-ordered 128-bit identifier with a 48-bit millisecond Unix timestamp prefix and monotonic sub-millisecond sequencing. Guarantees clustered B-tree index locality without page splitting while providing non-enumerable, collision-free distributed identity.
-- **Dual-Identifier Strategy**: Core relational tables (`users`, `admin_users`) maintain 64-bit `BIGINT IDENTITY` primary keys for maximum foreign-key join throughput and minimal memory footprint, paired with a non-enumerable `UUIDv7` for public API exposure. Standalone and distributed entities (`notifications`, `media`, `orders`) adopt `UUIDv7` as their primary key directly.
+- **UUIDv7 Standard (RFC 9562)**: Time-ordered 128-bit identifier with a 48-bit millisecond Unix timestamp prefix and monotonic sub-millisecond sequencing. Guarantees clustered B-tree index locality without page splitting while providing non-enumerable, collision-free distributed identity. Adopted directly as the primary identifier across core and standalone entities (`user`, `session`, `account`, `verification`, `notifications`, `media`, `orders`).
 - **RequestId (`x-request-id`)**: End-to-end distributed trace identifier formatted as a standard 36-character `UUIDv7`. Injected at the Fastify hook boundary, propagated across downstream logs (Pino), error envelopes, and HTTP response headers.
 - **IdempotencyKey**: Client-originated unique token (recommended `UUIDv7`) transmitted via the `Idempotency-Key` HTTP header. The server treats this as an opaque `varchar(255)` string, enforcing single-execution semantics scoped to `(key, request_path, actor_type, user_id)`.
-- **RefreshTokenJti**: Monotonically increasing `UUIDv7` embedded in the JWT `jti` claim at issuance, guaranteeing per-token uniqueness without full cryptographic decode. Revocation is stateful via the SHA-256 `token_hash` column in the `refresh_tokens` / `admin_refresh_tokens` tables; the `jti` claim itself is not persisted.
 
 ### API Surface & Admin Boundary
 
-- **Admin Boundary**: The `/admin` route prefix segregating back-office management endpoints from front-end API endpoints. The users, notifications, and dashboard management domains — controllers, services, and DTOs alike — live exclusively under this boundary.
-- **AdminPrefixGuard**: Default-deny global guard registered in the APP_GUARD chain after `JwtAuthGuard`, enforcing admin roles (`SUPER_ADMIN`, `ADMIN`, `OPERATOR`) for any request hitting the `/admin` prefix (with `/v1/admin` URI versioning support), while honoring `@Public()` on whitelisted endpoints (such as `/admin/auth/login`).
+- **Admin Boundary**: The `/admin` route prefix segregating back-office management endpoints from front-end API endpoints. The users, notifications, and dashboard management domains live exclusively under this boundary.
+- **AdminPrefixGuard**: Default-deny global guard registered in the APP_GUARD chain, enforcing admin roles (`SUPER_ADMIN`, `ADMIN`, `OPERATOR`) for any request hitting the `/admin` prefix (with `/v1/admin` URI versioning support), while honoring `@Public()` on whitelisted endpoints.
 - **AdminModule**: Sole back-office entry in `API_MODULES` aggregating self-contained domain submodules under `src/api/admin/` (the admin boundary area alongside `src/api/client/` and `src/api/system/`), plus any domain module auto-generated and auto-registered by `crud:generate`. New management endpoints must be added here, never to front-end controllers.
-- **Front-end (Client) API Module**: Feature module exposing only self-service endpoints for end-user clients under `src/api/client/`. The front-end `UsersModule` (`GET /users/me`, `GET /users/:id`, avatar upload) and `AuthModule` are fully self-contained with zero dependency on the admin domain; route-level security for the admin surface stays enforced by `AdminPrefixGuard`.
+- **Front-end (Client) API Module**: Feature module exposing only self-service endpoints for end-user clients under `src/api/client/`. The front-end `UsersModule` (`GET /users/me`, `GET /users/:id`, avatar upload) has zero dependency on the admin domain; route-level security for the admin surface stays enforced by `AdminPrefixGuard`.
 - **System API Module**: Infrastructure-adjacent endpoints (e.g. health checks) under `src/api/system/`.
 
-### Authentication & Token Lifecycle
+### Authentication & Session Lifecycle
 
-- **AuthTokenManager**: Deep module responsible for the complete lifecycle, cryptographic generation, persistence, rotation, atomic verification, and purging of all authentication tokens.
-- **TokenPair**: The combination of a short-lived stateless JWT access token and a long-lived stateful refresh token.
-- **RefreshToken**: Stateful SHA-256 hashed token record stored in PostgreSQL, supporting atomic single-use rotation and user-level mass revocation.
-- **EphemeralToken**: Single-use time-bound cryptographic token used for asynchronous security workflows (e.g., `password_reset`, `email_verification`).
-- **Atomic Token Consumption**: A single SQL `UPDATE ... RETURNING` pattern ensuring verification and invalidation occur in a single atomic database step, eliminating Time-of-Check to Time-of-Use (TOCTOU) concurrency windows.
+- **BetterAuthModule**: High-performance native NestJS module integrating Better Auth over Fastify 5 without third-party proxy wrappers, exposing `/v1/auth/*` catch-all handler and Drizzle ORM PostgreSQL persistence.
+- **Session**: Stateful authentication session record stored in PostgreSQL, supporting multi-device tracking, instant revocation, and dual-modality access (HTTP-Only Cookie and Bearer session token).
+- **BetterAuthGuard**: Global authentication guard inspecting incoming HTTP-Only cookies and Bearer tokens via Better Auth session API, attaching authenticated user and session context onto `request.user` and `request.session`.
 
 ### Asynchronous Operations
 
@@ -45,13 +41,13 @@ This document establishes the ubiquitous language and domain glossary for NestFo
 ### Real-time Streaming & Server-Sent Events
 
 - **Server-Sent Events (SSE)**: W3C standard unidirectional HTTP response stream (`text/event-stream`) providing persistent real-time server-to-client event delivery over standard HTTP/2 or Fastify HTTP/1.1 connections.
-- **SseAuthGuard**: Dual-channel authentication guard supporting query token extraction (`?token=<jwt>`) to accommodate browser `EventSource` header limitations alongside fallback `Authorization: Bearer` parsing.
+- **SseAuthGuard**: Dual-channel authentication guard supporting query token extraction (`?token=<token>`) to accommodate browser `EventSource` header limitations alongside fallback `Authorization: Bearer` parsing and Better Auth session validation.
 - **NotificationStream**: Reactive RxJS `Subject`-backed user unicast and broadcast channel, delivering JSON event envelopes with automatic 25s ping heartbeats, Fastify disconnect cleanup, and `@BypassTransform()` response protection.
 
 ### Bidirectional WebSockets & Unified Broadcasting
 
-- **WebSocketGateway**: Full-duplex bidirectional communication channel powered by Socket.IO (`/dashboard` namespace), supporting room isolation, RPC acknowledgments, and Fastify HTTP server integration via `IoAdapter`.
-- **Fail-Fast Handshake Authentication**: Immediate JWT verification during connection initiation via `client.handshake.auth.token`, `headers.authorization`, or `query.token`, instantly aborting unauthenticated connections (`client.disconnect(true)`) to protect TCP handles.
+- **WebSocketGateway**: Full-duplex bidirectional communication channel powered by Socket.IO (`/realtime` namespace), supporting room isolation, RPC acknowledgments, and Fastify HTTP server integration via `IoAdapter`.
+- **Fail-Fast Handshake Authentication**: Immediate Better Auth session verification during connection initiation via `client.handshake.auth.token`, `headers.authorization`, or `query.token`, instantly aborting unauthenticated connections (`client.disconnect(true)`) to protect TCP handles.
 - **MetricChannel**: Dedicated pub/sub rooms (`system`, `business`, `alerts`) allowing authenticated clients to dynamically subscribe to real-time runtime snapshots and business alerts.
 - **RealtimeBroadcaster**: Unified deep facade module (`RealtimeService` in `src/realtime/`) providing an ultra-compact public interface (`sendToUser`, `broadcast`, `subscribe`) over the polymorphic `REALTIME_PRIMARY_TRANSPORT` seam. Consolidates generic SSE streaming (`GET /v1/realtime/stream`) and generic WebSocket connections (`/realtime` namespace), backed by `LocalCompositeTransport` (composing `SseTransport`, `RealtimeGateway`, and `RedisPubSubAdapter`) or `PusherTransport`.
 - **ChannelManager**: Dynamic channel authorization engine in `src/realtime/channels/` supporting parametric pattern rules (`private:user.{userId}`), role-based wildcard rules (`private:admin.*`), and public room defaults, safeguarding both WebSocket rooms and SSE event streams against unauthorized cross-user eavesdropping.

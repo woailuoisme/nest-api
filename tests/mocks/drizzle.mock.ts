@@ -25,6 +25,9 @@ export function createMockDrizzleDb() {
 
   const mockDb: any = {
     query: {
+      user: {
+        findFirst: findFirstUser,
+      },
       users: {
         findFirst: findFirstUser,
       },

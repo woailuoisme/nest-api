@@ -5,7 +5,6 @@ import {
   ApiErrorDetailsResource,
   ApiErrorResponseResource,
   ApiPaginatedResponseResource,
-  ApiResponseResource,
 } from '@/common/dto/api-resource.dto';
 import { CursorPageMetaResource, PageMetaResource } from '@/common/dto/pagination.dto';
 
@@ -49,25 +48,20 @@ export function ApiSuccessResponse<TModel extends Type<unknown>>(
         description,
         schema: {
           type: 'object',
-          properties: {
-            data: { type: 'object', nullable: true, example: null },
-          },
+          nullable: true,
+          example: {},
         },
       }),
     );
   }
 
+  // 规范对齐：非分页单资源直接返回裸 JSON 实体对象，彻底消除 { data: ... } 冗余包裹
   return applyDecorators(
-    ApiExtraModels(ApiResponseResource, model),
+    ApiExtraModels(model),
     ApiResponse({
       status,
       description,
-      schema: {
-        type: 'object',
-        properties: {
-          data: { $ref: getSchemaPath(model) },
-        },
-      },
+      type: model,
     }),
   );
 }
@@ -106,11 +100,11 @@ export function ApiPageResponse<TModel extends Type<unknown>>(model: TModel, opt
       schema: {
         type: 'object',
         properties: {
-          data: {
+          items: {
             type: 'array',
             items: { $ref: getSchemaPath(model) },
           },
-          meta: { $ref: getSchemaPath(PageMetaResource) },
+          pagination: { $ref: getSchemaPath(PageMetaResource) },
         },
       },
     }),
@@ -138,11 +132,11 @@ export function ApiCursorPageResponse<TModel extends Type<unknown>>(
       schema: {
         type: 'object',
         properties: {
-          data: {
+          items: {
             type: 'array',
             items: { $ref: getSchemaPath(model) },
           },
-          meta: { $ref: getSchemaPath(CursorPageMetaResource) },
+          pagination: { $ref: getSchemaPath(CursorPageMetaResource) },
         },
       },
     }),
