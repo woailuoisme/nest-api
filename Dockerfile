@@ -1,5 +1,4 @@
 ARG BUN_VERSION=1-alpine
-ARG NODE_VERSION=24-alpine
 
 # --- Build Stage: 编译 TypeScript ---
 FROM oven/bun:${BUN_VERSION} AS build
@@ -20,8 +19,8 @@ WORKDIR /app
 COPY package.json bun.lock* bunfig.toml* ./
 RUN bun install --production --frozen-lockfile
 
-# --- Production Stage: 最小运行时 (Node.js) ---
-FROM node:${NODE_VERSION} AS production
+# --- Production Stage: 最小运行时 (Bun) ---
+FROM oven/bun:${BUN_VERSION} AS production
 WORKDIR /app
 ENV NODE_ENV=production \
     APP_ENV=production \
@@ -40,8 +39,8 @@ USER 1000
 
 EXPOSE 4300
 
-# 默认启动 HTTP 服务；Worker 进程由 K8s 通过 command 覆盖为 dist/workers/worker.main.js。
+# 默认启动 HTTP 服务；Worker 进程由 K8s 通过 command 覆盖为 `bun run dist/workers/worker.main.js`。
 # 健康检查交由 K8s probes 处理（镜像级 HEALTHCHECK 对无 HTTP 的 worker 进程会误报）。
-CMD ["node", "dist/main.js"]
+CMD ["bun", "run", "dist/main.js"]
 
 
