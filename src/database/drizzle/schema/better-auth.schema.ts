@@ -27,6 +27,7 @@ export const user = pgTable('user', {
   phoneNumber: text('phone_number').unique(),
   phoneNumberVerified: boolean('phone_number_verified'),
   lastLoginMethod: text('last_login_method'),
+  isAnonymous: boolean('is_anonymous').default(false),
 });
 
 /**
@@ -246,6 +247,29 @@ export const deviceCode = pgTable('device_code', {
   scope: text('scope'),
 });
 
+/**
+ * 通行密钥凭证表 (passkey) — WebAuthn FIDO2 生物识别与安全密钥凭据
+ */
+export const passkey = pgTable(
+  'passkey',
+  {
+    id: uuid('id').primaryKey().default(sql`uuidv7()`),
+    name: text('name'),
+    publicKey: text('public_key').notNull(),
+    userId: uuid('user_id')
+      .notNull()
+      .references(() => user.id, { onDelete: 'cascade' }),
+    credentialID: text('credential_id').notNull(),
+    counter: integer('counter').default(0).notNull(),
+    deviceType: text('device_type').notNull(),
+    backedUp: boolean('backed_up').default(false).notNull(),
+    transports: text('transports'),
+    createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+    aaguid: text('aaguid'),
+  },
+  (table) => [index('passkey_user_id_idx').on(table.userId), index('passkey_credential_id_idx').on(table.credentialID)],
+);
+
 // ---- Relations ----
 
 export const userRelations = relations(user, ({ many }) => ({
@@ -254,6 +278,7 @@ export const userRelations = relations(user, ({ many }) => ({
   twoFactors: many(twoFactor),
   members: many(member),
   invitations: many(invitation),
+  passkeys: many(passkey),
 }));
 
 export const sessionRelations = relations(session, ({ one }) => ({
@@ -304,7 +329,16 @@ export const invitationRelations = relations(invitation, ({ one }) => ({
   }),
 }));
 
+export const passkeyRelations = relations(passkey, ({ one }) => ({
+  user: one(user, {
+    fields: [passkey.userId],
+    references: [user.id],
+  }),
+}));
+
 export type User = typeof user.$inferSelect;
 export type NewUser = typeof user.$inferInsert;
 export type Session = typeof session.$inferSelect;
 export type Account = typeof account.$inferSelect;
+export type Passkey = typeof passkey.$inferSelect;
+export type NewPasskey = typeof passkey.$inferInsert;

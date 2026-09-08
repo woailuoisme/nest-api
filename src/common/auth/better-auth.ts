@@ -1,9 +1,11 @@
 import { apiKey } from '@better-auth/api-key';
 import { drizzleAdapter } from '@better-auth/drizzle-adapter';
+import { passkey } from '@better-auth/passkey';
 import { Logger } from '@nestjs/common';
 import { betterAuth } from 'better-auth';
 import {
   admin,
+  anonymous,
   bearer,
   deviceAuthorization,
   emailOTP,
@@ -12,6 +14,7 @@ import {
   lastLoginMethod,
   magicLink,
   multiSession,
+  oneTap,
   openAPI,
   organization,
   phoneNumber,
@@ -61,6 +64,20 @@ pool.on('error', (err) => {
 });
 const db = drizzle(pool, { schema });
 
+const baseURL = process.env.BETTER_AUTH_URL || process.env.APP_URL || 'http://localhost:4300';
+let passkeyRpId = process.env.PASSKEY_RP_ID;
+let passkeyOrigin = process.env.PASSKEY_ORIGIN;
+if (!passkeyRpId || !passkeyOrigin) {
+  try {
+    const parsed = new URL(baseURL);
+    passkeyRpId ??= parsed.hostname;
+    passkeyOrigin ??= parsed.origin;
+  } catch {
+    passkeyRpId ??= 'localhost';
+    passkeyOrigin ??= 'http://localhost:4300';
+  }
+}
+
 // 4. 导出 Better Auth 核心实例
 export const auth = betterAuth({
   database: drizzleAdapter(db, {
@@ -68,7 +85,7 @@ export const auth = betterAuth({
     schema,
   }),
   secret: process.env.BETTER_AUTH_SECRET || 'nestforge-better-auth-secret-key-32-chars!',
-  baseURL: process.env.BETTER_AUTH_URL || process.env.APP_URL || 'http://localhost:4300',
+  baseURL,
   basePath: '/v1/auth',
   advanced: {
     database: {
@@ -119,6 +136,25 @@ export const auth = betterAuth({
     emailOTP({
       sendVerificationOTP: async ({ email, otp }) => {
         logger.log(`[BetterAuth:EmailOTP] ${email}: ${otp}`);
+      },
+    }),
+    passkey({
+      rpID: passkeyRpId,
+      rpName: 'NestForge',
+      origin: passkeyOrigin,
+      registration: {
+        requireSession: true,
+      },
+    }),
+    oneTap({
+      clientId: process.env.GOOGLE_CLIENT_ID || 'google-client-id',
+      disableSignup: false,
+    }),
+    anonymous({
+      emailDomainName: 'anonymous.placeholder.invalid',
+      disableDeleteAnonymousUser: false,
+      onLinkAccount: async ({ anonymousUser, newUser }) => {
+        logger.log(`[BetterAuth:AnonymousLink] User ${anonymousUser.user.id} linked to ${newUser.user.id}`);
       },
     }),
     genericOAuth({

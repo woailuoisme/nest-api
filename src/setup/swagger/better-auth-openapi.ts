@@ -54,6 +54,18 @@ export const BETTER_AUTH_TAG_MAP: Record<string, TagMetadata> = {
     name: '认证-三方与设备',
     description: 'RFC 8628 设备码授权流与物联网设备绑定',
   },
+  Passkey: {
+    name: '认证-通行密钥',
+    description: 'WebAuthn 生物识别与安全硬件密钥免密注册、登录与凭据治理',
+  },
+  'One-tap': {
+    name: '认证-一键登录',
+    description: 'Google One Tap 快速免密授权与无缝登录',
+  },
+  Anonymous: {
+    name: '认证-匿名访客',
+    description: '匿名访客身份签发、转正与临时账户生命周期管理',
+  },
   Admin: {
     name: '认证-管理员治理',
     description: '管理员对用户的封禁、角色下发、冒充与会话吊销',

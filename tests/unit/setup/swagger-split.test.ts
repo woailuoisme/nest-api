@@ -52,17 +52,28 @@ describe('Swagger & Scalar Split Integration Test', () => {
     expect(adminJson.components.securitySchemes).toHaveProperty('bearerAuth');
     expect(adminJson.components.securitySchemes).toHaveProperty('cookieAuth');
 
-    // 3. Better Auth 全量专本文档 JSON Spec 校验 (全量 108 个端点完整聚合)
+    // 3. Better Auth 全量专本文档 JSON Spec 校验 (全量 118 个端点完整聚合)
     const authJsonRes = await app.inject({ method: 'GET', url: '/docs-auth-json' });
     expect(authJsonRes.statusCode).toBe(200);
     const authJson = JSON.parse(authJsonRes.body);
     expect(authJson.info.title).toBe('NestForge Better Auth API Reference');
     expect(authJson.tags.map((t: { name: string }) => t.name)).toEqual(
-      expect.arrayContaining(['认证-核心凭据', '认证-双因素(2FA)', '认证-组织租户', '认证-管理员治理']),
+      expect.arrayContaining([
+        '认证-核心凭据',
+        '认证-双因素(2FA)',
+        '认证-组织租户',
+        '认证-管理员治理',
+        '认证-通行密钥',
+        '认证-一键登录',
+        '认证-匿名访客',
+      ]),
     );
     expect(Object.keys(authJson.paths)).toContain('/v1/auth/sign-in/email');
     expect(Object.keys(authJson.paths)).toContain('/v1/auth/admin/list-users');
-    expect(Object.keys(authJson.paths).length).toBe(108);
+    expect(Object.keys(authJson.paths)).toContain('/v1/auth/passkey/generate-register-options');
+    expect(Object.keys(authJson.paths)).toContain('/v1/auth/one-tap/callback');
+    expect(Object.keys(authJson.paths)).toContain('/v1/auth/sign-in/anonymous');
+    expect(Object.keys(authJson.paths).length).toBe(118);
     expect(authJson.components.securitySchemes).toHaveProperty('bearerAuth');
     expect(authJson.components.securitySchemes).toHaveProperty('cookieAuth');
 

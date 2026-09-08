@@ -35,6 +35,8 @@ const envSchema = z.object({
 
   BETTER_AUTH_SECRET: z.string().min(16).default('nestforge-better-auth-secret-key-32-chars!'),
   BETTER_AUTH_URL: z.string().default('http://localhost:4300'),
+  PASSKEY_RP_ID: z.string().optional(),
+  PASSKEY_ORIGIN: z.string().optional(),
 
   /** @deprecated 遗留 JWT 配置，已由 BETTER_AUTH_SECRET 统一替代 */
   JWT_ACCESS_SECRET: z.string().min(16).optional(),

@@ -29,7 +29,8 @@ CREATE TABLE IF NOT EXISTS "user" (
     "display_username" text,
     "phone_number" text UNIQUE,
     "phone_number_verified" boolean,
-    "last_login_method" text
+    "last_login_method" text,
+    "is_anonymous" boolean DEFAULT false
 );
 
 CREATE TABLE IF NOT EXISTS "session" (
@@ -168,6 +169,22 @@ CREATE TABLE IF NOT EXISTS "device_code" (
     "client_id" text,
     "scope" text
 );
+
+CREATE TABLE IF NOT EXISTS "passkey" (
+    "id" uuid PRIMARY KEY DEFAULT uuidv7(),
+    "name" text,
+    "public_key" text NOT NULL,
+    "user_id" uuid NOT NULL REFERENCES "user"("id") ON DELETE CASCADE,
+    "credential_id" text NOT NULL,
+    "counter" integer NOT NULL DEFAULT 0,
+    "device_type" text NOT NULL,
+    "backed_up" boolean NOT NULL DEFAULT false,
+    "transports" text,
+    "created_at" timestamp with time zone NOT NULL DEFAULT now(),
+    "aaguid" text
+);
+CREATE INDEX IF NOT EXISTS "passkey_user_id_idx" ON "passkey" ("user_id");
+CREATE INDEX IF NOT EXISTS "passkey_credential_id_idx" ON "passkey" ("credential_id");
 
 -- Update downstream polymorphic columns from bigint to uuid
 ALTER TABLE "media" DROP COLUMN IF EXISTS "model_id";

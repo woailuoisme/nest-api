@@ -151,7 +151,7 @@ tests/
 ### 鉴权
 
 - **Better Auth**（`src/common/auth/better-auth.ts`）：Drizzle 适配器，基础路径 `/v1/auth`，默认 `emailAndPassword`，会话 token 存库可吊销；邮件通过 `MailJobs` 队列分发。
-- 插件全家桶：`admin` (RBAC) / `twoFactor` / `username` / `phoneNumber` / `magicLink` / `emailOTP` / `genericOAuth` (Google) / `apiKey` / `organization` / `bearer` / `multiSession` / `lastLoginMethod` / `jwt` / `deviceAuthorization` / `openAPI`。
+- 插件全家桶：`admin` (RBAC) / `twoFactor` / `username` / `phoneNumber` / `magicLink` / `emailOTP` / `passkey` / `oneTap` / `anonymous` / `genericOAuth` (Google) / `apiKey` / `organization` / `bearer` / `multiSession` / `lastLoginMethod` / `jwt` / `deviceAuthorization` / `openAPI`。
 - 角色: `SUPER_ADMIN / ADMIN / OPERATOR / USER`（`src/common/constants/roles.ts`），统一用户主表 `user`（UUID `uuidv7()`），前台用户与后台管理员聚合于同一张表。
 - 细粒度权限: `@Roles(Role.ADMIN)` 角色级 + `@Permissions(Permission.UserCreate)` 声明式，配合 `BetterAuthGuard` / `AccessControlGuard` 兜底。
 

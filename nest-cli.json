@@ -9,7 +9,7 @@
     "tsConfigPath": "tsconfig.build.json",
     "assets": [
       { "include": "i18n/translations/**/*" },
-      { "include": "queues/mail/templates/*.hbs" },
+      { "include": "jobs/mail/templates/*.hbs" },
       { "include": "commands/generator/templates/*.hbs" }
     ]
   }
