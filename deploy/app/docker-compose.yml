@@ -2,7 +2,7 @@ services:
   api:
     build:
       context: ../..
-      dockerfile: docker/app/Dockerfile
+      dockerfile: deploy/app/Dockerfile
     image: nestforge-api:latest
     container_name: nestforge-api
     restart: unless-stopped

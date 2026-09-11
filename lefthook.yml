@@ -11,8 +11,8 @@ pre-commit:
       run: ast-grep scan {staged_files}
 
     - name: helm
-      glob: "helm/**/{*.yaml,*.tpl,Chart.yaml}"
-      run: helm lint ./helm/forge
+      glob: "deploy/helm/**/{*.yaml,*.tpl,Chart.yaml}"
+      run: helm lint ./deploy/helm
 
     - run: bun x tsc --noEmit
     # - run: bun x vitest run

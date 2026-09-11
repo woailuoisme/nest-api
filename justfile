@@ -215,20 +215,20 @@ cmd *args='--help':
 
 # Lint Helm chart
 helm-lint:
-    helm lint ./helm/nestforge
+    helm lint ./deploy/helm
 
 # 校验 Helm chart（lint + template + kubeconform）
 helm-validate:
-    helm lint ./helm/nestforge
-    helm template nestforge ./helm/nestforge | kubeconform -summary
+    helm lint ./deploy/helm
+    helm template nestforge ./deploy/helm | kubeconform -summary
 
 # 打包 Helm chart
 helm-package:
-    helm package ./helm/nestforge
+    helm package ./deploy/helm
 
 # 安装/升级 Helm chart 到集群（需 kubeconfig）
 helm-install *args='--dry-run':
-    helm upgrade --install nestforge ./helm/nestforge {{args}}
+    helm upgrade --install nestforge ./deploy/helm {{args}}
 # 将密钥同步到 GitHub（需 gh CLI）
 sync-secrets:
     bash scripts/sync-secrets.sh
@@ -240,24 +240,24 @@ sync-secrets:
 # 启动全栈 Docker 容器集群 (API + Realtime)
 docker-up *args='':
     docker network create backend 2>/dev/null || true
-    docker compose -f docker/docker-compose.yml --env-file docker/.env up -d {{args}}
+    docker compose -f deploy/docker-compose.yml --env-file deploy/.env up -d {{args}}
 
 # 停止全栈 Docker 容器集群
 docker-down *args='':
-    docker compose -f docker/docker-compose.yml --env-file docker/.env down {{args}}
+    docker compose -f deploy/docker-compose.yml --env-file deploy/.env down {{args}}
 
 # 启动 Centrifugo 实时服务容器
 realtime:
     docker network create backend 2>/dev/null || true
-    docker compose -f docker/centrifugo/docker-compose.yml --env-file docker/.env up -d realtime
+    docker compose -f deploy/centrifugo/docker-compose.yml --env-file deploy/.env up -d realtime
 
 # 停止 Centrifugo 实时服务容器
 realtime-down:
-    docker compose -f docker/centrifugo/docker-compose.yml --env-file docker/.env stop realtime
+    docker compose -f deploy/centrifugo/docker-compose.yml --env-file deploy/.env stop realtime
 
 # 查看 Centrifugo 容器实时日志
 realtime-logs:
-    docker compose -f docker/centrifugo/docker-compose.yml --env-file docker/.env logs -f realtime
+    docker compose -f deploy/centrifugo/docker-compose.yml --env-file deploy/.env logs -f realtime
 
 # 检查 Centrifugo 健康状态
 realtime-health:

@@ -21,8 +21,8 @@ build/
 .env
 .env.*
 !.env.example
-docker/.env
-docker/.env.*
+deploy/.env
+deploy/.env.*
 secret*.ini
 *.ini
 scripts/
@@ -40,11 +40,10 @@ vitest.e2e.config.mts
 docs/
 
 # Docker, Infrastructure & Deployment
-docker/
+deploy/
 docker-compose.yml
 Dockerfile*
 .dockerignore
-helm/
 
 # CI/CD, Linters & Development Tooling
 justfile

@@ -12,7 +12,7 @@ $:
             docker buildx build \
               --tag "${REGISTRY}:latest" \
               --tag "${REGISTRY}:latest-multi" \
-              --file ./Dockerfile \
+              --file deploy/app/Dockerfile \
               --platform linux/amd64,linux/arm64 \
               --cache-from "type=registry,ref=${REGISTRY}:latest-multi-cache" \
               --cache-to "type=registry,ref=${REGISTRY}:latest-multi-cache,mode=max,image-manifest=true,oci-mediatypes=true" \
@@ -30,7 +30,7 @@ $:
             REGISTRY="${CNB_DOCKER_REGISTRY}/${CNB_REPO_SLUG_LOWERCASE}"
             docker buildx build \
               --tag "${REGISTRY}:latest-amd64" \
-              --file ./Dockerfile \
+              --file deploy/app/Dockerfile \
               --platform linux/amd64 \
               --cache-from "type=registry,ref=${REGISTRY}:latest-amd64-cache" \
               --cache-to "type=registry,ref=${REGISTRY}:latest-amd64-cache,mode=max,image-manifest=true,oci-mediatypes=true" \
@@ -45,7 +45,7 @@ $:
         - name: Configuring credentials
           script: helm registry login -u ${CNB_TOKEN_USER_NAME} -p "${CNB_TOKEN}" ${CNB_HELM_REGISTRY}
         - name: Build Helm packages
-          script: helm package ./helm/${CNB_REPO_NAME}
+          script: helm package ./deploy/helm
         - name: Publish to CNB
           script: |
             CHART_FILE=$(ls *.tgz | head -1)
@@ -64,7 +64,7 @@ $:
             docker buildx build \
               --tag "${REGISTRY}:${VERSION}" \
               --tag "${REGISTRY}:latest" \
-              --file ./Dockerfile \
+              --file deploy/app/Dockerfile \
               --platform linux/amd64,linux/arm64 \
               --cache-from "type=registry,ref=${REGISTRY}:cache-alpine-multi" \
               --cache-to "type=registry,ref=${REGISTRY}:cache-alpine-multi,mode=max,image-manifest=true,oci-mediatypes=true" \

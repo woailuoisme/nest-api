@@ -8,7 +8,7 @@
 
 - 运行时: Bun ≥ 1.2 + Node ≥ 24，纯 ESM（`"type": "module"`）
 - 框架: NestJS 12 + Fastify 5（非 Express）· ORM: Drizzle 0.45（PostgreSQL 多文件 schema）· 校验: Zod 4 · Redis + BullMQ
-- 构建: SWC（`resolveFully`），类型检查 `tsc --noEmit` · 测试: Vitest 4 · Lint/格式: Biome 2 · 任务: Just
+- 构建: SWC（`resolveFully`），类型检查 `tsc --noEmit` · 测试: Vitest 5 · Lint/格式: Biome 2 · 任务: Just
 - 工具库: es-toolkit（唯一首选，严禁 Lodash）· 日志: 原生 Pino（`pino-roll` 按日切割）
 
 ## 常用命令
@@ -31,6 +31,7 @@ just test         # 单元测试
 just test-e2e     # E2E 测试
 just test-cov     # 单测 + 覆盖率
 just test-watch   # 单测 watch 模式
+just k6 smoke     # 运行 k6 smoke 场景负载基准测试
 
 # Drizzle
 just db-gen       # 生成迁移 SQL (drizzle-kit generate)
@@ -39,6 +40,19 @@ just db-deploy    # 应用迁移 (prod)
 just db-seed      # 灌种子数据
 just db-studio    # Drizzle Studio
 just db-reset     # 重置数据库 (destructive)
+
+# Better Auth
+just ba-migrate   # 生成并应用 Better Auth 表结构变更
+just ba-generate  # 依据 better-auth.ts 重新生成 Drizzle Schema
+just ba-info      # 显示系统与 Better Auth 配置信息
+just ba-secret    # 生成新的 Better Auth secret
+
+# 容器编排与服务 (Docker / Centrifugo)
+just docker-up    # 启动全栈 Docker 容器集群 (API + 附属组件)
+just docker-down  # 停止全栈 Docker 容器集群
+just realtime     # 启动 Centrifugo 独立实时服务容器
+just realtime-health # 检查 Centrifugo 健康状态
+just mail-build   # 编译 MJML 邮件模板为 Handlebars (.hbs)
 
 # CLI (nest-commander)
 just cmd --help           # 查看所有命令 (直接跑 TS 源码)
@@ -55,10 +69,11 @@ just cli --help           # 运行生产构建 CLI (node dist/cli.js)
 src/database/
 ├── drizzle/        # Drizzle 表定义 + 数据库服务
 │   ├── schema/     # 多文件 schema (better-auth.schema.ts, notifications.schema.ts 等, 汇总于 index.ts)
-│   ├── sql/        # 原生 PostgreSQL DDL (00_init.sql, 01_auth.sql 等按 00~99 命名，供 DBA 审计与独立建表)
+│   ├── sql/        # 原生 PostgreSQL DDL (00_init.sql, 01_auth.sql, 02_features.sql 供 DBA 审计与独立建表)
 │   ├── drizzle.module.ts  # @Global() Drizzle 模块
 │   └── drizzle.service.ts # postgres.js + drizzle 客户端
-└── seeds/          # 种子数据 (user.seed.ts, index.ts)
+├── search/         # Laravel Scout 风格模型全文索引定义 (index.ts, user.searchable.ts)
+└── seeds/          # 种子数据 (admin.seed.ts, user.seed.ts, index.ts)
 src/
 ├── common/         # 全局 Filter/Guard/Interceptor/Pipe/Decorator/DTO/utils
 │   ├── constants/  # PATHS、NETWORK、Role、Permission 等常量
@@ -72,7 +87,7 @@ src/
 │   │   ├── realtime.dto.ts        # 信封结构 RealtimeEnvelope<T> 与客户端订阅传输对象
 │   │   ├── realtime.service.ts    # 领域发布服务 (向 Centrifugo HTTP API 安全派发事件)
 │   │   └── realtime.module.ts     # @Global 实时深模块 (纯发布引擎)
-│   ├── resilience/ # 熔断 (CircuitBreaker) / 优雅限流 / 过载保护 (LoadShedding)
+│   ├── resilience/ # 熔断 (CircuitBreaker) / 优雅限流 / 过载保护 (LoadShedding) / 超时拦截
 │   ├── search/     # Laravel Scout 风格搜索引擎抽象 (Meilisearch / Noop / 队列异步同步)
 │   └── storage/    # 本地/S3 驱动 (drivers/local.driver.ts, s3.driver.ts)
 ├── config/         # env.validation.ts (Zod schema)
@@ -101,6 +116,7 @@ src/
 ├── cli.module.ts   # CLI 入口模块
 ├── cli.ts          # CLI bootstrap
 └── main.ts         # HTTP bootstrap
+deploy/             # 统一交付与运维编排 (Docker 容器编排 app/centrifugo/... + Helm Kubernetes Chart)
 storage/            # 运行时数据 (cache/logs/tmp/uploads，git 忽略内容)
 tests/
 ├── setup.ts            # 全局 setup（环境变量、mock 重置）
@@ -130,6 +146,8 @@ tests/
 - **扁平数据访问**：Service 层直接使用 `@InjectDb() private readonly db: DrizzleDB` 注入数据库客户端，通过 `this.db.query...` / `this.db.insert...` 进行类型安全操作，不设多余的 Repository 样板层。
 - **多写原子事务 (Transaction)**：涉及多表关联写入（如创建用户并绑定 OAuth 账户）或多步更新时，使用显式原生闭包 `await this.db.transaction(async (tx) => { ... })` 保证强一致性与自动回滚。
 - **实时通信与领域事件解耦 (Decoupled Realtime & Events)**：所有 WebSocket 与 SSE 实时通信逻辑集中且自包含于 `src/features/system/{websocket,sse}/`（对齐 IoT 模块形态），包括各协议特有的频道常量、`@ChannelAuth` 准入鉴权、连接/订阅 Token 签发（`/v1/{websocket,sse}/*`）与频道列表。普通业务模块（如 `admin/notifications`）严禁直接注入实时服务或定义特定协议的频道规则，统一通过 `@nestjs/event-emitter` 向事件总线发布纯净领域事件（如 `notification.sent`）；`WebsocketService` 与 `SseService` 监听领域事件并负责向 Centrifugo 下发推送，实现业务与通信协议的单向彻底解耦。
+- **全文搜索模型解耦 (Laravel Scout 模式)**：数据表/实体如需支持全文检索，统一在 `src/database/search/` 目录下实现 `Searchable` 契约（如 `user.searchable.ts`）并注册入全局索引映射；业务数据增删改时通过 `SearchSyncService` 发布队列异步同步任务，严禁在业务 Service 中直接硬编码调用底层搜索引擎 SDK（如 Meilisearch 客户端），保障驱动可插拔性（Meilisearch / Noop 空驱动降级）。
+- **工业物联网总线解耦 (Decoupled MQTT & Telemetry)**：物联网设备指令交互与遥测采集集中收敛于 `src/features/system/iot/` 与 `src/common/mqtt/`。监听统一使用声明式 `@MqttSubscribe(topic, options)` 装饰器；向物理/仿真设备下发控制指令统一调用 `MqttService.publish()` 或 RPC 方法，禁止业务逻辑直连外部 MQTT Broker 客户端。
 - 全局基础设施 (Storage/Excel/Mail/Drizzle/Redis) 放 `src/common/` 或 `src/database/`，用 `@Global()` 导出。
 
 ### 环境变量
@@ -141,7 +159,11 @@ tests/
   - **Mail**: `MAIL_URL="smtp://user:pass@host:587"`（发件人保持 `MAIL_FROM_ADDRESS` / `MAIL_FROM_NAME`）
   - **S3 Storage**: `STORAGE_S3_URL="s3://key:secret@endpoint:port/bucket?region=...&publicUrl=..."`
   - **Realtime (Centrifugo)**: `REALTIME_URL="centrifugo://api-key:hmac-secret@host:port/api?tls=false"`
+  - **Search (Meilisearch)**: `SEARCH_URL="meilisearch://masterKey@localhost:7700"`（未配置时默认使用 `noop` 空驱动降级，配置后推导为 `SEARCH_DRIVER=meilisearch`）
   - **Imgproxy**: `IMGPROXY_URL="imgproxy://key:salt@host:port?publicUrl=..."`（支持 HMAC-SHA256 安全签名与多驱动映射）
+  - **MQTT (Mosquitto/EMQX)**: `MQTT_URL="mqtt://admin:password@localhost:1883?clientId=nest-forge"`（工业物联网通信与遥测总线）
+- 新增 env 必须**同步更新** validation schema 与 `.env.example`。
+- `.env` 由 `dotenv/config` 在 `drizzle.config.ts` 与 CLI 入口加载。
 - 新增 env 必须**同步更新** validation schema 与 `.env.example`。
 - `.env` 由 `dotenv/config` 在 `drizzle.config.ts` 与 CLI 入口加载。
 
@@ -214,7 +236,7 @@ BullMQ 队列由 `AuthModule → MailJobs` 依赖，CLI 模块也需 `BullModule
 
 - **`.env`**: 本地开发，不入库。
 - **`secret.ini`**: 部署用 VPS/SSH 凭据，`scripts/sync-secrets.sh` 同步到 GitHub Secrets (见 `secret.example.ini`)。
-- **Docker**: `docker/app/Dockerfile` 多阶段构建 (oven/bun:1.4-alpine)，生产镜像不含源码与 devDeps，`CMD ["bun", "run", "dist/main.js"]`；Docker 运维配置集中收敛于 `docker/`（含 `docker/app/`、`docker/centrifugo/`、`docker/docker-compose.yml`）。
+- **Docker**: `deploy/app/Dockerfile` 多阶段构建 (oven/bun:1.4-alpine)，生产镜像不含源码与 devDeps，`CMD ["bun", "run", "dist/main.js"]`；交付编排配置集中收敛于 `deploy/`（含 `deploy/app/`、`deploy/centrifugo/`、`deploy/docker-compose.yml` 与 `deploy/helm/`）。
 
 ## 易踩坑
 

@@ -1,6 +1,6 @@
 /**
  * Centrifugo 频道命名空间枚举
- * 对应 docker/centrifugo/config.yaml 中的 namespaces 定义
+ * 对应 deploy/centrifugo/config.yaml 中的 namespaces 定义
  */
 export enum RealtimeNamespace {
   /** 个人专属频道：支持断线重连补发与历史回溯 */
