@@ -23,7 +23,7 @@ export const PATHS = {
   STORAGE_LOGS: 'storage/logs',
   STORAGE_TMP: 'storage/tmp',
   STORAGE_CACHE: 'storage/cache',
-  API_MD_FILE: 'API.md',
+  API_MD_FILE: 'docs/api.md',
   AVATARS_RELATIVE_PATH: '/uploads/avatars',
 } as const;
 
@@ -114,10 +114,6 @@ export const SNOWFLAKE = {
 export const OTP = {
   /** 验证码长度 */
   LENGTH: 6,
-  /** TOTP 时间窗口（秒） */
-  TOTP_WINDOW: 30,
-  /** TOTP 容差窗口（允许 ±N 个窗口） */
-  TOTP_TOLERANCE: 1,
 } as const;
 
 /** 依赖注入令牌 */

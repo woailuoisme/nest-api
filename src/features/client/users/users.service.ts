@@ -26,7 +26,7 @@ export class UsersService {
     if (!foundUser) {
       throw new NotFoundException('User not found');
     }
-    return new UserEntity(foundUser as unknown as Partial<UserEntity>);
+    return new UserEntity(foundUser);
   }
 
   /**
@@ -57,7 +57,7 @@ export class UsersService {
           throw new NotFoundException('User not found');
         }
 
-        return new UserEntity(updatedUser as unknown as Partial<UserEntity>);
+        return new UserEntity(updatedUser);
       },
       { oldUrl: current.image },
     );

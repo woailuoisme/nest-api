@@ -5,11 +5,11 @@
  */
 import { ConflictException, NotFoundException } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
-import { instanceToPlain } from 'class-transformer';
 import { range } from 'es-toolkit';
 import { createMockDrizzleDb } from 'tests/mocks/drizzle.mock';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { Role } from '@/common/constants/roles';
+import { SearchService, SearchSyncService } from '@/common/search';
 import { DRIZZLE_DB } from '@/database/drizzle/drizzle.service';
 import { paginateQuery, paginateSpatieQuery } from '@/database/drizzle/drizzle-pagination';
 import { UserEntity } from '@/features/admin/users/users.dto';
@@ -29,6 +29,12 @@ vi.mock('@/database/drizzle/drizzle-pagination', () => ({
 describe('UsersService (Admin)', () => {
   let usersService: UsersService;
   let db: ReturnType<typeof createMockDrizzleDb>;
+  let searchService: { builder: ReturnType<typeof vi.fn> };
+  let searchSyncService: {
+    sync: ReturnType<typeof vi.fn>;
+    syncById: ReturnType<typeof vi.fn>;
+    remove: ReturnType<typeof vi.fn>;
+  };
 
   const mockUser = {
     id: 'user-uuid-1',
@@ -43,9 +49,22 @@ describe('UsersService (Admin)', () => {
 
   beforeEach(async () => {
     db = createMockDrizzleDb();
+    searchService = {
+      builder: vi.fn(),
+    };
+    searchSyncService = {
+      sync: vi.fn().mockResolvedValue(undefined),
+      syncById: vi.fn().mockResolvedValue(undefined),
+      remove: vi.fn().mockResolvedValue(undefined),
+    };
 
     const module = await Test.createTestingModule({
-      providers: [UsersService, { provide: DRIZZLE_DB, useValue: db }],
+      providers: [
+        UsersService,
+        { provide: DRIZZLE_DB, useValue: db },
+        { provide: SearchService, useValue: searchService },
+        { provide: SearchSyncService, useValue: searchSyncService },
+      ],
     }).compile();
 
     usersService = module.get(UsersService);
@@ -139,10 +158,9 @@ describe('UsersService (Admin)', () => {
       const result = await usersService.findAll({});
 
       expect(result.items[0]).toBeInstanceOf(UserEntity);
-      const plain = instanceToPlain(result.items[0]);
-      expect(plain).not.toHaveProperty('passwordHash');
-      expect(plain).toHaveProperty('id', 'user-uuid-1');
-      expect(plain).toHaveProperty('email', 'zhangsan@example.com');
+      expect(result.items[0]).not.toHaveProperty('passwordHash');
+      expect(result.items[0]).toHaveProperty('id', 'user-uuid-1');
+      expect(result.items[0]).toHaveProperty('email', 'zhangsan@example.com');
     });
   });
 
@@ -218,6 +236,34 @@ describe('UsersService (Admin)', () => {
       db._stubs.deleteReturning.mockResolvedValue([]);
 
       await expect(usersService.remove('non-existent')).rejects.toBeInstanceOf(NotFoundException);
+    });
+  });
+
+  describe('search() — 全文搜索用户', () => {
+    it('应通过 ScoutSearchBuilder 执行检索并返回分页资源', async () => {
+      const mockBuilder = {
+        query: vi.fn().mockReturnThis(),
+        where: vi.fn().mockReturnThis(),
+        hydrate: vi.fn().mockReturnThis(),
+        paginate: vi.fn().mockResolvedValue({
+          items: [mockUser],
+          total: 1,
+          page: 1,
+          limit: 20,
+          processingTimeMs: 5,
+        }),
+      };
+      searchService.builder.mockReturnValue(mockBuilder);
+
+      const result = await usersService.search({ q: '张三', role: Role.USER, page: 1, pageSize: 20 });
+
+      expect(searchService.builder).toHaveBeenCalled();
+      expect(mockBuilder.query).toHaveBeenCalledWith('张三');
+      expect(mockBuilder.where).toHaveBeenCalledWith('role', Role.USER);
+      expect(mockBuilder.hydrate).toHaveBeenCalledWith(true);
+      expect(mockBuilder.paginate).toHaveBeenCalledWith({ page: 1, limit: 20 });
+      expect(result.items).toHaveLength(1);
+      expect(result.meta.total).toBe(1);
     });
   });
 });

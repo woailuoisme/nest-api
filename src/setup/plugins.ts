@@ -9,13 +9,16 @@ import { fromNodeHeaders } from 'better-auth/node';
 import type { FastifyReply, FastifyRequest } from 'fastify';
 import { auth } from '@/common/auth/better-auth';
 import { PATHS } from '@/common/constants/app.constants';
+import { RequestContext } from '@/common/context';
 import { extractIp, PinoLoggerService } from '@/setup/logger';
 
 /** 仅暴露所需 Hook 与路由 API 的最小 Fastify 接口（规避 platform-fastify 嵌套 fastify 类型差异） */
 type FastifyLike = {
   addHook: (
     event: 'onRequest' | 'onResponse',
-    hook: (request: FastifyRequest, reply: FastifyReply) => Promise<void> | void,
+    hook:
+      | ((request: FastifyRequest, reply: FastifyReply) => Promise<void> | void)
+      | ((request: FastifyRequest, reply: FastifyReply, done: (err?: Error) => void) => void),
   ) => void;
   get: (url: string, handler: (request: FastifyRequest, reply: FastifyReply) => void | Promise<void>) => void;
 };
@@ -27,7 +30,7 @@ const PUBLIC_UPLOAD_PREFIX = '/uploads/public/';
  * 注册 Fastify 插件（Helmet, Static 文件服务, Multipart 文件上传）与原生全链路可观测性 Hooks。
  *
  * 1. 原生 Hooks 早于所有 Guard 与 Interceptor 执行，100% 捕获包括 401/403/404/429/500 在内的所有流量；
- * 2. 自动透传并回写 x-request-id 响应头；
+ * 2. 自动透传并回写 x-request-id 响应头，并初始化全链路 RequestContext (AsyncLocalStorage)；
  * 3. 私有上传文件需 JWT 鉴权（Authorization header 或 ?token= query），/uploads/public/ 子目录保持公开。
  */
 export async function registerFastifyPlugins(app: NestFastifyApplication): Promise<void> {
@@ -36,17 +39,26 @@ export async function registerFastifyPlugins(app: NestFastifyApplication): Promi
   const loggerService = app.get(PinoLoggerService);
   const fastify = app.getHttpAdapter().getInstance() as unknown as FastifyLike;
 
-  // 1. 全链路 Request ID Hook（Fastify 原生，无 RxJS 流额外分配）
-  fastify.addHook('onRequest', async (request, reply) => {
+  // 1. 全链路 Request ID 与 AsyncLocalStorage 请求上下文 Hook
+  fastify.addHook('onRequest', (request, reply, done) => {
     const id = request.id;
-    if (typeof id === 'string' && id) {
-      request.headers['x-request-id'] = id;
-      reply.header('x-request-id', id);
+    const reqId = typeof id === 'string' && id ? id : (request.headers['x-request-id'] as string) || '';
+    if (reqId) {
+      request.headers['x-request-id'] = reqId;
+      reply.header('x-request-id', reqId);
     }
+    const nextFn = typeof done === 'function' ? done : () => {};
+    RequestContext.run(
+      {
+        requestId: reqId,
+        startTime: Date.now(),
+      },
+      nextFn,
+    );
   });
 
   // 2. 全链路 HTTP 访问日志 Hook（Fastify 原生 onResponse，100% 覆盖包括 401/403/404/429/500 在内的所有流量）
-  fastify.addHook('onResponse', async (request, reply) => {
+  fastify.addHook('onResponse', async (request: FastifyRequest, reply: FastifyReply) => {
     const url = request.url?.split('?')[0] || '/';
 
     loggerService.logHttp({
@@ -82,7 +94,7 @@ export async function registerFastifyPlugins(app: NestFastifyApplication): Promi
       },
     });
 
-  fastify.addHook('onRequest', async (request, reply) => {
+  fastify.addHook('onRequest', async (request: FastifyRequest, reply: FastifyReply) => {
     const rawPath = request.url.split('?')[0];
     let normalizedPath: string;
     try {

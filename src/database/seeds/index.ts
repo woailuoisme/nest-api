@@ -1,7 +1,7 @@
 import 'dotenv/config';
 
-import { drizzle, type NodePgDatabase } from 'drizzle-orm/node-postgres';
-import { Pool } from 'pg';
+import { drizzle, type PostgresJsDatabase } from 'drizzle-orm/postgres-js';
+import postgres from 'postgres';
 import * as schema from '@/database/drizzle/schema';
 
 import { description as adminDesc, run as seedAdmins } from './admin.seed';
@@ -26,7 +26,7 @@ import { run as seedUsers, description as userDesc } from './user.seed';
  *   bun x tsx src/database/seeds/index.ts --help
  */
 
-type SeederFn = (db: NodePgDatabase<typeof schema>) => Promise<void>;
+type SeederFn = (db: PostgresJsDatabase<typeof schema>) => Promise<void>;
 
 const seeders: Record<string, { run: SeederFn; description: string }> = {
   admin: { run: seedAdmins, description: adminDesc },
@@ -61,7 +61,7 @@ function parseArgs(): { help: boolean; only: string[] | null } {
 }
 
 export async function seedDatabase(
-  db: NodePgDatabase<typeof schema>,
+  db: PostgresJsDatabase<typeof schema>,
   options?: { only?: string[] | null; log?: (msg: string) => void },
 ): Promise<void> {
   const { only, log = console.log } = options ?? {};
@@ -93,13 +93,13 @@ async function main(): Promise<void> {
     return;
   }
 
-  const pool = new Pool({ connectionString: process.env.DB_URL });
-  const db = drizzle(pool, { schema });
+  const sql = postgres(process.env.DB_URL ?? '', { max: 1, prepare: false, onnotice: () => {} });
+  const db = drizzle(sql, { schema });
 
   try {
     await seedDatabase(db, { only });
   } finally {
-    await pool.end();
+    await sql.end();
   }
 }
 

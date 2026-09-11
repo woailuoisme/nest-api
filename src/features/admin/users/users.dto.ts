@@ -1,5 +1,4 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { Exclude } from 'class-transformer';
 import { createZodDto } from 'nestjs-zod';
 import { z } from 'zod';
 import { Role } from '@/common/constants/roles';
@@ -24,6 +23,13 @@ export const FindUsersSchema = PageOptionsSchema.extend({
 });
 
 export class FindUsersRequest extends createZodDto(FindUsersSchema) {}
+
+export const SearchUsersSchema = PageOptionsSchema.extend({
+  q: z.string().default('').describe('搜索关键词'),
+  role: z.enum(Role).optional().describe('按角色筛选'),
+});
+
+export class SearchUsersRequest extends createZodDto(SearchUsersSchema) {}
 
 export const UpdateUserSchema = z.object({
   name: z.string().trim().min(2).max(100).optional().describe('用户名称'),
@@ -74,17 +80,32 @@ export class UserEntity {
   @ApiProperty({ example: '2024-01-15T10:30:00.000Z', description: '更新时间' })
   updatedAt: Date;
 
-  @Exclude()
-  passwordHash?: string | null;
-
   constructor(
-    partial: Partial<UserEntity> & {
+    partial: Omit<Partial<UserEntity>, 'role' | 'createdAt' | 'updatedAt'> & {
+      role?: Role | string | null;
       image?: string | null;
       avatarUrl?: string | null;
       emailVerifiedAt?: Date | null;
+      createdAt?: Date | number | string | null;
+      updatedAt?: Date | number | string | null;
     },
   ) {
     Object.assign(this, partial);
+    this.role = (partial.role as Role) ?? Role.USER;
+    if (partial.createdAt) {
+      const ts =
+        typeof partial.createdAt === 'number' && partial.createdAt < 1e11
+          ? partial.createdAt * 1000
+          : partial.createdAt;
+      this.createdAt = partial.createdAt instanceof Date ? partial.createdAt : new Date(ts);
+    }
+    if (partial.updatedAt) {
+      const ts =
+        typeof partial.updatedAt === 'number' && partial.updatedAt < 1e11
+          ? partial.updatedAt * 1000
+          : partial.updatedAt;
+      this.updatedAt = partial.updatedAt instanceof Date ? partial.updatedAt : new Date(ts);
+    }
     this.avatarUrl = partial.avatarUrl ?? partial.image ?? null;
     this.image = partial.image ?? partial.avatarUrl ?? null;
     this.emailVerified = partial.emailVerified ?? Boolean(partial.emailVerifiedAt);

@@ -12,6 +12,7 @@ export interface ApiSuccessResponseOptions {
   message?: string;
   description?: string;
   status?: number;
+  isArray?: boolean;
 }
 
 function resolveDescription(options: ApiSuccessResponseOptions, fallback: string): string {
@@ -22,7 +23,7 @@ function resolveDescription(options: ApiSuccessResponseOptions, fallback: string
  * Swagger 成功响应装饰器：自动生成符合系统统一 JSON 结构的 OpenAPI 成功响应文档。
  *
  * @param model 响应数据 DTO / Entity 类（可选）
- * @param options 可选配置（HTTP 状态码、文档描述）
+ * @param options 可选配置（HTTP 状态码、文档描述、数组形式）
  */
 export function ApiSuccessResponse<TModel extends Type<unknown>>(
   model?: TModel,
@@ -62,6 +63,7 @@ export function ApiSuccessResponse<TModel extends Type<unknown>>(
       status,
       description,
       type: model,
+      isArray: options.isArray,
     }),
   );
 }

@@ -57,39 +57,40 @@ src/database/
 │   ├── schema/     # 多文件 schema (better-auth.schema.ts, notifications.schema.ts 等, 汇总于 index.ts)
 │   ├── sql/        # 原生 PostgreSQL DDL (00_init.sql, 01_auth.sql 等按 00~99 命名，供 DBA 审计与独立建表)
 │   ├── drizzle.module.ts  # @Global() Drizzle 模块
-│   └── drizzle.service.ts # pg Pool + drizzle 客户端
+│   └── drizzle.service.ts # postgres.js + drizzle 客户端
 └── seeds/          # 种子数据 (user.seed.ts, index.ts)
 src/
 ├── common/         # 全局 Filter/Guard/Interceptor/Pipe/Decorator/DTO/utils
 │   ├── constants/  # PATHS、NETWORK、Role、Permission 等常量
 │   ├── decorators/ # @Roles() @Permissions() @CurrentUser() 等
 │   ├── excel/      # ExcelJS 封装
-│   ├── media/      # 媒体处理服务 (sharp WebP转换/缩略图/二维码/命名策略)
+│   ├── media/      # 媒体处理服务 (imgproxy JIT动态实时渲染/纯JS元数据/矢量二维码/命名策略)
+│   ├── mqtt/       # MQTT 5.0 客户端与指令/遥测总线 (@MqttSubscribe/@MqttPayload/RPC)
+│   ├── realtime/   # 统一实时发布核心 (对齐 Laravel Broadcasting)：Centrifugo 纯粹无状态实时发布中枢
+│   │   ├── channels/           # 模式匹配频道鉴权 (channel-manager.service.ts, presence.service.ts, @ChannelAuth)
+│   │   ├── transports/         # 传输层契约与 Centrifugo 适配器 (centrifugo.transport.ts)
+│   │   ├── realtime.dto.ts        # 信封结构 RealtimeEnvelope<T> 与客户端订阅传输对象
+│   │   ├── realtime.service.ts    # 领域发布服务 (向 Centrifugo HTTP API 安全派发事件)
+│   │   └── realtime.module.ts     # @Global 实时深模块 (纯发布引擎)
+│   ├── resilience/ # 熔断 (CircuitBreaker) / 优雅限流 / 过载保护 (LoadShedding)
+│   ├── search/     # Laravel Scout 风格搜索引擎抽象 (Meilisearch / Noop / 队列异步同步)
 │   └── storage/    # 本地/S3 驱动 (drivers/local.driver.ts, s3.driver.ts)
 ├── config/         # env.validation.ts (Zod schema)
 ├── database/       # drizzle/ + bull.config.ts + redis.module.ts
-├── commands/       # nest-commander CLI (route-list, db-seed, jwt-secret)
+├── commands/       # nest-commander CLI (route-list, db-seed, jwt-secret, search)
 ├── i18n/           # nestjs-i18n 配置
 ├── features/       # 统一业务特性层 (client: 客户端业务特性 / system: 系统基础设施 / admin: 后台管理自包含领域)
 │   ├── client/     # 客户端特性模块 (auth, users)
-│   ├── system/     # 系统/基础设施模块 (health)
+│   ├── system/     # 系统/基础设施业务模块 (health, iot, websocket, sse)
 │   ├── admin/      # 后台管理领域模块 (dashboard, notifications, users, admin.module.ts)
 │   └── index.ts    # 聚合导出 FEATURE_MODULES
 ├── jobs/           # 异步任务与队列 (对齐 Laravel app/Jobs)：jobs 契约+生产者 / processor 消费者
 │   ├── demo/           # 演示队列 (demo.jobs.ts, demo.processor.ts)
 │   ├── mail/           # 邮件队列
 │   ├── media/          # 媒体处理队列 (media.jobs.ts, media.processor.ts)
+│   ├── search/         # 搜索同步队列 (search.jobs.ts, search.processor.ts)
 │   ├── token-cleanup/  # Token 清理队列
 │   └── jobs.module.ts  # @Global 生产者侧（registerQueue + Jobs）
-├── realtime/       # 统一实时分发中枢 (对齐 Laravel Broadcasting)：深模块分发中枢与双通道适配
-│   ├── channels/           # 模式匹配频道鉴权 (channel-manager.service.ts, private/presence)
-│   ├── guards/             # 长连接鉴权 (sse-auth.guard.ts)
-│   ├── transports/         # 传输层适配器缝隙 (sse.transport.ts, pusher.transport.ts, redis-pubsub.adapter.ts)
-│   ├── realtime.controller.ts # 通用 SSE 订阅流 (GET /v1/realtime/stream) 与 Pusher 鉴权 (/v1/realtime/auth)
-│   ├── realtime.gateway.ts    # 通用 WebSocket 网关 (/realtime 命名空间)
-│   ├── realtime.dto.ts        # 信封结构 RealtimeEnvelope<T> 与 PusherAuthDto
-│   ├── realtime.service.ts    # 领域发布服务 (支持 Local 与 Pusher/Soketi 双驱动)
-│   └── realtime.module.ts     # @Global 实时深模块
 ├── schedules/      # 调度声明 (对齐 Laravel routes/console.php)：集中注册定时任务
 │   ├── schedules.module.ts # 聚合所有 *Schedule
 │   └── *.schedule.ts      # 每个定时任务一个文件，挂入 SchedulesModule
@@ -128,6 +129,7 @@ tests/
 - **Admin / 前端 API 边界**: 后台管理领域（users / notifications / dashboard / admins / auth）的 controller + service + DTO 全部自包含于 `src/features/admin/`，由 `AdminModule` 聚合成唯一管理面入口并纳入 `FEATURE_MODULES`；准入由全局 `AdminPrefixGuard` 默认拒绝式强制（仅限合法管理角色 SUPER_ADMIN / ADMIN / OPERATOR，支持显式 `@Public()` 白名单豁免如 `/admin/auth/login`）。前端自助模块 `src/features/client/users/` 自包含自有 service 与 DTO（仅 `/users/me`、`/users/:id`、头像上传），与 admin 管理面零依赖；`AuthModule` 基于 Drizzle 客户端直接原子落库，与 `AdminUsersModule` 彻底解耦零依赖。**新增管理端点必须落在 `src/features/admin/`，严禁混入前端 controller**；`crud:generate` 产物支持 `--scope=admin|client` 分流，admin 产物自动落入该边界（`src/features/admin/<feature>/`）并自动注册进 `AdminModule`。
 - **扁平数据访问**：Service 层直接使用 `@InjectDb() private readonly db: DrizzleDB` 注入数据库客户端，通过 `this.db.query...` / `this.db.insert...` 进行类型安全操作，不设多余的 Repository 样板层。
 - **多写原子事务 (Transaction)**：涉及多表关联写入（如创建用户并绑定 OAuth 账户）或多步更新时，使用显式原生闭包 `await this.db.transaction(async (tx) => { ... })` 保证强一致性与自动回滚。
+- **实时通信与领域事件解耦 (Decoupled Realtime & Events)**：所有 WebSocket 与 SSE 实时通信逻辑集中且自包含于 `src/features/system/{websocket,sse}/`（对齐 IoT 模块形态），包括各协议特有的频道常量、`@ChannelAuth` 准入鉴权、连接/订阅 Token 签发（`/v1/{websocket,sse}/*`）与频道列表。普通业务模块（如 `admin/notifications`）严禁直接注入实时服务或定义特定协议的频道规则，统一通过 `@nestjs/event-emitter` 向事件总线发布纯净领域事件（如 `notification.sent`）；`WebsocketService` 与 `SseService` 监听领域事件并负责向 Centrifugo 下发推送，实现业务与通信协议的单向彻底解耦。
 - 全局基础设施 (Storage/Excel/Mail/Drizzle/Redis) 放 `src/common/` 或 `src/database/`，用 `@Global()` 导出。
 
 ### 环境变量
@@ -138,6 +140,8 @@ tests/
   - **Redis**: `REDIS_URL="redis://:password@host:6379/0"`（或 `rediss://...`）
   - **Mail**: `MAIL_URL="smtp://user:pass@host:587"`（发件人保持 `MAIL_FROM_ADDRESS` / `MAIL_FROM_NAME`）
   - **S3 Storage**: `STORAGE_S3_URL="s3://key:secret@endpoint:port/bucket?region=...&publicUrl=..."`
+  - **Realtime (Centrifugo)**: `REALTIME_URL="centrifugo://api-key:hmac-secret@host:port/api?tls=false"`
+  - **Imgproxy**: `IMGPROXY_URL="imgproxy://key:salt@host:port?publicUrl=..."`（支持 HMAC-SHA256 安全签名与多驱动映射）
 - 新增 env 必须**同步更新** validation schema 与 `.env.example`。
 - `.env` 由 `dotenv/config` 在 `drizzle.config.ts` 与 CLI 入口加载。
 
@@ -210,7 +214,7 @@ BullMQ 队列由 `AuthModule → MailJobs` 依赖，CLI 模块也需 `BullModule
 
 - **`.env`**: 本地开发，不入库。
 - **`secret.ini`**: 部署用 VPS/SSH 凭据，`scripts/sync-secrets.sh` 同步到 GitHub Secrets (见 `secret.example.ini`)。
-- **Docker**: `Dockerfile` 多阶段构建 (node:24-alpine)，生产镜像不含源码与 devDeps，`CMD ["node","dist/main.js"]`。
+- **Docker**: `docker/app/Dockerfile` 多阶段构建 (oven/bun:1.4-alpine)，生产镜像不含源码与 devDeps，`CMD ["bun", "run", "dist/main.js"]`；Docker 运维配置集中收敛于 `docker/`（含 `docker/app/`、`docker/centrifugo/`、`docker/docker-compose.yml`）。
 
 ## 易踩坑
 

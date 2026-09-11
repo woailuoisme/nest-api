@@ -1,6 +1,6 @@
 import { type SQL, Table } from 'drizzle-orm';
-import type { NodePgDatabase } from 'drizzle-orm/node-postgres';
 import type { PgColumn, PgTable } from 'drizzle-orm/pg-core';
+import type { PostgresJsDatabase } from 'drizzle-orm/postgres-js';
 import { clamp, isEmptyObject } from 'es-toolkit';
 import { PAGINATION } from '@/common/constants/app.constants';
 
@@ -31,7 +31,7 @@ export async function paginateQuery<
     ? { [K in keyof TColumns]: TColumns[K] extends PgColumn<infer C> ? C['data'] : unknown }
     : TTable['$inferSelect'],
 >(
-  db: NodePgDatabase<TSchema>,
+  db: PostgresJsDatabase<TSchema>,
   table: TTable,
   options: PaginateQueryOptions<TColumns>,
 ): Promise<PaginatedRows<TSelect>> {
@@ -78,7 +78,7 @@ export async function paginateSpatieQuery<
     ? { [K in keyof TColumns]: TColumns[K] extends PgColumn<infer C> ? C['data'] : unknown }
     : TTable['$inferSelect'],
 >(
-  db: NodePgDatabase<TSchema>,
+  db: PostgresJsDatabase<TSchema>,
   table: TTable,
   parsedQuery: import('@/common/query/spatie-query').ParsedSpatieQuery,
   mappingOptions: import('@/common/query/spatie-query').SpatieMappingOptions<TTable>,

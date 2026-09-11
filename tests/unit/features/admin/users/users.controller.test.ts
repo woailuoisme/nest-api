@@ -24,6 +24,7 @@ describe('AdminUsersController', () => {
     update: ReturnType<typeof vi.fn>;
     changeRole: ReturnType<typeof vi.fn>;
     remove: ReturnType<typeof vi.fn>;
+    search: ReturnType<typeof vi.fn>;
   };
 
   const mockUser = new UserEntity({
@@ -48,6 +49,7 @@ describe('AdminUsersController', () => {
       update: vi.fn().mockResolvedValue(mockUser),
       changeRole: vi.fn().mockResolvedValue({ ...mockUser, role: Role.ADMIN }),
       remove: vi.fn().mockResolvedValue(undefined),
+      search: vi.fn().mockResolvedValue(mockPaginatedResult),
     };
 
     const module = await Test.createTestingModule({
@@ -117,6 +119,15 @@ describe('AdminUsersController', () => {
 
       expect(usersService.remove).toHaveBeenCalledWith('user-uuid-1');
       expect(result).toBeUndefined();
+    });
+  });
+
+  describe('GET /admin/users/search — 搜索用户', () => {
+    it('应调用 UsersService.search 返回分页结果', async () => {
+      const result = await controller.search({ q: '张三', role: Role.USER, page: 1, pageSize: 20 });
+
+      expect(usersService.search).toHaveBeenCalledWith({ q: '张三', role: Role.USER, page: 1, pageSize: 20 });
+      expect(result).toEqual(mockPaginatedResult);
     });
   });
 });

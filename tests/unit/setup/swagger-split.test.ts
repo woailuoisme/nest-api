@@ -73,7 +73,7 @@ describe('Swagger & Scalar Split Integration Test', () => {
     expect(Object.keys(authJson.paths)).toContain('/v1/auth/passkey/generate-register-options');
     expect(Object.keys(authJson.paths)).toContain('/v1/auth/one-tap/callback');
     expect(Object.keys(authJson.paths)).toContain('/v1/auth/sign-in/anonymous');
-    expect(Object.keys(authJson.paths).length).toBe(118);
+    expect(Object.keys(authJson.paths).length).toBe(132);
     expect(authJson.components.securitySchemes).toHaveProperty('bearerAuth');
     expect(authJson.components.securitySchemes).toHaveProperty('cookieAuth');
 

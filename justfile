@@ -1,5 +1,5 @@
-# justfile for nest-forge
-# Run `just --list` to view available commands.
+# nest-forge 的 justfile
+# 运行 `just --list` 查看可用命令。
 
 set shell := ["bash", "-uc"]
 set dotenv-load := true
@@ -8,182 +8,204 @@ default:
     @just --list
 
 # ----------------------------------------
-# Development
+# 开发
 # ----------------------------------------
 
-# Start dev server with embedded worker (single process, watch mode)
+# 启动开发服务器（单进程内嵌 Worker，watch 模式）
 dev:
     WORKER_EMBEDDED=true nest start --watch
 
-# Start app + worker concurrently (two separate processes)
+# 并发启动应用与 Worker（两个独立进程）
 dev-all:
     concurrently -k -n app,worker -c bgBlue.bold,bgMagenta.bold -p "[{name}]" -t "HH:mm:ss" "nest start --watch" "nest start --entryFile workers/worker.main --watch"
 
-# Start dev server with debugger
+# 以调试模式启动开发服务器
 debug:
     bun x nest start --debug --watch
 
-# Build production output (SWC)
+# 构建生产产物（SWC）
 build:
     nest build
 
-# Start production build
+# 启动生产构建
 start:
     node dist/main.js
 
-# Start worker only (production build)
+# 仅启动 Worker（生产构建）
 start-worker:
     node dist/workers/worker.main.js
 
-# Start app with embedded worker (single process)
+# 启动应用（内嵌 Worker，单进程）
 start-embedded:
     WORKER_EMBEDDED=true node dist/main.js
 
-# Start app + worker concurrently (two separate processes)
+# 并发启动应用与 Worker（两个独立进程）
 start-all:
     concurrently -k -n app,worker -c bgBlue.bold,bgMagenta.bold "node dist/main.js" "node dist/workers/worker.main.js"
 
 # ----------------------------------------
-# Quality & Test
+# 质量与测试
 # ----------------------------------------
 
-# Check code formatting, types and AST architecture rules
+# 检查代码格式、类型与 AST 架构规则
 check: fix fmt type sg-lint sg-test
 
-# TypeScript type check
+# TypeScript 类型检查
 type:
     bun x tsc --noEmit
 
-# Lint code
+# 代码 Lint
 lint:
     bun x biome check src
 
-# Run ast-grep structural architecture lint
+# 运行 ast-grep 结构架构 Lint
 sg-lint *args='':
     ast-grep scan {{args}}
 
-# Run ast-grep rule test suite
+# 运行 ast-grep 规则测试套件
 sg-test *args='':
     ast-grep test {{args}}
 
-# Structural outline for files or directories
+# 查看文件或目录的结构大纲
 outline *args='':
     ast-grep outline {{args}}
 
-# One-click scan for all @deprecated symbols & functions across the project
+# 一键扫描项目中所有已废弃(@deprecated)的符号与函数
 check-deprecated:
     node scripts/check-deprecated.ts
 
-# Auto-fix lint & formatting
+# 自动修复 Lint 与格式化
 fix:
      bun x biome check --write --no-errors-on-unmatched src tests
 
-# Format code with Biome
+# 使用 Biome 格式化代码
 fmt:
     bun x biome format --write --no-errors-on-unmatched src tests
 
-# Run unit tests
-test:
-    bun x vitest run --config vitest.config.mts
+# 运行单元测试
+test *args='':
+    bun x vitest run --config vitest.config.mts {{args}}
 
-# Run unit tests in watch mode
+# 以 watch 模式运行单元测试
 test-watch:
     bun x vitest --config vitest.config.mts
 
-# Open Vitest UI
+# 打开 Vitest UI
 test-ui:
     bun x vitest --config vitest.config.mts --ui
 
-# Run unit tests with coverage
+# 运行带覆盖率的单元测试
 test-cov:
     bun x vitest run --coverage --config vitest.config.mts
 
-# Run E2E tests
+# 运行 E2E 测试
 test-e2e:
     bun x vitest run --config vitest.e2e.config.mts
 
-# Debug unit tests with Node inspector (breakpoint debugging)
+# 使用 Node inspector 调试单元测试（断点调试）
 test-debug *args='':
     bun x vitest --inspect-brk --no-file-parallelism --config vitest.config.mts {{args}}
 
 # ----------------------------------------
-# k6 Load & Performance Testing
+# k6 负载与性能测试
 # ----------------------------------------
 
-# Run k6 load test by scenario (e.g. `just k6 smoke`, `just k6 stress -e BASE_URL=...`)
+# 按场景运行 k6 负载测试（如 `just k6 smoke`、`just k6 stress -e BASE_URL=...`）
 k6 scenario='smoke' *args='':
     k6 run tests/k6/scenarios/{{scenario}}.js {{args}}
 
-# Run k6 smoke test
+# 运行 k6 smoke 测试
 k6-smoke *args='':
     k6 run tests/k6/scenarios/smoke.js {{args}}
 
-# Run k6 average load test
+# 运行 k6 average 负载测试
 k6-load *args='':
     k6 run tests/k6/scenarios/load.js {{args}}
 
-# Run k6 stress test
+# 运行 k6 stress 测试
 k6-stress *args='':
     k6 run tests/k6/scenarios/stress.js {{args}}
 
-# Run k6 spike test
+# 运行 k6 spike 测试
 k6-spike *args='':
     k6 run tests/k6/scenarios/spike.js {{args}}
 
-# Run k6 soak / endurance test
+# 运行 k6 soak/耐力测试
 k6-soak *args='':
     k6 run tests/k6/scenarios/soak.js {{args}}
 
-# Run k6 inside Docker container (no local k6 CLI installation required)
+# 在 Docker 容器内运行 k6（无需本地安装 k6 CLI）
 k6-docker scenario='smoke' *args='':
     docker run --rm -i -e BASE_URL="http://host.docker.internal:4300" -v "$(pwd)/tests/k6:/scripts:ro" -v "$(pwd)/storage/logs:/storage/logs" grafana/k6 run /scripts/scenarios/{{scenario}}.js {{args}}
 
 # ----------------------------------------
-# Mail templates
+# 邮件模板
 # ----------------------------------------
 
-# Compile MJML mail templates to Handlebars (.hbs)
+# 将 MJML 邮件模板编译为 Handlebars (.hbs)
 mail-build:
     bash scripts/build-mail.sh
 
 # ----------------------------------------
-# Drizzle / Database
+# Drizzle / 数据库
 # ----------------------------------------
 
-# Generate Drizzle migrations
+# 生成 Drizzle 迁移
 db-gen:
     bun x drizzle-kit generate
 
-# Run migrations (dev)
+# 运行迁移（开发环境）
 db-migrate:
     bun x drizzle-kit migrate
 
-# Deploy migrations (prod)
+# 部署迁移（生产环境）
 db-deploy:
     bun x drizzle-kit migrate
 
-# Seed the database
+# 灌入种子数据
 db-seed:
     bun x tsx src/database/seeds/index.ts
 
-# Open Drizzle Studio
+# 打开 Drizzle Studio
 db-studio:
     bun x drizzle-kit studio
 
-# Reset database (dev only, destructive — drop schema and re-migrate)
+# 重置数据库（仅开发环境，破坏性操作——删除 schema 并重新迁移）
 db-reset:
     bun x drizzle-kit drop
     bun x drizzle-kit migrate
 
 # ----------------------------------------
-# CLI
+# Better Auth 命令行
 # ----------------------------------------
 
-# Run nest-commander CLI from production build (e.g. `just cli jwt:secret`)
+# 为 Better Auth 应用表结构变更（Drizzle 架构下生成并应用迁移 SQL）
+ba-migrate:
+    @echo "Better Auth 使用 Drizzle 适配器，正通过 drizzle-kit 生成并执行迁移..."
+    just db-gen
+    just db-migrate
+
+# 为 Better Auth 生成 Drizzle Schema（覆盖输出到 better-auth.schema.ts）
+ba-generate:
+    bun x --bun auth generate --config src/common/auth/better-auth.ts --output src/database/drizzle/schema/better-auth.schema.ts -y
+
+# 显示系统与 Better Auth 配置信息
+ba-info:
+    bun x --bun auth info --config src/common/auth/better-auth.ts
+
+# 生成新的 Better Auth secret
+ba-secret:
+    bun x --bun auth secret
+
+# ----------------------------------------
+# CLI（nest-commander）
+# ----------------------------------------
+
+# 从生产构建运行 nest-commander CLI（如 `just cli jwt:secret`）
 cli *args='--help':
     node dist/cli.js {{args}}
 
-# Run nest-commander CLI (builds & runs TS CLI, e.g. `just cmd jwt:secret`)
+# 运行 nest-commander CLI（构建并运行 TS CLI，如 `just cmd jwt:secret`）
 cmd *args='--help':
     nest build && node dist/cli.js {{args}}
 
@@ -195,18 +217,53 @@ cmd *args='--help':
 helm-lint:
     helm lint ./helm/nestforge
 
-# Validate Helm chart (lint + template + kubeconform)
+# 校验 Helm chart（lint + template + kubeconform）
 helm-validate:
     helm lint ./helm/nestforge
     helm template nestforge ./helm/nestforge | kubeconform -summary
 
-# Package Helm chart
+# 打包 Helm chart
 helm-package:
     helm package ./helm/nestforge
 
-# Install/upgrade Helm chart to cluster (kubeconfig required)
+# 安装/升级 Helm chart 到集群（需 kubeconfig）
 helm-install *args='--dry-run':
     helm upgrade --install nestforge ./helm/nestforge {{args}}
-# Sync secrets to GitHub (requires gh CLI)
+# 将密钥同步到 GitHub（需 gh CLI）
 sync-secrets:
     bash scripts/sync-secrets.sh
+
+# ----------------------------------------
+# 容器运维 (Docker Compose)
+# ----------------------------------------
+
+# 启动全栈 Docker 容器集群 (API + Realtime)
+docker-up *args='':
+    docker network create backend 2>/dev/null || true
+    docker compose -f docker/docker-compose.yml --env-file docker/.env up -d {{args}}
+
+# 停止全栈 Docker 容器集群
+docker-down *args='':
+    docker compose -f docker/docker-compose.yml --env-file docker/.env down {{args}}
+
+# 启动 Centrifugo 实时服务容器
+realtime:
+    docker network create backend 2>/dev/null || true
+    docker compose -f docker/centrifugo/docker-compose.yml --env-file docker/.env up -d realtime
+
+# 停止 Centrifugo 实时服务容器
+realtime-down:
+    docker compose -f docker/centrifugo/docker-compose.yml --env-file docker/.env stop realtime
+
+# 查看 Centrifugo 容器实时日志
+realtime-logs:
+    docker compose -f docker/centrifugo/docker-compose.yml --env-file docker/.env logs -f realtime
+
+# 检查 Centrifugo 健康状态
+realtime-health:
+    curl -fsS http://localhost:8000/health || exit 1
+
+# 兼容别名
+centrifugo: realtime
+centrifugo-down: realtime-down
+centrifugo-logs: realtime-logs

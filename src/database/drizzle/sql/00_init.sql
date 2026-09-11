@@ -32,25 +32,15 @@ $$ LANGUAGE plpgsql;
 -- 3. Module DDLs
 -- -----------------------------------------------------------------------------
 \ir 01_auth.sql
-\ir 02_admin.sql
-\ir 03_idempotency.sql
-\ir 04_media.sql
-\ir 05_notifications.sql
+\ir 02_features.sql
 
 -- -----------------------------------------------------------------------------
 -- 4. Triggers
 -- -----------------------------------------------------------------------------
--- 用户主表 updated_at 自动更新触发器
-DROP TRIGGER IF EXISTS trigger_users_updated_at ON "users";
-CREATE TRIGGER trigger_users_updated_at
-    BEFORE UPDATE ON "users"
-    FOR EACH ROW
-    EXECUTE FUNCTION set_updated_at();
-
--- 管理员主表 updated_at 自动更新触发器
-DROP TRIGGER IF EXISTS trigger_admin_users_updated_at ON "admin_users";
-CREATE TRIGGER trigger_admin_users_updated_at
-    BEFORE UPDATE ON "admin_users"
+-- 统一用户主表 updated_at 自动更新触发器
+DROP TRIGGER IF EXISTS trigger_user_updated_at ON "user";
+CREATE TRIGGER trigger_user_updated_at
+    BEFORE UPDATE ON "user"
     FOR EACH ROW
     EXECUTE FUNCTION set_updated_at();
 

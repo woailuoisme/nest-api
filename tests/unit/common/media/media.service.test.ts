@@ -1,8 +1,8 @@
 import { promises as fs } from 'node:fs';
 import { join } from 'node:path';
 import { PayloadTooLargeException } from '@nestjs/common';
-import type { ConfigService } from '@nestjs/config';
-import sharp from 'sharp';
+import { ConfigService } from '@nestjs/config';
+import { createTestPng } from 'tests/factories/image.factory';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { PATHS } from '@/common/constants/app.constants';
 import { THUMBNAIL_PRESETS } from '@/common/media/interfaces/media.interface';
@@ -10,20 +10,6 @@ import { MediaService } from '@/common/media/media.service';
 import type { UploadedFile } from '@/common/storage/interfaces/upload.interface';
 import { StorageService } from '@/common/storage/storage.service';
 import type { MediaJobs } from '@/jobs/media/media.jobs';
-
-/** 创建测试用 PNG 图片 Buffer (400x300 红色图片) */
-async function createTestImageBuffer(width = 400, height = 300): Promise<Buffer> {
-  return sharp({
-    create: {
-      width,
-      height,
-      channels: 4,
-      background: { r: 255, g: 0, b: 0, alpha: 1 },
-    },
-  })
-    .png()
-    .toBuffer();
-}
 
 /** 内存模式上传文件工厂 */
 function memoryImage(buffer: Buffer, filename = 'test.png', mimetype = 'image/png'): UploadedFile {
@@ -65,7 +51,8 @@ describe('MediaService', () => {
 
   const configServiceMock = {
     get: vi.fn((key: string, defaultVal?: unknown) => {
-      if (key === 'MEDIA_QUEUE_ENABLED') return false; // 默认单测中设为同步，方便精确验证
+      if (key === 'IMGPROXY_URL') return 'imgproxy://a1b2c3d4e5f6:0123456789abcdef@localhost:8080';
+      if (key === 'MEDIA_QUEUE_ENABLED') return false;
       return defaultVal;
     }),
   };
@@ -78,9 +65,10 @@ describe('MediaService', () => {
   beforeEach(async () => {
     vi.clearAllMocks();
     storageMock.exists.mockResolvedValue(false);
-    testImageBuffer = await createTestImageBuffer(400, 300);
+    testImageBuffer = createTestPng(400, 300);
     mediaService = new MediaService(
       storageMock as unknown as StorageService,
+      undefined,
       undefined,
       undefined,
       undefined,
@@ -90,7 +78,7 @@ describe('MediaService', () => {
   });
 
   describe('save() — 单媒体文件存储与处理', () => {
-    it('图片存储：提取元数据并生成默认日期路径', async () => {
+    it('图片存储：提取元数据并生成默认日期路径，保存原始主图', async () => {
       const file = memoryImage(testImageBuffer, 'avatar.png');
       const result = await mediaService.save(file, { prefix: 'avatars' });
 
@@ -104,70 +92,35 @@ describe('MediaService', () => {
       expect(result.metadata?.format).toBe('png');
     });
 
-    it('转换为 WebP：主图转码为 .webp 且更新 contentType', async () => {
-      const file = memoryImage(testImageBuffer, 'photo.jpg', 'image/jpeg');
-      const result = await mediaService.save(file, {
-        prefix: 'photos',
-        convertToWebp: true,
-        webpQuality: 85,
-      });
-
-      expect(storageMock.put).toHaveBeenCalledTimes(1);
-      const [path, buffer, opts] = storageMock.put.mock.calls[0];
-      expect(path).toMatch(/^photos\/\d{8}\/[0-9a-f-]{36}\.webp$/);
-      expect(opts).toEqual({ contentType: 'image/webp' });
-
-      // 验证存入的 buffer 确实是 webp
-      const meta = await sharp(buffer).metadata();
-      expect(meta.format).toBe('webp');
-      expect(result.metadata?.format).toBe('webp');
-    });
-
-    it('生成缩略图与多规格变体 (同步模式)', async () => {
+    it('生成缩略图与多规格变体 (imgproxy JIT 动态签名模式，零额外磁盘写入)', async () => {
       const file = memoryImage(testImageBuffer, 'cover.png');
       const result = await mediaService.save(file, {
         prefix: 'covers',
-        asyncQueue: false,
         variants: {
           thumb: THUMBNAIL_PRESETS.thumb,
           medium: { width: 200, format: 'webp' },
         },
       });
 
-      // 主图 + 2 个变体 = 3 次 put
-      expect(storageMock.put).toHaveBeenCalledTimes(3);
+      // 仅主图 1 次 put，变体全为即时签名 URL，零磁盘开销
+      expect(storageMock.put).toHaveBeenCalledTimes(1);
       expect(result.variants).toBeDefined();
       expect(result.variants?.thumb).toBeDefined();
       expect(result.variants?.medium).toBeDefined();
 
-      expect(result.variants?.thumb.path).toMatch(/_thumb\.webp$/);
-      expect(result.variants?.medium.path).toMatch(/_medium\.webp$/);
-      expect(result.variants?.thumb.url).toMatch(/_thumb\.webp$/);
-      expect(result.variants?.thumb.isNew).toBe(true);
       expect(result.variants?.thumb.status).toBe('ready');
+      expect(result.variants?.thumb.isNew).toBe(false);
+      expect(result.variants?.thumb.path).toBe(result.path);
+      expect(result.variants?.thumb.url).toMatch(/^http:\/\/localhost:8080\//);
+      expect(result.variants?.thumb.url).toContain('rs:fill:150:150');
+
+      expect(result.variants?.medium.status).toBe('ready');
+      expect(result.variants?.medium.url).toMatch(/^http:\/\/localhost:8080\//);
+      expect(result.variants?.medium.url).toContain('rs:fit:200');
+      expect(result.variants?.medium.url).toMatch(/@webp$/);
     });
 
-    it('生成缩略图与多规格变体 (BullMQ 异步队列模式)', async () => {
-      const file = memoryImage(testImageBuffer, 'cover.png');
-      const result = await mediaService.save(file, {
-        prefix: 'covers',
-        asyncQueue: true, // 显式开启异步队列
-        variants: {
-          thumb: THUMBNAIL_PRESETS.thumb,
-          medium: { width: 200, format: 'webp' },
-        },
-      });
-
-      // 主图 1 次 put，变体交由 BullMQ
-      expect(storageMock.put).toHaveBeenCalledTimes(1);
-      expect(mediaJobsMock.dispatchGenerateVariants).toHaveBeenCalledTimes(1);
-      expect(result.variants?.thumb.status).toBe('pending');
-      expect(result.variants?.thumb.jobId).toBe('media-job-999');
-      expect(result.variants?.thumb.path).toMatch(/_thumb\.webp$/);
-      expect(result.variants?.medium.path).toMatch(/_medium\.webp$/);
-    });
-
-    it('非图片文件：直接存储，不调用 sharp 转换', async () => {
+    it('非图片文件：直接存储，不调用图像处理', async () => {
       const textBuffer = Buffer.from('hello world');
       const file: UploadedFile = {
         type: 'memory',
@@ -213,16 +166,13 @@ describe('MediaService', () => {
       await expect(mediaService.save(file)).rejects.toThrow(PayloadTooLargeException);
     });
 
-    it('变体生成失败时自动回滚已写入的主图与变体', async () => {
-      // 模拟第 2 次 put 失败
-      storageMock.put.mockResolvedValueOnce('main-path').mockRejectedValueOnce(new Error('Disk write error'));
+    it('主图生成写入失败时自动安全回滚', async () => {
+      storageMock.put.mockRejectedValueOnce(new Error('Disk write error'));
 
       const file = memoryImage(testImageBuffer, 'fail.png');
       await expect(
         mediaService.save(file, {
           prefix: 'covers',
-          asyncQueue: false,
-          variants: { thumb: THUMBNAIL_PRESETS.thumb },
         }),
       ).rejects.toThrow('Disk write error');
 
@@ -245,6 +195,31 @@ describe('MediaService', () => {
     });
   });
 
+  describe('url() — imgproxy Fluent 构建器门面', () => {
+    it('为存储路径生成合法的 imgproxy 签名 URL', () => {
+      const url = mediaService.url('photos/avatar.png').preset('avatar').webp().build();
+
+      expect(url).toMatch(/^http:\/\/localhost:8080\/[A-Za-z0-9_-]+\//);
+      expect(url).toContain('rs:fill:200:200');
+      expect(url).toContain('g:ce');
+      expect(url).toContain('/plain/local:///photos/avatar.png@webp');
+    });
+
+    it('支持链式组合 resize、format 与 quality 参数', () => {
+      const url = mediaService
+        .url('covers/banner.jpg')
+        .resize({ width: 800, height: 400, fit: 'cover' })
+        .quality(85)
+        .avif()
+        .build();
+
+      expect(url).toMatch(/^http:\/\/localhost:8080\/[A-Za-z0-9_-]+\//);
+      expect(url).toContain('rs:fill:800:400');
+      expect(url).toContain('q:85');
+      expect(url).toContain('/plain/local:///covers/banner.jpg@avif');
+    });
+  });
+
   describe('saveBatch() — 批量媒体上传', () => {
     it('批量存储所有文件并返回结果列表', async () => {
       const files = [memoryImage(testImageBuffer, 'img1.png'), memoryImage(testImageBuffer, 'img2.png')];
@@ -254,19 +229,17 @@ describe('MediaService', () => {
       expect(storageMock.put).toHaveBeenCalledTimes(2);
     });
 
-    it('批量上传中任一文件失败时回滚全部已写文件并撤销 BullMQ 任务', async () => {
+    it('批量上传中任一文件失败时回滚已写文件', async () => {
       storageMock.put.mockResolvedValueOnce('img1.png').mockRejectedValueOnce(new Error('Batch Error'));
 
       const files = [memoryImage(testImageBuffer, 'img1.png'), memoryImage(testImageBuffer, 'img2.png')];
       await expect(
         mediaService.saveBatch(files, {
-          asyncQueue: true,
-          variants: { thumb: THUMBNAIL_PRESETS.thumb },
+          prefix: 'gallery',
         }),
       ).rejects.toThrow('Batch Error');
 
       expect(storageMock.deleteBatch).toHaveBeenCalled();
-      expect(mediaJobsMock.removeJob).toHaveBeenCalledWith('media-job-999');
     });
   });
 
@@ -277,7 +250,7 @@ describe('MediaService', () => {
 
       const result = await mediaService.storeWithCompensation(
         file,
-        { prefix: 'avatars', asyncQueue: false, variants: { thumb: THUMBNAIL_PRESETS.thumb } },
+        { prefix: 'avatars', variants: { thumb: THUMBNAIL_PRESETS.thumb } },
         onStored,
         { oldUrl: '/uploads/avatars/old1.png', oldUrls: ['/uploads/avatars/old2.png', null] },
       );
@@ -288,20 +261,19 @@ describe('MediaService', () => {
       expect(result).toEqual({ id: 123, avatarUrl: '/uploads/avatars/new.png' });
     });
 
-    it('业务异常时自动回滚新写入的主文件与所有变体并撤销异步 BullMQ 任务', async () => {
+    it('业务异常时自动回滚新写入的主文件', async () => {
       const file = memoryImage(testImageBuffer, 'avatar.png');
       const onStored = vi.fn().mockRejectedValue(new Error('Database Update Failed'));
 
       await expect(
         mediaService.storeWithCompensation(
           file,
-          { prefix: 'avatars', asyncQueue: true, variants: { thumb: THUMBNAIL_PRESETS.thumb } },
+          { prefix: 'avatars', variants: { thumb: THUMBNAIL_PRESETS.thumb } },
           onStored,
           { oldUrl: '/uploads/avatars/old.png' },
         ),
       ).rejects.toThrow('Database Update Failed');
 
-      expect(mediaJobsMock.removeJob).toHaveBeenCalledWith('media-job-999');
       expect(storageMock.deleteBatch).toHaveBeenCalledTimes(1);
       expect(storageMock.delete).not.toHaveBeenCalledWith('avatars/old.png');
     });
@@ -320,39 +292,19 @@ describe('MediaService', () => {
     });
   });
 
-  describe('独立图像处理公共方法', () => {
-    it('convertToWebp() 独立转码', async () => {
-      const { buffer, info } = await mediaService.convertToWebp(testImageBuffer, { quality: 80 });
-      expect(info.format).toBe('webp');
-      expect(buffer).toBeInstanceOf(Buffer);
+  describe('基础图像方法', () => {
+    it('isImage() 校验 MIME 与扩展名', () => {
+      expect(mediaService.isImage('image/png')).toBe(true);
+      expect(mediaService.isImage('image/jpeg')).toBe(true);
+      expect(mediaService.isImage(undefined, 'test.webp')).toBe(true);
+      expect(mediaService.isImage('application/pdf')).toBe(false);
     });
 
-    it('optimize() 自动校正优化', async () => {
-      const { buffer, info } = await mediaService.optimize(testImageBuffer);
-      expect(info.format).toBe('png');
-      expect(buffer).toBeInstanceOf(Buffer);
-    });
-
-    it('transformImage() 支持指定宽高缩放与格式转换', async () => {
-      const { buffer, info } = await mediaService.transformImage(testImageBuffer, {
-        width: 100,
-        height: 100,
-        fit: 'cover',
-        format: 'webp',
-      });
-
-      expect(buffer).toBeInstanceOf(Buffer);
-      expect(info.width).toBe(100);
-      expect(info.height).toBe(100);
-      expect(info.format).toBe('webp');
-    });
-
-    it('getImageMetadata() 正确读取图像分辨率与透明度通道', async () => {
+    it('getImageMetadata() 正确读取图像分辨率与格式', async () => {
       const meta = await mediaService.getImageMetadata(testImageBuffer);
       expect(meta.width).toBe(400);
       expect(meta.height).toBe(300);
       expect(meta.format).toBe('png');
-      expect(meta.hasAlpha).toBe(true);
       expect(meta.aspectRatio).toBeCloseTo(1.3333, 3);
     });
   });

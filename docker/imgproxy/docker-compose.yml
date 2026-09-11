@@ -1,0 +1,29 @@
+services:
+  imgproxy:
+    image: darthsim/imgproxy:latest
+    container_name: imgproxy
+    restart: unless-stopped
+    ports:
+      - "${IMGPROXY_PORT:-8080}:8080"
+    env_file:
+      - ../.env
+    environment:
+      - IMGPROXY_KEY=${IMGPROXY_KEY:-9348e3a2b1c4d5e6f7a8b9c0d1e2f3a4}
+      - IMGPROXY_SALT=${IMGPROXY_SALT:-5678f1a2b3c4d5e6f7a8b9c0d1e2f3a4}
+      - IMGPROXY_USE_S3=true
+      - IMGPROXY_LOCAL_FILESYSTEM_ROOT=/var/storage
+      - AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID:-GKfd16f76e81fb861a868a01b9b19452ad}
+      - AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY:-18d5eda476ff7fb88f0bec38eae3a5e468020ae6dfc610defe2f3f72a65c4339}
+      - AWS_REGION=${AWS_REGION:-garage}
+      - IMGPROXY_S3_REGION=${AWS_REGION:-garage}
+      - IMGPROXY_S3_ENDPOINT=${AWS_ENDPOINT:-http://garage:3900}
+      - AWS_ENDPOINT=${AWS_ENDPOINT:-http://garage:3900}
+      - IMGPROXY_S3_ENDPOINT_USE_PATH_STYLE=true
+    volumes:
+      - ../../storage/uploads:/var/storage:ro
+    networks:
+      - backend
+
+networks:
+  backend:
+    external: true

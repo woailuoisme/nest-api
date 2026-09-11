@@ -3,8 +3,6 @@ frozenLockfile = false
 peer = true
 trustedDependencies = [
   "@swc/core",
-  "argon2",
-  "sharp",
   "esbuild"
 ]
 

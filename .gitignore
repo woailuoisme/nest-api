@@ -1,34 +1,42 @@
 # Dependencies
 node_modules/
 .bun/
+.pnpm-store/
 
 # Production & Build Output
 dist/
 build/
 *.tsbuildinfo
+.swc/
+/generated
 
 # Test & Coverage
 coverage/
 .nyc_output/
+tests/.tmp/
+.vitest/
 
 # Environment & Secrets
 .env
 .env.*
+.env.local
+.env.*.local
 !.env.example
+!docker/.env.example
 secret.ini
+secret*.ini
 *.ini
 !secret.example.ini
 !secret.ini.example
 
 # Logs
 *.log
+logs/
 npm-debug.log*
 pnpm-debug.log*
 yarn-debug.log*
 yarn-error.log*
-
-# Build & Generated Assets
-/generated
+bun.report-*
 
 # Storage (keep dirs via .gitignore, ignore runtime files)
 storage/cache/*
@@ -47,6 +55,7 @@ storage/uploads/*
 .Spotlight-V100
 .Trashes
 Thumbs.db
+ehthumbs.db
 
 # IDEs & Editors
 .idea/
@@ -58,17 +67,19 @@ Thumbs.db
 !.vscode/tasks.json
 !.vscode/launch.json
 !.vscode/extensions.json
+.fleet/
 
 # AI & Agent Tooling Cache
-.agents/skills
+.agents/skills/
+.code-review-graph/
 .codegraph/
-.codex
+.codex/
+.trae/
 .rumdl_cache/
 .gemini/
 .speckit/
 .claude/
-.pi
+.pi/
 skills-lock.json
-.codebuddy
-docs/agents
-docs/adr
+.codebuddy/
+.scratch/

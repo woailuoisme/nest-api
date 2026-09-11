@@ -1,45 +1,108 @@
+# Dependencies & package caches
 node_modules/
+.bun/
+.npm/
+.cache/
+.pnpm-store/
+
+# Production & Build outputs
 dist/
+build/
+*.tsbuildinfo
+.swc/
+/generated
+
+# Git & Version Control
 .git/
-.env
-.env.*
-*.md
 .gitignore
 .gitattributes
-docker-compose.yml
-lefthook.yml
-justfile
-tests/
-coverage/
-.DS_Store
-.vscode/
-.idea/
-.npm/
-.bun/
-.cache/
-.claude/
-.codebuddy/
-.codegraph/
-.agents/
-*.log
-helm/
-.github/
-.oxlintrc.json
 
-# Security & Deploy Credentials
+# Environment, Secrets & Local Credentials
+.env
+.env.*
+!.env.example
+docker/.env
+docker/.env.*
 secret*.ini
+*.ini
 scripts/
 
-# Tooling, CI & Build Metadata
+# Tests & Coverage
+tests/
+coverage/
+.nyc_output/
+vitest.config.mts
+vitest.e2e.config.mts
+.vitest/
+
+# Documentation
+*.md
+docs/
+
+# Docker, Infrastructure & Deployment
+docker/
+docker-compose.yml
 Dockerfile*
 .dockerignore
+helm/
+
+# CI/CD, Linters & Development Tooling
+justfile
+lefthook.yml
+.github/
 .cnb
+.cnb/
 .cnb.yml
 .mise.toml
 .rumdl.toml
 .rumdl_cache/
+.oxlintrc.json
+.hadolint.yaml
+biome.jsonc
+sgconfig.yml
+rules/
+rule-tests/
+
+# System / OS Files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+Thumbs.db
+ehthumbs.db
+
+# IDEs & Editors
+.idea/
+.vscode/
+.fleet/
+*.swp
+*.swo
+*~
+
+# AI & Agent Tooling Cache
+.agents/
+.claude/
+.codebuddy/
+.codegraph/
+.code-review-graph/
+.codex/
+.gemini/
+.trae/
+.speckit/
+.pi/
+.scratch/
 skills-lock.json
 .mcp.json
+
+# Logs
+*.log
+logs/
+npm-debug.log*
+pnpm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+bun.report-*
 
 # Storage (keep dirs via .gitignore, ignore runtime files)
 storage/cache/*

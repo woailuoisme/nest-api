@@ -18,3 +18,6 @@ export const TOKEN_CLEANUP_QUEUE = 'token-cleanup';
 
 /** 媒体处理队列名 (图像转码与多规格缩略图衍生) */
 export const MEDIA_QUEUE = 'media';
+
+/** 全文搜索索引同步队列名 (Meilisearch 异步增删改索引) */
+export const SEARCH_QUEUE = 'search';

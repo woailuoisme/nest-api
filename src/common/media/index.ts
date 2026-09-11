@@ -1,3 +1,4 @@
+export * from './imgproxy';
 export * from './interfaces';
 export * from './managers';
 export * from './media.module';

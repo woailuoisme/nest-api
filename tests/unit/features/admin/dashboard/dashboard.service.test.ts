@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import type { RealtimeService } from '@/common/realtime/realtime.service';
 import { DashboardService } from '@/features/admin/dashboard/dashboard.service';
-import type { RealtimeService } from '@/realtime/realtime.service';
 
 describe('DashboardService', () => {
   let service: DashboardService;

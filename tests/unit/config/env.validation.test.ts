@@ -77,3 +77,65 @@ describe('MAIL_FROM_ADDRESS', () => {
     expect(() => envOf({ MAIL_FROM_ADDRESS: '' })).toThrow(/MAIL_FROM_ADDRESS/);
   });
 });
+
+describe('Smart Defaults & Derivations', () => {
+  it('STORAGE_DRIVER: 未配置且无 S3 URL 时推导为 local', () => {
+    const config = envOf({});
+    expect(config.STORAGE_DRIVER).toBe('local');
+  });
+
+  it('STORAGE_DRIVER: 未配置但有 S3 URL 时自动推导为 s3', () => {
+    const config = envOf({
+      STORAGE_S3_URL: 's3://key:sec@garage:3900/bucket?region=garage',
+    });
+    expect(config.STORAGE_DRIVER).toBe('s3');
+  });
+
+  it('STORAGE_DRIVER: 显式指定时尊重显式配置', () => {
+    const config = envOf({
+      STORAGE_DRIVER: 'local',
+      STORAGE_S3_URL: 's3://key:sec@garage:3900/bucket?region=garage',
+    });
+    expect(config.STORAGE_DRIVER).toBe('local');
+  });
+
+  it('BETTER_AUTH_URL: 未配置时自动级联 APP_URL', () => {
+    const config = envOf({ APP_URL: 'http://my-domain.dev:4300' });
+    expect(config.BETTER_AUTH_URL).toBe('http://my-domain.dev:4300');
+  });
+
+  it('BETTER_AUTH_URL: 显式配置时使用显式值', () => {
+    const config = envOf({
+      APP_URL: 'http://my-domain.dev:4300',
+      BETTER_AUTH_URL: 'http://auth.my-domain.dev',
+    });
+    expect(config.BETTER_AUTH_URL).toBe('http://auth.my-domain.dev');
+  });
+
+  it('BROADCAST_DRIVER: 默认使用 centrifugo 驱动', () => {
+    const config = envOf({});
+    expect(config.BROADCAST_DRIVER).toBe('centrifugo');
+  });
+
+  it('BROADCAST_DRIVER: 显式指定 local 时尊重显式配置', () => {
+    const config = envOf({ BROADCAST_DRIVER: 'local' });
+    expect(config.BROADCAST_DRIVER).toBe('local');
+  });
+
+  it('极简配置: 仅提供 DB_URL 时自动产出完整的工业级默认配置', () => {
+    const config = validateEnv({
+      DB_URL: 'postgresql://postgres:pass@localhost:5432/db',
+    });
+    expect(config.APP_ENV).toBe('local');
+    expect(config.APP_DEBUG).toBe(false);
+    expect(config.PORT).toBe(4300);
+    expect(config.APP_URL).toBe('http://localhost:4300');
+    expect(config.STORAGE_DRIVER).toBe('local');
+    expect(config.BETTER_AUTH_URL).toBe('http://localhost:4300');
+    expect(config.BROADCAST_DRIVER).toBe('centrifugo');
+    expect(config.HTTP_TIMEOUT_MS).toBe(15_000);
+    expect(config.WORKER_EMBEDDED).toBe(false);
+    expect(config.MEDIA_QUEUE_ENABLED).toBe(true);
+    expect(config.SWAGGER_ENABLED).toBe(true);
+  });
+});

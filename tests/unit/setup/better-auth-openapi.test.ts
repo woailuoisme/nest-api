@@ -7,7 +7,7 @@ import {
 } from '@/setup/swagger/better-auth-openapi';
 
 describe('Better Auth OpenAPI Processor', () => {
-  it('应完整包含 15 个插件的中文标签元数据定义', () => {
+  it('应完整包含 17 个插件与特性的中文标签元数据定义', () => {
     const requiredKeys = [
       'Default',
       'Two-factor',
@@ -23,6 +23,8 @@ describe('Better Auth OpenAPI Processor', () => {
       'Passkey',
       'One-tap',
       'Anonymous',
+      'One-time-token',
+      'Sso',
       'Admin',
     ];
     for (const key of requiredKeys) {
@@ -49,14 +51,14 @@ describe('Better Auth OpenAPI Processor', () => {
     clearBetterAuthOpenAPICache();
     const processed = await getProcessedBetterAuthOpenAPI();
 
-    // 1. 端点总数与前后台拆分（15 个插件共 118 个端点：管理端 15 个，客户端 103 个）
+    // 1. 端点总数与前后台拆分（17 个特性标签共 132 个端点：管理端 15 个，客户端 117 个）
     const allPathsCount = Object.keys(processed.allPaths).length;
     const clientPathsCount = Object.keys(processed.clientPaths).length;
     const adminPathsCount = Object.keys(processed.adminPaths).length;
 
-    expect(allPathsCount).toBe(118);
+    expect(allPathsCount).toBe(132);
     expect(adminPathsCount).toBe(15);
-    expect(clientPathsCount).toBe(103);
+    expect(clientPathsCount).toBe(117);
     expect(clientPathsCount + adminPathsCount).toBe(allPathsCount);
 
     // 2. 绝对路径前缀验证 (/v1/auth)

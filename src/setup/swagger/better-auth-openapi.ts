@@ -66,6 +66,14 @@ export const BETTER_AUTH_TAG_MAP: Record<string, TagMetadata> = {
     name: '认证-匿名访客',
     description: '匿名访客身份签发、转正与临时账户生命周期管理',
   },
+  'One-time-token': {
+    name: '认证-一次性令牌',
+    description: '单次有效安全令牌生成与消费校验',
+  },
+  Sso: {
+    name: '认证-单点登录',
+    description: '企业级 SAML 2.0 与 OIDC 单点登录服务商治理与鉴权流',
+  },
   Admin: {
     name: '认证-管理员治理',
     description: '管理员对用户的封禁、角色下发、冒充与会话吊销',

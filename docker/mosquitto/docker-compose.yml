@@ -1,0 +1,22 @@
+services:
+  mosquitto:
+    image: eclipse-mosquitto:2.1-alpine
+    container_name: mosquitto
+    restart: unless-stopped
+    ports:
+      - "${MOSQUITTO_PORT:-1883}:1883"
+      - "${MOSQUITTO_WS_PORT:-9001}:9001"
+    volumes:
+      - ./config/mosquitto.conf:/mosquitto/config/mosquitto.conf:ro
+      - mosquitto_data:/mosquitto/data
+      - mosquitto_log:/mosquitto/log
+    networks:
+      - backend
+
+volumes:
+  mosquitto_data:
+  mosquitto_log:
+
+networks:
+  backend:
+    external: true

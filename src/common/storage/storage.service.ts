@@ -17,7 +17,7 @@ export class StorageService implements StorageDriver {
   readonly #defaultDisk: string;
 
   constructor(config: ConfigService) {
-    this.#defaultDisk = config.get<string>('STORAGE_DRIVER', 'local');
+    this.#defaultDisk = config.get<string>('STORAGE_DRIVER') ?? (config.get('STORAGE_S3_URL') ? 's3' : 'local');
     this.#bootstrap(config);
     this.#logInit(config);
   }

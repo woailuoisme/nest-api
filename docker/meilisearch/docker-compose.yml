@@ -1,0 +1,24 @@
+services:
+  meilisearch:
+    image: getmeili/meilisearch:v1.53
+    container_name: meilisearch
+    restart: unless-stopped
+    ports:
+      - "${MEILISEARCH_PORT:-7700}:7700"
+    env_file:
+      - ../.env
+    environment:
+      - MEILI_ENV=development
+      - MEILI_MASTER_KEY=${MEILISEARCH_MASTER_KEY:-masterKey}
+      - MEILI_NO_ANALYTICS=true
+    volumes:
+      - meilisearch_data:/meili_data
+    networks:
+      - backend
+
+volumes:
+  meilisearch_data:
+
+networks:
+  backend:
+    external: true

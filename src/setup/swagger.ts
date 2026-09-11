@@ -5,7 +5,6 @@ import type { NestFastifyApplication } from '@nestjs/platform-fastify';
 import type { OpenAPIObject } from '@nestjs/swagger';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import { renderApiReference } from '@scalar/client-side-rendering';
-import { customThemeCSS } from '@scalar/nestjs-api-reference';
 import { cleanupOpenApiDoc } from 'nestjs-zod';
 import { APP_VERSION, OPENAPI_VERSION, PATHS, ROUTES } from '@/common/constants/app.constants';
 import { ADMIN_FEATURE_MODULES, CLIENT_FEATURE_MODULES } from '@/features';
@@ -154,41 +153,71 @@ export async function setupApiDocumentation(app: NestFastifyApplication, appUrl:
     telemetry: false,
     isEditable: false,
     _integration: 'nestjs',
+
+    // Introduction 区域通栏全宽排版（文档正文 100% 全宽展开，卡片沉降至底部自适应网格展示）
+    customCss: `
+      .introduction-section .section-columns {
+        flex-direction: column !important;
+        gap: 32px !important;
+      }
+      .introduction-section .section-column {
+        max-width: 100% !important;
+        width: 100% !important;
+      }
+      .introduction-section .sticky-cards {
+        position: static !important;
+        top: auto !important;
+        max-width: 100% !important;
+        width: 100% !important;
+      }
+      .introduction-section .introduction-card {
+        display: grid !important;
+        grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)) !important;
+        gap: 16px !important;
+      }
+      .introduction-section .introduction-card .scalar-reference-intro-clients {
+        grid-column: 1 / -1 !important;
+      }
+
+      /* 隐藏侧边栏顶部 "Ask AI" 按钮，让搜索框独占整行 */
+      div[class*="gap-1.5"][class*="px-3"] > button:not(:first-of-type),
+      .flex.gap-1\\.5.px-3.pt-3 > button:not(:first-of-type) {
+        display: none !important;
+      }
+
+      /* 隐藏侧边栏底部及全站 "Powered by Scalar" 署名链接，保留深色模式切换开关对齐 */
+      a[href="https://www.scalar.com"],
+      a[href="https://www.scalar.com/"],
+      .scalar-version-number {
+        display: none !important;
+      }
+    `,
   } as const;
 
   // ─── 5. 预渲染 Scalar HTML (零延迟、零前缀污染) ──────────────────────────
-  const clientScalarHtml = renderApiReference(
-    {
-      config: {
-        ...SCALAR_UNIFIED_CONFIG,
-        spec: { content: clientDocument },
-      },
-      pageTitle: 'NestForge Client API Reference',
+  const clientScalarHtml = renderApiReference({
+    config: {
+      ...SCALAR_UNIFIED_CONFIG,
+      spec: { content: clientDocument },
     },
-    customThemeCSS,
-  );
+    pageTitle: 'NestForge Client API Reference',
+  });
 
-  const adminScalarHtml = renderApiReference(
-    {
-      config: {
-        ...SCALAR_UNIFIED_CONFIG,
-        spec: { content: adminDocument },
-      },
-      pageTitle: 'NestForge Admin API Reference',
+  const adminScalarHtml = renderApiReference({
+    config: {
+      ...SCALAR_UNIFIED_CONFIG,
+      spec: { content: adminDocument },
     },
-    customThemeCSS,
-  );
+    pageTitle: 'NestForge Admin API Reference',
+  });
 
-  const authScalarHtml = renderApiReference(
-    {
-      config: {
-        ...SCALAR_UNIFIED_CONFIG,
-        spec: { content: authDocument },
-      },
-      pageTitle: 'NestForge Better Auth API Reference',
+  const authScalarHtml = renderApiReference({
+    config: {
+      ...SCALAR_UNIFIED_CONFIG,
+      spec: { content: authDocument },
     },
-    customThemeCSS,
-  );
+    pageTitle: 'NestForge Better Auth API Reference',
+  });
 
   const httpAdapter = app.getHttpAdapter();
   const fastifyInstance = httpAdapter.getInstance();

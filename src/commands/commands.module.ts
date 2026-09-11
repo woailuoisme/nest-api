@@ -5,10 +5,28 @@ import { CrudGenerateCommand } from './generator/crud-generate.command';
 import { CrudGeneratorService } from './generator/crud-generator.service';
 import { JwtSecretCommand } from './jwt-secret.command';
 import { RouteListCommand } from './route-list.command';
+import { SearchFlushCommand, SearchImportCommand, SearchSyncSettingsCommand } from './search.command';
 
 @Module({
   imports: [DiscoveryModule],
-  providers: [JwtSecretCommand, RouteListCommand, DbSeedCommand, CrudGenerateCommand, CrudGeneratorService],
-  exports: [JwtSecretCommand, RouteListCommand, DbSeedCommand, CrudGenerateCommand],
+  providers: [
+    JwtSecretCommand,
+    RouteListCommand,
+    DbSeedCommand,
+    CrudGenerateCommand,
+    CrudGeneratorService,
+    SearchImportCommand,
+    SearchFlushCommand,
+    SearchSyncSettingsCommand,
+  ],
+  exports: [
+    JwtSecretCommand,
+    RouteListCommand,
+    DbSeedCommand,
+    CrudGenerateCommand,
+    SearchImportCommand,
+    SearchFlushCommand,
+    SearchSyncSettingsCommand,
+  ],
 })
 export class CommandsModule {}

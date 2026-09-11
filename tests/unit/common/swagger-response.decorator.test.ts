@@ -33,6 +33,11 @@ describe('Swagger Response Decorators', () => {
     expect(typeof decorator).toBe('function');
   });
 
+  it('ApiSuccessResponse 支持 isArray: true 选项生成数组响应装饰器', () => {
+    const decorator = ApiSuccessResponse(SampleDto, { status: 200, isArray: true, description: 'Get sample list' });
+    expect(typeof decorator).toBe('function');
+  });
+
   it('ApiPageResponse 应正确生成 Offset 分页响应装饰器', () => {
     const decorator = ApiPageResponse(SampleDto, { status: 200, description: 'Paginated list' });
     expect(typeof decorator).toBe('function');

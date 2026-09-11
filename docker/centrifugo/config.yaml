@@ -1,0 +1,49 @@
+# Centrifugo v5 实时广播与长连接分发中枢配置 (YAML 规范)
+# 注意：敏感鉴权凭据 (token_hmac_secret_key, api_key, admin_password, admin_secret)
+# 已完全解耦并转由环境变量在 docker-compose.yml 中动态注入，杜绝密钥硬编码入库风险。
+
+# 管理后台与监控探针配置
+admin: true
+health: true
+prometheus: true
+
+# 客户端跨域允许列表 (开发调试支持本地各前端端口与通配符)
+allowed_origins:
+  - "http://localhost:3000"
+  - "http://localhost:5173"
+  - "http://localhost:4300"
+  - "http://127.0.0.1:3000"
+  - "http://127.0.0.1:5173"
+  - "http://127.0.0.1:4300"
+  - "*"
+
+# 默认全局频道配置：支持用户隔离频道、保留历史 100 条并启用自动恢复
+allow_user_limited_channels: true
+history_size: 100
+history_ttl: "300s"
+force_recovery: true
+
+# 频道命名空间隔离策略
+namespaces:
+  # 个人专属频道：支持断线消息自动补发与历史回溯 (如 private:user.{userId})
+  - name: "user"
+    allow_user_limited_channels: true
+    history_size: 100
+    history_ttl: "300s"
+    force_recovery: true
+
+  # 公共广播频道：客户端可自由订阅，无需私有鉴权 (如 public:global-announcement)
+  - name: "public"
+    allow_subscribe_for_client: true
+
+  # 协同房间频道：启用在场名单 (Presence) 与进出动态广播 (Join/Leave)
+  - name: "room"
+    presence: true
+    join_leave: true
+    history_size: 100
+    history_ttl: "300s"
+    force_recovery: true
+
+  # 管理员监控频道：严禁客户端直接订阅，必须由后端严格鉴权代理
+  - name: "admin"
+    allow_subscribe_for_client: false

@@ -11,7 +11,7 @@ describe('PATHS Constants', () => {
   });
 
   it('API.md 和头像相对路径常量应正确定义', () => {
-    expect(PATHS.API_MD_FILE).toBe('API.md');
+    expect(PATHS.API_MD_FILE).toBe('docs/api.md');
     expect(PATHS.AVATARS_RELATIVE_PATH).toBe('/uploads/avatars');
   });
 });

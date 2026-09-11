@@ -17,10 +17,10 @@ describe('DrizzleService', () => {
     const service = new DrizzleService(mockConfig);
     expect(service.db).toBeDefined();
 
-    // 验证 onApplicationShutdown 调用 pool.end()
-    const poolEndSpy = vi.spyOn((service as any).pool, 'end').mockResolvedValue(undefined as never);
+    // 验证 onApplicationShutdown 调用 client.end()
+    const clientEndSpy = vi.spyOn((service as any).client, 'end').mockResolvedValue(undefined as never);
     await service.onApplicationShutdown();
 
-    expect(poolEndSpy).toHaveBeenCalledTimes(1);
+    expect(clientEndSpy).toHaveBeenCalledTimes(1);
   });
 });

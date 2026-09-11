@@ -1,16 +1,16 @@
 import { createReadStream, promises as fs } from 'node:fs';
 import { extname } from 'node:path';
-import { BadRequestException, Injectable, Logger, Optional, PayloadTooLargeException } from '@nestjs/common';
+import { Injectable, Logger, Optional, PayloadTooLargeException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { isEmptyObject } from 'es-toolkit';
-import type { OutputInfo } from 'sharp';
 import type { StorageDriver } from '@/common/storage/interfaces/storage.interface';
 import type { UploadedFile } from '@/common/storage/interfaces/upload.interface';
 import { StorageService } from '@/common/storage/storage.service';
 import { MediaJobs } from '@/jobs/media/media.jobs';
+import { ImgproxyService } from './imgproxy/imgproxy.service';
+import { ImgproxyBuilder } from './imgproxy/imgproxy-builder';
 import type {
   ImageMetadata,
-  ImageResizeOptions,
   MediaCleanupOptions,
   MediaSaveOptions,
   MediaUploadResult,
@@ -22,17 +22,17 @@ import type {
 import { MediaCompensationManager } from './managers/compensation.manager';
 import { ImageProcessor } from './processors/image.processor';
 import { QrCodeProcessor } from './processors/qrcode.processor';
-import { buildMediaPath, buildVariantPath } from './strategies/naming.strategy';
+import { buildMediaPath } from './strategies/naming.strategy';
 
 /**
  * 统一通用媒体处理与存储门面 (MediaService Facade)
  *
  * 在底层基础设施之上提供聚合门面：
  * 1. 存储与多格式自适应（流式与内存、本地与 S3）；
- * 2. 图像 Sharp 转码与多规格衍生（委托 ImageProcessor）；
- * 3. 事务性自动补偿与防孤儿屏障（委托 MediaCompensationManager）；
- * 4. 二维码生成、SVG 渲染与图层合成（委托 QrCodeProcessor）；
- * 5. BullMQ 异步队列变体分发（可选注入 MediaJobs）。
+ * 2. imgproxy JIT 动态图像生成与签名安全构建器 (mediaService.url)；
+ * 3. 图像快速元数据解析（委托纯 JS ImageProcessor）；
+ * 4. 事务性自动补偿与防孤儿屏障（委托 MediaCompensationManager）；
+ * 5. 二维码生成、SVG 渲染与矢量合成（委托 QrCodeProcessor）。
  */
 @Injectable()
 export class MediaService {
@@ -40,22 +40,40 @@ export class MediaService {
   private readonly img: ImageProcessor;
   private readonly qr: QrCodeProcessor;
   private readonly comp: MediaCompensationManager;
+  private readonly imgproxy: ImgproxyService;
 
   constructor(
     private readonly storage: StorageService,
     @Optional() imageProcessor?: ImageProcessor,
     @Optional() qrCodeProcessor?: QrCodeProcessor,
     @Optional() compensationManager?: MediaCompensationManager,
-    @Optional() private readonly configService?: ConfigService,
+    @Optional() imgproxyService?: ImgproxyService,
+    @Optional() configService?: ConfigService,
     @Optional() private readonly mediaJobs?: MediaJobs,
   ) {
     this.img = imageProcessor ?? new ImageProcessor();
     this.qr = qrCodeProcessor ?? new QrCodeProcessor(storage);
     this.comp = compensationManager ?? new MediaCompensationManager();
+    this.imgproxy = imgproxyService ?? new ImgproxyService(configService ?? new ConfigService());
   }
 
   /**
-   * 存储单个上传文件，自适应流式与内存模式，自动执行图像优化、WebP 转换与多规格缩略图生成。
+   * 构造指定存储路径图片的 imgproxy JIT 动态处理 Fluent 构建器
+   *
+   * @param sourcePath 存储文件相对路径（如 avatars/20260820/uuid.png）
+   * @example
+   * ```ts
+   * const avatarUrl = mediaService.url(path).preset('avatar').webp().build();
+   * const thumbUrl = mediaService.url(path).resize({ width: 300, height: 300 }).webp().build();
+   * ```
+   */
+  url(sourcePath: string): ImgproxyBuilder {
+    return this.imgproxy.url(sourcePath);
+  }
+
+  /**
+   * 存储单个上传文件，自适应流式与内存模式。
+   * 保存原始主图（Master Asset），元数据同步解析。若指定了 variants，即时返回 imgproxy 签名 JIT URL。
    */
   async save(file: UploadedFile, opts?: MediaSaveOptions): Promise<MediaUploadResult> {
     const disk = this.storage.disk(opts?.disk);
@@ -69,40 +87,38 @@ export class MediaService {
     }
 
     try {
-      // 2. 非图片文件（或 SVG 矢量）：保持 O(1) 流式直传存盘，不走 Sharp 像素管道
+      // 2. 非图片文件（或 SVG 矢量）：保持 O(1) 流式直传存盘
       if (!isImg || extname(file.filename).toLowerCase() === '.svg') {
-        return await this.saveNonImage(file, opts, disk, newlyCreatedPaths);
+        const path = await buildMediaPath(file, opts);
+        const content = file.type === 'stream' ? createReadStream(file.tmpPath) : file.buffer;
+        return await this.persistToDisk(disk, path, content, file.mimetype, newlyCreatedPaths);
       }
 
-      // 3. 图片文件：提取 Buffer 并执行图像转换流水线
+      // 3. 图片文件：提取 Buffer 并快速解析元数据
       const rawBuffer = await this.getFileBuffer(file);
-      let metadata: ImageMetadata;
+      let metadata: ImageMetadata | undefined;
       try {
         metadata = await this.img.getImageMetadata(rawBuffer);
       } catch {
-        if (opts?.convertToWebp || opts?.variants) {
-          throw new BadRequestException(`图片文件损坏或格式不受支持: ${file.filename}`);
-        }
-        return await this.saveBufferDirect(rawBuffer, file, opts, disk, newlyCreatedPaths);
+        const path = await buildMediaPath(file, opts, rawBuffer);
+        return await this.persistToDisk(disk, path, rawBuffer, file.mimetype, newlyCreatedPaths);
       }
-      const { mainBuffer, contentType, overrideExt } = await this.prepareMainBuffer(rawBuffer, file.mimetype, opts);
 
-      // 4. 生成主图存储路径并写入
-      const mainPath = await buildMediaPath(file, opts, mainBuffer, overrideExt);
-      const mainResult = await this.persistToDisk(disk, mainPath, mainBuffer, contentType, newlyCreatedPaths);
+      // 4. 生成主图存储路径并写入原图（Master Asset）
+      const mainPath = await buildMediaPath(file, opts, rawBuffer);
+      const mainResult = await this.persistToDisk(disk, mainPath, rawBuffer, file.mimetype, newlyCreatedPaths);
 
-      // 5. 生成多规格缩略图/变体 (支持 BullMQ 异步队列与同步执行)
-      const variants = await this.generateVariants(rawBuffer, mainPath, opts, disk, newlyCreatedPaths);
+      // 5. 生成多规格变体 URL（通过 imgproxy JIT 动态签名生成，零物理磁盘占用）
+      const variants = this.generateVariants(mainPath, opts);
 
       return {
         path: mainPath,
         url: mainResult.url,
         isNew: mainResult.isNew,
-        variants: !isEmptyObject(variants) ? variants : undefined,
+        variants,
         metadata: {
           ...metadata,
-          size: mainBuffer.byteLength,
-          format: overrideExt ? 'webp' : metadata.format,
+          size: rawBuffer.byteLength,
         },
       };
     } catch (error) {
@@ -121,7 +137,7 @@ export class MediaService {
 
   /**
    * 批量存储多个上传文件。
-   * 串行处理，任一文件或变体失败时自动回滚所有本次新写的文件，并取消已排队的 BullMQ 任务。
+   * 串行处理，任一文件失败时自动回滚本次所有新写入的文件。
    */
   async saveBatch(files: UploadedFile[], opts?: MediaSaveOptions): Promise<MediaUploadResult[]> {
     const disk = this.storage.disk(opts?.disk);
@@ -135,22 +151,12 @@ export class MediaService {
         if (res.isNew !== false) {
           createdPaths.push(res.path);
         }
-        if (res.variants) {
-          for (const v of Object.values(res.variants)) {
-            if (v.isNew !== false && v.status === 'ready') {
-              createdPaths.push(v.path);
-            }
-          }
-        }
       }
       return savedResults;
     } catch (err) {
-      // 取消批量操作中已投递的 BullMQ 任务
-      await this.comp.cancelVariantJobs(savedResults, this.mediaJobs);
-
       if (createdPaths.length > 0) {
         await this.comp.deletePaths(disk, createdPaths);
-        this.logger.warn(`批量媒体上传失败，已回滚 ${createdPaths.length} 个已写文件/变体`);
+        this.logger.warn(`批量媒体上传失败，已回滚 ${createdPaths.length} 个已写文件`);
       }
       throw err;
     }
@@ -189,47 +195,26 @@ export class MediaService {
   async deleteByUrl(url: string, diskName?: string): Promise<void> {
     if (!url) return;
     const path = this.storage.urlToPath(url, diskName);
-    if (!path) return;
-    const disk = this.storage.disk(diskName);
-    await disk.delete(path);
+    if (path) {
+      await this.deleteStored(path, diskName);
+    }
   }
 
-  // ── 独立图像处理工具方法（委托 ImageProcessor） ─────────────────────────
+  // ── 图像基础方法（委托 ImageProcessor） ─────────────────────────────────
 
   /** 判断是否为图像 MIME 类型或扩展名 */
   isImage(mimetype?: string, filename?: string): boolean {
     return this.img.isImage(mimetype, filename);
   }
 
-  /** 独立将图像转换为 WebP 格式 */
-  async convertToWebp(
-    input: Buffer | string,
-    options?: { quality?: number },
-  ): Promise<{ buffer: Buffer; info: OutputInfo }> {
-    return this.img.convertToWebp(input, options);
-  }
-
-  /** 独立对图像进行自动校正与优化（无格式变更） */
-  async optimize(input: Buffer | string): Promise<{ buffer: Buffer; info: OutputInfo }> {
-    return this.img.optimize(input);
-  }
-
-  /** 图像变换工具方法 — 支持尺寸缩放、裁剪、质量控制与格式转换 */
-  async transformImage(
-    input: Buffer | string,
-    options: ImageResizeOptions,
-  ): Promise<{ buffer: Buffer; info: OutputInfo }> {
-    return this.img.transformImage(input, options);
-  }
-
-  /** 提取图像元数据（分辨率、格式、透明度、宽高比等） */
+  /** 提取图像元数据（分辨率、格式、尺寸、宽高比等） */
   async getImageMetadata(input: Buffer | string): Promise<ImageMetadata> {
     return this.img.getImageMetadata(input);
   }
 
   // ── 二维码生成与存储门面（委托 QrCodeProcessor） ─────────────────────────
 
-  /** 生成二维码 Buffer（支持 PNG / WebP / SVG，支持中心 Logo 合成） */
+  /** 生成二维码 Buffer（纯 JS/SVG 矢量渲染，支持 PNG / WebP / SVG，支持中心 Logo 合成） */
   async generateQrCodeBuffer(content: string, options?: QrCodeOptions): Promise<Buffer> {
     return this.qr.generateBuffer(content, options);
   }
@@ -263,149 +248,33 @@ export class MediaService {
     newlyCreatedPaths: string[],
   ): Promise<MediaUploadResult> {
     const exists = await disk.exists(path).catch(() => false);
-    await disk.put(path, content, { contentType });
     if (!exists) newlyCreatedPaths.push(path);
+    await disk.put(path, content, { contentType });
     return { path, url: disk.getUrl(path), isNew: !exists };
   }
 
-  private async saveNonImage(
-    file: UploadedFile,
-    opts: MediaSaveOptions | undefined,
-    disk: StorageDriver,
-    newlyCreatedPaths: string[],
-  ): Promise<MediaUploadResult> {
-    const path = await buildMediaPath(file, opts);
-    const content = file.type === 'stream' ? createReadStream(file.tmpPath) : file.buffer;
-    return this.persistToDisk(disk, path, content, file.mimetype, newlyCreatedPaths);
-  }
-
-  private async saveBufferDirect(
-    buffer: Buffer,
-    file: UploadedFile,
-    opts: MediaSaveOptions | undefined,
-    disk: StorageDriver,
-    newlyCreatedPaths: string[],
-  ): Promise<MediaUploadResult> {
-    const path = await buildMediaPath(file, opts, buffer);
-    return this.persistToDisk(disk, path, buffer, file.mimetype, newlyCreatedPaths);
-  }
-
-  private async prepareMainBuffer(
-    rawBuffer: Buffer,
-    defaultMime: string,
-    opts?: MediaSaveOptions,
-  ): Promise<{ mainBuffer: Buffer; contentType: string; overrideExt?: string }> {
-    if (opts?.convertToWebp) {
-      const { buffer } = await this.img.convertToWebp(rawBuffer, { quality: opts.webpQuality });
-      return { mainBuffer: buffer, contentType: 'image/webp', overrideExt: '.webp' };
-    }
-    const mainBuffer = opts?.optimize !== false ? (await this.img.optimize(rawBuffer)).buffer : rawBuffer;
-    return { mainBuffer, contentType: defaultMime };
-  }
-
-  private async generateVariants(
-    rawBuffer: Buffer,
+  private generateVariants(
     mainPath: string,
     opts: MediaSaveOptions | undefined,
-    disk: StorageDriver,
-    newlyCreatedPaths: string[],
-  ): Promise<Record<string, MediaVariantResult>> {
+  ): Record<string, MediaVariantResult> | undefined {
     const variantsConfig = opts?.variants;
     if (!variantsConfig || isEmptyObject(variantsConfig)) {
-      return {};
+      return undefined;
     }
 
-    const queueConfigEnabled = this.configService?.get<boolean>('MEDIA_QUEUE_ENABLED') ?? true;
-    if (opts.asyncQueue === true && !this.mediaJobs) {
-      this.logger.warn('MediaSaveOptions.asyncQueue 显式设置为 true，但 MediaJobs 生产者未注入，自动降级为同步执行');
-    }
-
-    const isAsyncQueue = (opts.asyncQueue ?? queueConfigEnabled) && !!this.mediaJobs;
-    if (isAsyncQueue && this.mediaJobs) {
-      return this.dispatchAsyncVariants(mainPath, variantsConfig, opts.disk, disk);
-    }
-    return this.renderSyncVariants(rawBuffer, mainPath, variantsConfig, disk, newlyCreatedPaths);
-  }
-
-  private async dispatchAsyncVariants(
-    mainPath: string,
-    variantsConfig: Record<string, ImageResizeOptions>,
-    diskName: string | undefined,
-    disk: StorageDriver,
-  ): Promise<Record<string, MediaVariantResult>> {
     const variants: Record<string, MediaVariantResult> = {};
-    const neededVariants: Record<string, ImageResizeOptions> = {};
-
     for (const [variantName, variantOpts] of Object.entries(variantsConfig)) {
-      const variantFormat = variantOpts.format ?? 'webp';
-      const variantPath = buildVariantPath(mainPath, variantName, variantFormat);
-      const variantExists = await disk.exists(variantPath).catch(() => false);
-
       variants[variantName] = {
-        path: variantPath,
-        url: disk.getUrl(variantPath),
-        isNew: !variantExists,
-        status: variantExists ? 'ready' : 'pending',
-      };
-
-      if (!variantExists) {
-        neededVariants[variantName] = variantOpts;
-      }
-    }
-
-    if (!isEmptyObject(neededVariants) && this.mediaJobs) {
-      const job = await this.mediaJobs.dispatchGenerateVariants({
-        mainPath,
-        variants: neededVariants,
-        disk: diskName,
-      });
-
-      if (job?.id) {
-        for (const [variantName, v] of Object.entries(variants)) {
-          if (neededVariants[variantName]) {
-            v.jobId = String(job.id);
-          }
-        }
-      }
-    }
-
-    return variants;
-  }
-
-  private async renderSyncVariants(
-    rawBuffer: Buffer,
-    mainPath: string,
-    variantsConfig: Record<string, ImageResizeOptions>,
-    disk: StorageDriver,
-    newlyCreatedPaths: string[],
-  ): Promise<Record<string, MediaVariantResult>> {
-    const variants: Record<string, MediaVariantResult> = {};
-
-    for (const [variantName, variantOpts] of Object.entries(variantsConfig)) {
-      const { buffer: variantBuffer } = await this.img.transformImage(rawBuffer, variantOpts);
-      const variantFormat = variantOpts.format ?? 'webp';
-      const variantPath = buildVariantPath(mainPath, variantName, variantFormat);
-      const variantContentType = `image/${variantFormat}`;
-
-      const variantExists = await disk.exists(variantPath).catch(() => false);
-      await disk.put(variantPath, variantBuffer, { contentType: variantContentType });
-      if (!variantExists) newlyCreatedPaths.push(variantPath);
-
-      variants[variantName] = {
-        path: variantPath,
-        url: disk.getUrl(variantPath),
-        isNew: !variantExists,
+        path: mainPath,
+        url: this.imgproxy.url(mainPath).resize(variantOpts).build(),
+        isNew: false,
         status: 'ready',
       };
     }
-
     return variants;
   }
 
   private async getFileBuffer(file: UploadedFile): Promise<Buffer> {
-    if (file.type === 'memory') {
-      return file.buffer;
-    }
-    return fs.readFile(file.tmpPath);
+    return file.type === 'memory' ? file.buffer : fs.readFile(file.tmpPath);
   }
 }

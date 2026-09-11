@@ -1,6 +1,5 @@
 import { describe, expect, it } from 'vitest';
 import * as schema from '@/database/drizzle/schema';
-import { idempotencyKeys } from '@/database/drizzle/schema/idempotency.schema';
 import { media } from '@/database/drizzle/schema/media.schema';
 import { notifications } from '@/database/drizzle/schema/notifications.schema';
 
@@ -18,30 +17,8 @@ describe('Drizzle Schemas Integrity', () => {
       expect(schema.invitation).toBeDefined();
       expect(schema.jwks).toBeDefined();
       expect(schema.deviceCode).toBeDefined();
-      expect(schema.idempotencyKeys).toBeDefined();
       expect(schema.media).toBeDefined();
       expect(schema.notifications).toBeDefined();
-    });
-  });
-
-  describe('idempotencyKeys Schema', () => {
-    it('应包含完整的幂等键字段与类型配置', () => {
-      const cols = idempotencyKeys;
-      expect(cols.id).toBeDefined();
-      expect(cols.key).toBeDefined();
-      expect(cols.userId).toBeDefined();
-      expect(cols.actorType).toBeDefined();
-      expect(cols.requestMethod).toBeDefined();
-      expect(cols.requestPath).toBeDefined();
-      expect(cols.requestParamsHash).toBeDefined();
-      expect(cols.responseStatusCode).toBeDefined();
-      expect(cols.responseHeaders).toBeDefined();
-      expect(cols.responseBody).toBeDefined();
-      expect(cols.status).toBeDefined();
-      expect(cols.lockedAt).toBeDefined();
-      expect(cols.expiresAt).toBeDefined();
-      expect(cols.createdAt).toBeDefined();
-      expect(cols.updatedAt).toBeDefined();
     });
   });
 

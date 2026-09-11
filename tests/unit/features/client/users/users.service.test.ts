@@ -6,7 +6,6 @@
  */
 import { NotFoundException } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
-import { instanceToPlain } from 'class-transformer';
 import { createMockDrizzleDb } from 'tests/mocks/drizzle.mock';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { MediaService } from '@/common/media/media.service';
@@ -88,8 +87,7 @@ describe('UsersService (前端自助面)', () => {
       expect(result).toBeInstanceOf(UserEntity);
       expect(result.id).toBe('user-uuid-1');
       expect(result).toHaveProperty('name', '张三');
-      const plain = instanceToPlain(result);
-      expect(plain).not.toHaveProperty('passwordHash');
+      expect(result).not.toHaveProperty('passwordHash');
     });
 
     it('用户不存在时应抛出 NotFoundException', async () => {

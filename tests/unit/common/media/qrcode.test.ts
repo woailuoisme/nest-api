@@ -1,4 +1,5 @@
-import sharp from 'sharp';
+import { imageSize } from 'image-size';
+import { createTestPng } from 'tests/factories/image.factory';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { calculateLogoGeometry, QrCodeService } from '@/common/media';
 import { StorageService } from '@/common/storage/storage.service';
@@ -35,16 +36,10 @@ describe('QrCodeService', () => {
       expect(buffer).toBeInstanceOf(Buffer);
       expect(buffer.length).toBeGreaterThan(0);
 
-      const meta = await sharp(buffer).metadata();
-      expect(meta.format).toBe('png');
-      expect(meta.width).toBe(200);
-      expect(meta.height).toBe(200);
-    });
-
-    it('生成 WebP 格式二维码 Buffer', async () => {
-      const buffer = await qrCodeService.generateBuffer('https://example.com', { width: 200, format: 'webp' });
-      const meta = await sharp(buffer).metadata();
-      expect(meta.format).toBe('webp');
+      const size = imageSize(buffer);
+      expect(size.type).toBe('png');
+      expect(size.width).toBe(200);
+      expect(size.height).toBe(200);
     });
 
     it('生成 SVG 格式二维码 Buffer', async () => {
@@ -54,17 +49,8 @@ describe('QrCodeService', () => {
       expect(str).toContain('</svg>');
     });
 
-    it('支持在二维码中心合成 Logo 图标 (PNG)', async () => {
-      const testLogo = await sharp({
-        create: {
-          width: 50,
-          height: 50,
-          channels: 4,
-          background: { r: 255, g: 0, b: 0, alpha: 1 },
-        },
-      })
-        .png()
-        .toBuffer();
+    it('支持在二维码中心合成 Logo 图标并返回 SVG 矢量 Buffer', async () => {
+      const testLogo = createTestPng(50, 50);
 
       const buffer = await qrCodeService.generateBuffer('https://example.com', {
         width: 300,
@@ -72,22 +58,14 @@ describe('QrCodeService', () => {
       });
 
       expect(buffer).toBeInstanceOf(Buffer);
-      const meta = await sharp(buffer).metadata();
-      expect(meta.width).toBe(300);
-      expect(meta.height).toBe(300);
+      const str = buffer.toString('utf-8');
+      expect(str).toContain('<svg');
+      expect(str).toContain('<image');
+      expect(str).toContain('data:image/png;base64,');
     });
 
     it('支持在 SVG 格式二维码中心嵌入 Logo', async () => {
-      const testLogo = await sharp({
-        create: {
-          width: 50,
-          height: 50,
-          channels: 4,
-          background: { r: 255, g: 0, b: 0, alpha: 1 },
-        },
-      })
-        .png()
-        .toBuffer();
+      const testLogo = createTestPng(50, 50);
 
       const buffer = await qrCodeService.generateBuffer('https://example.com', {
         width: 300,
@@ -108,11 +86,6 @@ describe('QrCodeService', () => {
       expect(dataUrl).toMatch(/^data:image\/png;base64,[A-Za-z0-9+/=]+$/);
     });
 
-    it('指定 webp 格式时返回 data:image/webp;base64 DataURL', async () => {
-      const dataUrl = await qrCodeService.generateDataUrl('https://example.com', { format: 'webp' });
-      expect(dataUrl).toMatch(/^data:image\/webp;base64,[A-Za-z0-9+/=]+$/);
-    });
-
     it('指定 svg 格式时返回 data:image/svg+xml;utf8,... DataURL', async () => {
       const dataUrl = await qrCodeService.generateDataUrl('https://example.com', { format: 'svg' });
       expect(dataUrl).toMatch(/^data:image\/svg\+xml;utf8,/);
@@ -129,16 +102,7 @@ describe('QrCodeService', () => {
     });
 
     it('支持在 SVG 字符串中嵌入 Logo', async () => {
-      const testLogo = await sharp({
-        create: {
-          width: 50,
-          height: 50,
-          channels: 4,
-          background: { r: 0, g: 0, b: 255, alpha: 1 },
-        },
-      })
-        .png()
-        .toBuffer();
+      const testLogo = createTestPng(50, 50);
 
       const svg = await qrCodeService.generateSvg('https://example.com', { logo: testLogo });
       expect(svg).toContain('<rect');

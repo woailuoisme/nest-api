@@ -8,9 +8,9 @@ import { Hash, sha256 } from '@/common/utils/hash.util';
 
 describe('Hash', () => {
   describe('make() — 密码哈希', () => {
-    it('应返回 argon2id 格式的哈希字符串', async () => {
+    it('应返回 scrypt 格式的哈希字符串 (saltHex:derivedKeyHex)', async () => {
       const hash = await Hash.make('MyP@ssw0rd!2024');
-      expect(hash).toMatch(/^\$argon2id\$/);
+      expect(hash).toMatch(/^[0-9a-f]{32}:[0-9a-f]{128}$/);
     });
 
     it('每次对相同明文应生成不同的哈希（随机盐）', async () => {
@@ -21,7 +21,7 @@ describe('Hash', () => {
 
     it('空字符串也应能正常哈希', async () => {
       const hash = await Hash.make('');
-      expect(hash).toMatch(/^\$argon2id\$/);
+      expect(hash).toMatch(/^[0-9a-f]{32}:[0-9a-f]{128}$/);
     });
   });
 

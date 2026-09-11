@@ -1,0 +1,416 @@
+<!DOCTYPE html>
+<html lang="zh-CN" class="h-full">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>工业级高保真交互原型通用脚手架模版</title>
+
+  <!-- 1. Tailwind CSS v4 Browser CDN (最新版实时编译器) -->
+  <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
+
+  <!-- 2. tw-animate-css (Tailwind CSS v4 纯 CSS 动画扩展库) -->
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/tw-animate-css/dist/tw-animate.min.css">
+
+  <!-- 3. Lucide Icons (现代化矢量图标库) -->
+  <script src="https://cdn.jsdelivr.net/npm/lucide@latest/dist/umd/lucide.min.js"></script>
+
+  <!-- 4. Alpine.js v3 (极简轻量响应式驱动) -->
+  <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
+
+  <style>
+    [x-cloak] { display: none !important; }
+  </style>
+</head>
+<body 
+  class="h-full bg-slate-50 text-slate-900 antialiased dark:bg-slate-950 dark:text-slate-100 transition-colors duration-200 flex flex-col font-sans"
+  x-data="prototypeApp()"
+  x-init="initApp()"
+  x-cloak
+>
+
+  <!-- ==========================================================================
+       顶部原型工具栏与环境沙盒 (Prototype Topbar)
+       ========================================================================== -->
+  <header class="sticky top-0 z-40 w-full border-b border-slate-200 bg-white/95 px-6 py-3 backdrop-blur dark:border-slate-800 dark:bg-slate-900/95 shadow-xs">
+    <div class="mx-auto flex max-w-7xl items-center justify-between">
+      <!-- 左侧：功能标题与 PRD 快速链接 -->
+      <div class="flex items-center gap-3">
+        <span class="inline-flex items-center gap-1.5 rounded-full bg-blue-50 px-2.5 py-0.5 text-xs font-semibold text-blue-700 dark:bg-blue-950/60 dark:text-blue-400 border border-blue-200 dark:border-blue-800">
+          <span class="h-1.5 w-1.5 rounded-full bg-blue-600 dark:bg-blue-400"></span>
+          原型脚手架
+        </span>
+        <h1 class="text-sm font-semibold tracking-tight text-slate-900 dark:text-slate-100">
+          [功能模块英文/中文] · 工业级原型
+        </h1>
+        <span class="text-slate-300 dark:text-slate-700">|</span>
+        <a 
+          href="../specs/000-sample-spec.md" 
+          target="_blank"
+          class="inline-flex items-center gap-1 text-xs text-blue-600 hover:underline dark:text-blue-400 font-medium"
+        >
+          <i data-lucide="file-text" class="w-3.5 h-3.5"></i>
+          关联 PRD 需求规格书
+        </a>
+      </div>
+
+      <!-- 右侧：沙盒控制器 + 深色主题 -->
+      <div class="flex items-center gap-4">
+        <div class="flex items-center gap-2 text-xs text-slate-500 dark:text-slate-400">
+          <label for="mockStateSelect" class="font-medium">沙盒环境模拟:</label>
+          <select 
+            id="mockStateSelect"
+            x-model="mockState" 
+            @change="handleMockStateChange()" 
+            class="rounded-lg border border-slate-300 bg-slate-50 px-2.5 py-1 text-xs font-medium text-slate-800 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200"
+          >
+            <option value="normal">正常数据态 (Normal)</option>
+            <option value="empty">空数据态 (Empty State)</option>
+            <option value="loading">加载中骨架屏 (Skeleton Loading)</option>
+            <option value="error">网络/业务异常 (Error/Forbidden)</option>
+          </select>
+        </div>
+
+        <button 
+          @click="toggleTheme()" 
+          class="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-600 hover:bg-slate-100 hover:text-slate-900 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700 transition"
+          title="切换深色/浅色主题"
+        >
+          <i data-lucide="sun" x-show="isDark" class="w-4 h-4"></i>
+          <i data-lucide="moon" x-show="!isDark" class="w-4 h-4"></i>
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <!-- ==========================================================================
+       主体工作台容器 (Main Workbench)
+       ========================================================================== -->
+  <div class="mx-auto flex w-full max-w-7xl flex-1 gap-8 px-6 py-8">
+    <!-- 侧边栏导航 -->
+    <aside class="hidden w-64 shrink-0 md:block">
+      <nav class="space-y-1">
+        <a 
+          href="#dashboard" 
+          @click.prevent="currentTab = 'dashboard'"
+          class="flex items-center gap-3 rounded-xl px-3.5 py-2.5 text-sm font-medium transition"
+          :class="currentTab === 'dashboard' ? 'bg-blue-50/80 font-semibold text-blue-700 dark:bg-blue-950/40 dark:text-blue-400 border border-blue-100 dark:border-blue-900/50' : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900 dark:text-slate-400 dark:hover:bg-slate-800/60 dark:hover:text-slate-200'"
+        >
+          <i data-lucide="layout-dashboard" class="w-4 h-4"></i>
+          总览仪表盘
+        </a>
+        <a 
+          href="#data-list" 
+          @click.prevent="currentTab = 'data-list'"
+          class="flex items-center gap-3 rounded-xl px-3.5 py-2.5 text-sm font-medium transition"
+          :class="currentTab === 'data-list' ? 'bg-blue-50/80 font-semibold text-blue-700 dark:bg-blue-950/40 dark:text-blue-400 border border-blue-100 dark:border-blue-900/50' : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900 dark:text-slate-400 dark:hover:bg-slate-800/60 dark:hover:text-slate-200'"
+        >
+          <i data-lucide="table" class="w-4 h-4"></i>
+          核心业务列表
+        </a>
+        <a 
+          href="#settings" 
+          @click.prevent="currentTab = 'settings'"
+          class="flex items-center gap-3 rounded-xl px-3.5 py-2.5 text-sm font-medium transition"
+          :class="currentTab === 'settings' ? 'bg-blue-50/80 font-semibold text-blue-700 dark:bg-blue-950/40 dark:text-blue-400 border border-blue-100 dark:border-blue-900/50' : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900 dark:text-slate-400 dark:hover:bg-slate-800/60 dark:hover:text-slate-200'"
+        >
+          <i data-lucide="settings" class="w-4 h-4"></i>
+          系统与偏好设置
+        </a>
+      </nav>
+    </aside>
+
+    <!-- 主展示面板 -->
+    <main class="flex-1 min-w-0 space-y-6">
+      <!-- 页面标头 -->
+      <div class="flex items-center justify-between">
+        <div>
+          <h2 class="text-2xl font-bold tracking-tight text-slate-900 dark:text-slate-100">[业务特性名称]</h2>
+          <p class="mt-1 text-sm text-slate-500 dark:text-slate-400">
+            遵循 PRD 契约标准，在此区域快速验证交互流程、数据边界与异常状态。
+          </p>
+        </div>
+
+        <div class="flex items-center gap-3">
+          <button 
+            @click="openModal()" 
+            class="inline-flex items-center gap-2 rounded-xl bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 shadow-xs active:scale-98 transition"
+          >
+            <i data-lucide="plus" class="w-4 h-4"></i>
+            新建数据记录
+          </button>
+        </div>
+      </div>
+
+      <!-- 核心内容区 (基于 mockState 动态呈现) -->
+      <div>
+        <!-- 1. 骨架屏加载中 (mockState === 'loading') -->
+        <template x-if="mockState === 'loading'">
+          <div class="space-y-4 animate-pulse">
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+              <div class="h-28 rounded-2xl bg-slate-200 dark:bg-slate-800"></div>
+              <div class="h-28 rounded-2xl bg-slate-200 dark:bg-slate-800"></div>
+              <div class="h-28 rounded-2xl bg-slate-200 dark:bg-slate-800"></div>
+            </div>
+            <div class="h-64 rounded-2xl bg-slate-200 dark:bg-slate-800"></div>
+          </div>
+        </template>
+
+        <!-- 2. 空数据状态 (mockState === 'empty') -->
+        <template x-if="mockState === 'empty'">
+          <div class="flex flex-col items-center justify-center rounded-2xl border border-dashed border-slate-300 p-12 text-center dark:border-slate-800">
+            <div class="flex h-12 w-12 items-center justify-center rounded-2xl bg-slate-100 dark:bg-slate-800 text-slate-400">
+              <i data-lucide="inbox" class="w-6 h-6"></i>
+            </div>
+            <h3 class="mt-4 text-base font-semibold text-slate-900 dark:text-slate-100">暂无任何数据记录</h3>
+            <p class="mt-1 text-sm text-slate-500 dark:text-slate-400 max-w-sm">
+              当前业务列表中尚未创建任何实体，请点击下方按钮新建第一条数据。
+            </p>
+            <button @click="openModal()" class="mt-5 inline-flex items-center gap-2 rounded-xl bg-blue-600 px-4 py-2 text-xs font-medium text-white hover:bg-blue-700">
+              <i data-lucide="plus" class="w-3.5 h-3.5"></i>
+              立即创建
+            </button>
+          </div>
+        </template>
+
+        <!-- 3. 错误状态 (mockState === 'error') -->
+        <template x-if="mockState === 'error'">
+          <div class="rounded-2xl border border-rose-200 bg-rose-50/80 p-8 text-center dark:border-rose-900/50 dark:bg-rose-950/30">
+            <i data-lucide="shield-x" class="w-10 h-10 mx-auto text-rose-600 dark:text-rose-400"></i>
+            <h3 class="mt-3 text-base font-semibold text-rose-900 dark:text-rose-200">数据加载失败或权限不足 (403/500)</h3>
+            <p class="mt-1 text-xs text-rose-700 dark:text-rose-300 max-w-md mx-auto">
+              模拟测试由于权限准入校验未通过或上游服务异常导致的不可用场景。
+            </p>
+            <button @click="mockState = 'normal'; handleMockStateChange()" class="mt-4 inline-flex items-center gap-1.5 rounded-lg border border-rose-300 bg-white px-3 py-1.5 text-xs font-medium text-rose-700 hover:bg-rose-50 dark:border-rose-800 dark:bg-slate-900 dark:text-rose-300">
+              <i data-lucide="refresh-cw" class="w-3.5 h-3.5"></i>
+              重试恢复
+            </button>
+          </div>
+        </template>
+
+        <!-- 4. 正常数据态 (mockState === 'normal') -->
+        <template x-if="mockState === 'normal'">
+          <div class="space-y-6">
+            <!-- 统计卡片栅格 -->
+            <div class="grid grid-cols-1 gap-6 sm:grid-cols-3">
+              <div class="rounded-2xl border border-slate-200 bg-white p-5 shadow-xs dark:border-slate-800 dark:bg-slate-900">
+                <div class="flex items-center justify-between text-xs font-medium text-slate-500 dark:text-slate-400">
+                  <span>总实体数量</span>
+                  <span class="rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-semibold text-emerald-600 dark:bg-emerald-950/50 dark:text-emerald-400">+12%</span>
+                </div>
+                <div class="mt-3 text-2xl font-bold text-slate-900 dark:text-slate-100">1,280</div>
+              </div>
+              <div class="rounded-2xl border border-slate-200 bg-white p-5 shadow-xs dark:border-slate-800 dark:bg-slate-900">
+                <div class="flex items-center justify-between text-xs font-medium text-slate-500 dark:text-slate-400">
+                  <span>活跃受保护率</span>
+                  <span class="rounded-full bg-blue-50 px-2 py-0.5 text-[10px] font-semibold text-blue-600 dark:bg-blue-950/50 dark:text-blue-400">高</span>
+                </div>
+                <div class="mt-3 text-2xl font-bold text-slate-900 dark:text-slate-100">98.4%</div>
+              </div>
+              <div class="rounded-2xl border border-slate-200 bg-white p-5 shadow-xs dark:border-slate-800 dark:bg-slate-900">
+                <div class="flex items-center justify-between text-xs font-medium text-slate-500 dark:text-slate-400">
+                  <span>告警拦截次数</span>
+                  <span class="rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-semibold text-slate-600 dark:bg-slate-800 dark:text-slate-400">本周</span>
+                </div>
+                <div class="mt-3 text-2xl font-bold text-slate-900 dark:text-slate-100">0</div>
+              </div>
+            </div>
+
+            <!-- 数据列表卡片 -->
+            <div class="rounded-2xl border border-slate-200 bg-white shadow-xs dark:border-slate-800 dark:bg-slate-900 overflow-hidden">
+              <div class="flex items-center justify-between p-5 border-b border-slate-100 dark:border-slate-800">
+                <div class="flex items-center gap-3">
+                  <div class="relative">
+                    <i data-lucide="search" class="w-4 h-4 absolute left-3 top-2.5 text-slate-400"></i>
+                    <input 
+                      type="text" 
+                      placeholder="按关键字检索..." 
+                      class="rounded-xl border border-slate-200 bg-slate-50 pl-9 pr-3.5 py-1.5 text-xs outline-none focus:border-blue-500 focus:bg-white dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
+                    >
+                  </div>
+                </div>
+                <div class="text-xs text-slate-500">共 3 条记录</div>
+              </div>
+
+              <!-- 表格 -->
+              <table class="w-full text-left text-xs border-collapse">
+                <thead class="border-b border-slate-100 bg-slate-50/60 dark:border-slate-800 dark:bg-slate-800/40 text-slate-500">
+                  <tr>
+                    <th class="px-5 py-3 font-semibold">名称/标识</th>
+                    <th class="px-5 py-3 font-semibold">状态</th>
+                    <th class="px-5 py-3 font-semibold">更新时间</th>
+                    <th class="px-5 py-3 font-semibold text-right">操作</th>
+                  </tr>
+                </thead>
+                <tbody class="divide-y divide-slate-100 dark:divide-slate-800 text-slate-700 dark:text-slate-300">
+                  <tr class="hover:bg-slate-50 dark:hover:bg-slate-800/40">
+                    <td class="px-5 py-3.5 font-medium text-slate-900 dark:text-slate-100">示例条目 A (Production)</td>
+                    <td class="px-5 py-3.5">
+                      <span class="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 px-2 py-0.5 text-[11px] font-semibold text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-400">
+                        <span class="h-1.5 w-1.5 rounded-full bg-emerald-500"></span>
+                        正常
+                      </span>
+                    </td>
+                    <td class="px-5 py-3.5 text-slate-400">刚刚</td>
+                    <td class="px-5 py-3.5 text-right">
+                      <button @click="showToast('点击了编辑', 'info')" class="text-blue-600 hover:underline dark:text-blue-400">编辑</button>
+                    </td>
+                  </tr>
+                  <tr class="hover:bg-slate-50 dark:hover:bg-slate-800/40">
+                    <td class="px-5 py-3.5 font-medium text-slate-900 dark:text-slate-100">示例条目 B (Staging)</td>
+                    <td class="px-5 py-3.5">
+                      <span class="inline-flex items-center gap-1.5 rounded-full bg-amber-50 px-2 py-0.5 text-[11px] font-semibold text-amber-700 dark:bg-amber-950/50 dark:text-amber-400">
+                        <span class="h-1.5 w-1.5 rounded-full bg-amber-500"></span>
+                        审核中
+                      </span>
+                    </td>
+                    <td class="px-5 py-3.5 text-slate-400">10 分钟前</td>
+                    <td class="px-5 py-3.5 text-right">
+                      <button @click="showToast('点击了查看', 'info')" class="text-blue-600 hover:underline dark:text-blue-400">查看</button>
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </template>
+      </div>
+    </main>
+  </div>
+
+  <!-- ==========================================================================
+       通用弹窗模态框 (Modal Example)
+       ========================================================================== -->
+  <div 
+    x-show="showModal" 
+    x-transition:enter="animate-in fade-in duration-200"
+    x-transition:leave="animate-out fade-out duration-150"
+    class="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/60 p-4 backdrop-blur-xs"
+  >
+    <div 
+      @click.away="closeModal()"
+      x-transition:enter="animate-in zoom-in-95 duration-200"
+      x-transition:leave="animate-out zoom-out-95 duration-150"
+      class="w-full max-w-md rounded-2xl border border-slate-200 bg-white p-6 shadow-2xl dark:border-slate-800 dark:bg-slate-900"
+    >
+      <div class="flex items-center justify-between pb-4 border-b border-slate-100 dark:border-slate-800">
+        <h3 class="text-base font-semibold text-slate-900 dark:text-slate-100">新建业务条目</h3>
+        <button @click="closeModal()" class="rounded-lg p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-600 dark:hover:bg-slate-800">
+          <i data-lucide="x" class="w-4 h-4"></i>
+        </button>
+      </div>
+
+      <div class="py-4 space-y-4">
+        <div>
+          <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">条目名称</label>
+          <input 
+            type="text" 
+            x-model="formData.name"
+            placeholder="输入名称" 
+            class="w-full rounded-xl border border-slate-300 bg-white px-3.5 py-2 text-xs outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-100 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
+          >
+        </div>
+      </div>
+
+      <div class="flex items-center justify-end gap-3 pt-3 border-t border-slate-100 dark:border-slate-800">
+        <button 
+          @click="closeModal()" 
+          class="rounded-xl border border-slate-200 px-4 py-2 text-xs font-medium text-slate-700 hover:bg-slate-50 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800 transition"
+        >
+          取消
+        </button>
+        <button 
+          @click="saveFormData()" 
+          class="rounded-xl bg-blue-600 px-4 py-2 text-xs font-medium text-white hover:bg-blue-700 active:scale-98 transition shadow-xs"
+        >
+          保存提交
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Toast 消息容器 -->
+  <div class="fixed bottom-6 right-6 z-60 flex flex-col gap-2.5 pointer-events-none">
+    <template x-for="t in toasts" :key="t.id">
+      <div 
+        class="pointer-events-auto flex items-center gap-2.5 rounded-xl border border-slate-200 bg-white/95 px-4 py-3 text-xs font-medium text-slate-800 shadow-lg dark:border-slate-800 dark:bg-slate-900/95 dark:text-slate-100 backdrop-blur animate-in slide-in-from-bottom-5 fade-in duration-200"
+        :class="{
+          'border-l-4 border-l-emerald-500': t.type === 'success',
+          'border-l-4 border-l-rose-500': t.type === 'error',
+          'border-l-4 border-l-blue-500': t.type === 'info'
+        }"
+      >
+        <span x-text="t.message"></span>
+      </div>
+    </template>
+  </div>
+
+  <!-- Alpine.js 状态与交互逻辑 -->
+  <script>
+    function prototypeApp() {
+      return {
+        isDark: false,
+        mockState: 'normal', // 'normal' | 'empty' | 'loading' | 'error'
+        currentTab: 'dashboard',
+        showModal: false,
+        formData: { name: '' },
+        toasts: [],
+
+        initApp() {
+          this.refreshIcons();
+        },
+
+        refreshIcons() {
+          this.$nextTick(() => {
+            if (window.lucide) {
+              window.lucide.createIcons();
+            }
+          });
+        },
+
+        toggleTheme() {
+          this.isDark = !this.isDark;
+          if (this.isDark) {
+            document.documentElement.classList.add('dark');
+          } else {
+            document.documentElement.classList.remove('dark');
+          }
+          this.showToast(`已切换至${this.isDark ? '深色' : '浅色'}模式`, 'info');
+          this.refreshIcons();
+        },
+
+        handleMockStateChange() {
+          this.showToast(`沙盒状态切换为: ${this.mockState}`, 'info');
+          this.refreshIcons();
+        },
+
+        openModal() {
+          this.formData.name = '';
+          this.showModal = true;
+          this.refreshIcons();
+        },
+
+        closeModal() {
+          this.showModal = false;
+        },
+
+        saveFormData() {
+          if (!this.formData.name) {
+            this.showToast('请输入名称', 'error');
+            return;
+          }
+          this.closeModal();
+          this.showToast('数据创建成功！', 'success');
+        },
+
+        showToast(message, type = 'info') {
+          const id = Date.now() + Math.random();
+          this.toasts.push({ id, message, type });
+          setTimeout(() => {
+            this.toasts = this.toasts.filter(t => t.id !== id);
+          }, 3200);
+        }
+      }
+    }
+  </script>
+</body>
+</html>

@@ -2,6 +2,7 @@ import { BullModule } from '@nestjs/bullmq';
 import { Module } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { APP_GUARD } from '@nestjs/core';
+import { EventEmitterModule } from '@nestjs/event-emitter';
 import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
 import { I18nModule } from 'nestjs-i18n';
 import { AccessControlGuard } from '@/common/guards/access-control.guard';
@@ -12,6 +13,10 @@ import { CommandsModule } from './commands/commands.module';
 import { ExcelModule } from './common/excel/excel.module';
 import { IdempotencyModule } from './common/idempotency';
 import { MediaModule } from './common/media/media.module';
+import { MqttModule } from './common/mqtt/mqtt.module';
+import { RealtimeModule } from './common/realtime/realtime.module';
+import { LoadSheddingGuard, ResilienceModule } from './common/resilience';
+import { SearchModule } from './common/search/search.module';
 import { StorageModule } from './common/storage/storage.module';
 import { type EnvConfig, validateEnv } from './config/env.validation';
 import { createBullModuleConfig } from './database/bull.config';
@@ -19,7 +24,6 @@ import { DatabaseModule } from './database/drizzle/drizzle.module';
 import { RedisModule } from './database/redis.module';
 import { createI18nModuleConfig } from './i18n/i18n.config';
 import { JobsModule } from './jobs/jobs.module';
-import { RealtimeModule } from './realtime/realtime.module';
 import { LoggerModule } from './setup/logger/logger.module';
 import { WorkerModule } from './workers/worker.module';
 
@@ -28,6 +32,7 @@ const isWorkerEmbedded = ['true', '1', 'yes', 'on'].includes(String(process.env.
 @Module({
   imports: [
     ConfigModule.forRoot({ isGlobal: true, validate: validateEnv }),
+    EventEmitterModule.forRoot({ wildcard: true }),
     I18nModule.forRoot(createI18nModuleConfig()),
     LoggerModule,
     ThrottlerModule.forRootAsync({
@@ -48,8 +53,11 @@ const isWorkerEmbedded = ['true', '1', 'yes', 'on'].includes(String(process.env.
     RedisModule,
     StorageModule,
     MediaModule,
+    SearchModule,
     ExcelModule,
+    MqttModule,
     IdempotencyModule,
+    ResilienceModule,
     ...FEATURE_MODULES,
     RealtimeModule,
     JobsModule,
@@ -57,6 +65,7 @@ const isWorkerEmbedded = ['true', '1', 'yes', 'on'].includes(String(process.env.
     ...(isWorkerEmbedded ? [WorkerModule] : []),
   ],
   providers: [
+    { provide: APP_GUARD, useClass: LoadSheddingGuard },
     { provide: APP_GUARD, useClass: ThrottlerGuard },
     { provide: APP_GUARD, useClass: BetterAuthGuard },
     { provide: APP_GUARD, useClass: AdminPrefixGuard },

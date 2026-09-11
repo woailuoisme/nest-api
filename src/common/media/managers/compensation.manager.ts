@@ -40,17 +40,12 @@ export class MediaCompensationManager {
       await this.cancelVariantJobs(result, mediaJobs);
 
       // 仅回滚本次操作新创建的物理主文件和已就绪变体
-      const pathsToDelete: string[] = [];
-      if (result.isNew !== false) {
-        pathsToDelete.push(result.path);
-      }
-      if (result.variants) {
-        for (const v of Object.values(result.variants)) {
-          if (v.isNew !== false && v.status === 'ready') {
-            pathsToDelete.push(v.path);
-          }
-        }
-      }
+      const variantPaths = result.variants
+        ? Object.values(result.variants)
+            .filter((v) => v.isNew !== false && v.status === 'ready')
+            .map((v) => v.path)
+        : [];
+      const pathsToDelete = compact([result.isNew !== false ? result.path : null, ...variantPaths]);
       if (pathsToDelete.length > 0) {
         await this.deletePaths(disk, pathsToDelete);
       }

@@ -1,10 +1,4 @@
-import {
-  ClassSerializerInterceptor,
-  type PipeTransform,
-  type Type,
-  UnprocessableEntityException,
-  VersioningType,
-} from '@nestjs/common';
+import { type PipeTransform, type Type, UnprocessableEntityException, VersioningType } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { Reflector } from '@nestjs/core';
 import type { NestFastifyApplication } from '@nestjs/platform-fastify';
@@ -13,6 +7,7 @@ import type { ZodError } from 'zod';
 import { HttpExceptionFilter } from '@/common/filters/http-exception.filter';
 import { IdempotencyInterceptor } from '@/common/idempotency';
 import { MultipartInterceptor } from '@/common/interceptors/multipart.interceptor';
+import { TimeoutInterceptor } from '@/common/interceptors/timeout.interceptor';
 import { TransformInterceptor } from '@/common/interceptors/transform.interceptor';
 import type { EnvConfig } from '@/config/env.validation';
 import { PinoLoggerService } from '@/setup/logger/pino-logger.service';
@@ -46,14 +41,16 @@ export function setupGlobalMiddleware(app: NestFastifyApplication): void {
 
   app.useGlobalPipes(new CustomZodValidationPipe());
 
-  app.useGlobalFilters(new HttpExceptionFilter(app.get(ConfigService<EnvConfig, true>).get('APP_DEBUG')));
+  const config = app.get(ConfigService<EnvConfig, true>);
+  app.useGlobalFilters(new HttpExceptionFilter(config.get('APP_DEBUG')));
 
   const reflector = app.get(Reflector);
   const idempotencyInterceptor = app.get(IdempotencyInterceptor);
+  const httpTimeoutMs = config.get('HTTP_TIMEOUT_MS');
   app.useGlobalInterceptors(
+    new TimeoutInterceptor(reflector, httpTimeoutMs),
     idempotencyInterceptor,
     new TransformInterceptor(reflector),
-    new ClassSerializerInterceptor(reflector),
     new MultipartInterceptor(reflector),
   );
 }

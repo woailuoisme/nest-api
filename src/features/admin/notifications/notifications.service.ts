@@ -1,22 +1,23 @@
 import { Injectable } from '@nestjs/common';
+import { EventEmitter2 } from '@nestjs/event-emitter';
 import { v7 as uuidv7 } from 'uuid';
-import { RealtimeService } from '@/realtime/realtime.service';
 import type { NotificationPayload, SendNotificationDto } from './notifications.dto';
 
 /**
  * 业务通知领域服务：
- * 作为纯业务服务，将通知派发委托给底层统一 RealtimeService，实现 SSE 与 WebSocket 双通道精准同步投递。
+ * 作为纯业务服务，仅发布通知领域事件（notification.sent / notification.broadcast），
+ * 与下层具体的通信协议（WebSocket、SSE）完全解耦。
  */
 @Injectable()
 export class NotificationsService {
-  constructor(private readonly realtimeService: RealtimeService) {}
+  constructor(private readonly eventEmitter: EventEmitter2) {}
 
   /**
    * 向特定用户发送实时通知
    */
   sendToUser(userId: string, dto: Omit<SendNotificationDto, 'userId'>): NotificationPayload {
     const payload = this.createPayload(dto);
-    this.realtimeService.sendToUser(userId, 'notification', payload);
+    this.eventEmitter.emit('notification.sent', { userId, payload });
     return payload;
   }
 
@@ -25,7 +26,7 @@ export class NotificationsService {
    */
   broadcast(dto: Omit<SendNotificationDto, 'userId'>): NotificationPayload {
     const payload = this.createPayload(dto);
-    this.realtimeService.broadcast('notifications', 'notification', payload);
+    this.eventEmitter.emit('notification.broadcast', { payload });
     return payload;
   }
 

@@ -20,7 +20,14 @@ import {
   ApiSuccessResponse,
 } from '@/common/decorators/swagger-response.decorator';
 import { Idempotent } from '@/common/idempotency';
-import { ChangeRoleRequest, CreateUserRequest, FindUsersRequest, UpdateUserRequest, UserEntity } from './users.dto';
+import {
+  ChangeRoleRequest,
+  CreateUserRequest,
+  FindUsersRequest,
+  SearchUsersRequest,
+  UpdateUserRequest,
+  UserEntity,
+} from './users.dto';
 import { UsersService } from './users.service';
 
 /**
@@ -44,6 +51,15 @@ export class AdminUsersController {
   @ApiSuccessResponse(UserEntity, { status: 201, description: '用户创建成功' })
   create(@Body() dto: CreateUserRequest) {
     return this.usersService.create(dto);
+  }
+
+  /** 全文搜索用户（支持 Meilisearch 检索与角色过滤） */
+  @Get('search')
+  @Permissions(Permission.UserRead)
+  @ApiOperation({ summary: '搜索用户' })
+  @ApiPageResponse(UserEntity, { description: '搜索命中用户列表' })
+  search(@Query() query: SearchUsersRequest) {
+    return this.usersService.search(query);
   }
 
   /** 分页获取用户列表，支持按关键字和角色筛选 */

@@ -1,29 +1,43 @@
-import { createHash } from 'node:crypto';
-import * as argon2 from 'argon2';
+import { createHash, randomBytes, scrypt, timingSafeEqual } from 'node:crypto';
+import { promisify } from 'node:util';
 
-/** Laravel 风格哈希门面：使用 argon2id 进行密码哈希和验证 */
+const scryptAsync = promisify(scrypt);
+
+/** 盐长度（字节）：16 字节 (128-bit) */
+const SALT_LENGTH = 16;
+/** 派生密钥长度（字节）：64 字节 (512-bit) */
+const KEY_LENGTH = 64;
+
+/** Laravel 风格哈希门面：使用 Node.js 原生 scrypt 进行密码哈希和恒定时间安全验证 */
 export const Hash = {
   /**
-   * 使用 argon2id 对明文密码进行哈希
+   * 使用 scrypt 对明文密码进行安全哈希（内置动态盐）
    * @param plain - 明文密码
-   * @returns argon2id 哈希字符串（如 $argon2id$v=19$m=65536,t=3,p=4$...）
+   * @returns `saltHex:derivedKeyHex` 格式哈希字符串
    */
   async make(plain: string): Promise<string> {
-    return argon2.hash(plain, {
-      type: argon2.argon2id,
-      memoryCost: 65536, // 64 MiB — OWASP 推荐
-      timeCost: 3, // 3 次迭代
-      parallelism: 4, // 4 线程并行
-    });
+    const salt = randomBytes(SALT_LENGTH);
+    const derivedKey = (await scryptAsync(plain, salt, KEY_LENGTH)) as Buffer;
+    return `${salt.toString('hex')}:${derivedKey.toString('hex')}`;
   },
 
   /**
-   * 验证明文密码与 argon2id 哈希是否匹配
+   * 验证明文密码与已存储哈希是否匹配（恒定时间防时序攻击）
    * @param plain - 明文密码
-   * @param hash - 已存储的 argon2id 哈希
+   * @param hash - 已存储的 `saltHex:derivedKeyHex` 哈希
    */
   async check(plain: string, hash: string): Promise<boolean> {
-    return argon2.verify(hash, plain);
+    const [saltHex, keyHex] = hash.split(':');
+    if (!saltHex || !keyHex) {
+      return false;
+    }
+    const salt = Buffer.from(saltHex, 'hex');
+    const key = Buffer.from(keyHex, 'hex');
+    if (salt.length !== SALT_LENGTH || key.length !== KEY_LENGTH) {
+      return false;
+    }
+    const derivedKey = (await scryptAsync(plain, salt, KEY_LENGTH)) as Buffer;
+    return timingSafeEqual(key, derivedKey);
   },
 };
 
