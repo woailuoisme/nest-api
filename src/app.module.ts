@@ -13,8 +13,6 @@ import { CommandsModule } from './commands/commands.module';
 import { ExcelModule } from './common/excel/excel.module';
 import { IdempotencyModule } from './common/idempotency';
 import { MediaModule } from './common/media/media.module';
-import { MqttModule } from './common/mqtt/mqtt.module';
-import { RealtimeModule } from './common/realtime/realtime.module';
 import { LoadSheddingGuard, ResilienceModule } from './common/resilience';
 import { SearchModule } from './common/search/search.module';
 import { StorageModule } from './common/storage/storage.module';
@@ -23,7 +21,9 @@ import { createBullModuleConfig } from './database/bull.config';
 import { DatabaseModule } from './database/drizzle/drizzle.module';
 import { RedisModule } from './database/redis.module';
 import { createI18nModuleConfig } from './i18n/i18n.config';
+import { IotModule } from './iot/iot.module';
 import { JobsModule } from './jobs/jobs.module';
+import { RealtimeModule } from './realtime/realtime.module';
 import { LoggerModule } from './setup/logger/logger.module';
 import { WorkerModule } from './workers/worker.module';
 
@@ -55,7 +55,7 @@ const isWorkerEmbedded = ['true', '1', 'yes', 'on'].includes(String(process.env.
     MediaModule,
     SearchModule,
     ExcelModule,
-    MqttModule,
+    IotModule,
     IdempotencyModule,
     ResilienceModule,
     ...FEATURE_MODULES,

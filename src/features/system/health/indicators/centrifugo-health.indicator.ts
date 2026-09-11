@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { type HealthIndicatorResult, HealthIndicatorService } from '@nestjs/terminus';
-import { RealtimeService } from '@/common/realtime/realtime.service';
+import { RealtimeService } from '@/realtime';
 
 /**
  * Centrifugo 实时推送中枢健康检查指示器

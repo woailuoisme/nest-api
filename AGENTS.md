@@ -80,13 +80,6 @@ src/
 │   ├── decorators/ # @Roles() @Permissions() @CurrentUser() 等
 │   ├── excel/      # ExcelJS 封装
 │   ├── media/      # 媒体处理服务 (imgproxy JIT动态实时渲染/纯JS元数据/矢量二维码/命名策略)
-│   ├── mqtt/       # MQTT 5.0 客户端与指令/遥测总线 (@MqttSubscribe/@MqttPayload/RPC)
-│   ├── realtime/   # 统一实时发布核心 (对齐 Laravel Broadcasting)：Centrifugo 纯粹无状态实时发布中枢
-│   │   ├── channels/           # 模式匹配频道鉴权 (channel-manager.service.ts, presence.service.ts, @ChannelAuth)
-│   │   ├── transports/         # 传输层契约与 Centrifugo 适配器 (centrifugo.transport.ts)
-│   │   ├── realtime.dto.ts        # 信封结构 RealtimeEnvelope<T> 与客户端订阅传输对象
-│   │   ├── realtime.service.ts    # 领域发布服务 (向 Centrifugo HTTP API 安全派发事件)
-│   │   └── realtime.module.ts     # @Global 实时深模块 (纯发布引擎)
 │   ├── resilience/ # 熔断 (CircuitBreaker) / 优雅限流 / 过载保护 (LoadShedding) / 超时拦截
 │   ├── search/     # Laravel Scout 风格搜索引擎抽象 (Meilisearch / Noop / 队列异步同步)
 │   └── storage/    # 本地/S3 驱动 (drivers/local.driver.ts, s3.driver.ts)
@@ -94,9 +87,26 @@ src/
 ├── database/       # drizzle/ + bull.config.ts + redis.module.ts
 ├── commands/       # nest-commander CLI (route-list, db-seed, jwt-secret, search)
 ├── i18n/           # nestjs-i18n 配置
+├── iot/            # 统一工业物联网与设备通信中枢：MQTT 5.0 传输层 + 声明式订阅 + 遥测影子 + 同步 RPC
+│   ├── transports/     # MQTT 5.0 传输层契约与适配服务 (mqtt.service.ts, interfaces, utils)
+│   ├── decorators/     # 声明式注解 (@MqttSubscribe, @MqttPayload, @MqttParams, @MqttCtx)
+│   ├── explorer/       # MQTT 元数据与拓扑发现服务 (mqtt-explorer.service.ts)
+│   ├── services/       # 遥测影子与指令 RPC 服务 (iot-command.service.ts, iot-telemetry.service.ts)
+│   ├── dto/            # 统一设备 DTO 与影子实体 (iot.dto.ts)
+│   ├── iot.controller.ts # 模拟仿真与设备管理控制器 (/v1/iot/devices/*)
+│   ├── iot.module.ts   # @Global() 核心物联网模块 (并提供 MqttModule 兼容别名)
+│   └── index.ts        # 聚合导出
+├── realtime/       # 统一实时通信中枢 (对齐 Laravel Broadcasting)：Centrifugo 适配 + 频道鉴权 + 协议 Token + 领域事件
+│   ├── channels/       # 模式匹配频道鉴权与业务频道定义 (channel-manager.service.ts, @ChannelAuth 等)
+│   ├── transports/     # 传输层契约与 Centrifugo 适配器 (centrifugo.transport.ts)
+│   ├── dto/            # 统一请求与响应 DTO (realtime.dto.ts)
+│   ├── realtime.controller.ts # 多协议路由控制器 (/v1/realtime/*, /v1/websocket/*, /v1/sse/*)
+│   ├── realtime-events.service.ts # 领域事件监听与转发服务
+│   ├── realtime.service.ts # 统一领域发布服务
+│   └── realtime.module.ts # @Global 实时模块
 ├── features/       # 统一业务特性层 (client: 客户端业务特性 / system: 系统基础设施 / admin: 后台管理自包含领域)
 │   ├── client/     # 客户端特性模块 (auth, users)
-│   ├── system/     # 系统/基础设施业务模块 (health, iot, websocket, sse)
+│   ├── system/     # 系统/基础设施业务模块 (health)
 │   ├── admin/      # 后台管理领域模块 (dashboard, notifications, users, admin.module.ts)
 │   └── index.ts    # 聚合导出 FEATURE_MODULES
 ├── jobs/           # 异步任务与队列 (对齐 Laravel app/Jobs)：jobs 契约+生产者 / processor 消费者
@@ -145,9 +155,8 @@ tests/
 - **Admin / 前端 API 边界**: 后台管理领域（users / notifications / dashboard / admins / auth）的 controller + service + DTO 全部自包含于 `src/features/admin/`，由 `AdminModule` 聚合成唯一管理面入口并纳入 `FEATURE_MODULES`；准入由全局 `AdminPrefixGuard` 默认拒绝式强制（仅限合法管理角色 SUPER_ADMIN / ADMIN / OPERATOR，支持显式 `@Public()` 白名单豁免如 `/admin/auth/login`）。前端自助模块 `src/features/client/users/` 自包含自有 service 与 DTO（仅 `/users/me`、`/users/:id`、头像上传），与 admin 管理面零依赖；`AuthModule` 基于 Drizzle 客户端直接原子落库，与 `AdminUsersModule` 彻底解耦零依赖。**新增管理端点必须落在 `src/features/admin/`，严禁混入前端 controller**；`crud:generate` 产物支持 `--scope=admin|client` 分流，admin 产物自动落入该边界（`src/features/admin/<feature>/`）并自动注册进 `AdminModule`。
 - **扁平数据访问**：Service 层直接使用 `@InjectDb() private readonly db: DrizzleDB` 注入数据库客户端，通过 `this.db.query...` / `this.db.insert...` 进行类型安全操作，不设多余的 Repository 样板层。
 - **多写原子事务 (Transaction)**：涉及多表关联写入（如创建用户并绑定 OAuth 账户）或多步更新时，使用显式原生闭包 `await this.db.transaction(async (tx) => { ... })` 保证强一致性与自动回滚。
-- **实时通信与领域事件解耦 (Decoupled Realtime & Events)**：所有 WebSocket 与 SSE 实时通信逻辑集中且自包含于 `src/features/system/{websocket,sse}/`（对齐 IoT 模块形态），包括各协议特有的频道常量、`@ChannelAuth` 准入鉴权、连接/订阅 Token 签发（`/v1/{websocket,sse}/*`）与频道列表。普通业务模块（如 `admin/notifications`）严禁直接注入实时服务或定义特定协议的频道规则，统一通过 `@nestjs/event-emitter` 向事件总线发布纯净领域事件（如 `notification.sent`）；`WebsocketService` 与 `SseService` 监听领域事件并负责向 Centrifugo 下发推送，实现业务与通信协议的单向彻底解耦。
 - **全文搜索模型解耦 (Laravel Scout 模式)**：数据表/实体如需支持全文检索，统一在 `src/database/search/` 目录下实现 `Searchable` 契约（如 `user.searchable.ts`）并注册入全局索引映射；业务数据增删改时通过 `SearchSyncService` 发布队列异步同步任务，严禁在业务 Service 中直接硬编码调用底层搜索引擎 SDK（如 Meilisearch 客户端），保障驱动可插拔性（Meilisearch / Noop 空驱动降级）。
-- **工业物联网总线解耦 (Decoupled MQTT & Telemetry)**：物联网设备指令交互与遥测采集集中收敛于 `src/features/system/iot/` 与 `src/common/mqtt/`。监听统一使用声明式 `@MqttSubscribe(topic, options)` 装饰器；向物理/仿真设备下发控制指令统一调用 `MqttService.publish()` 或 RPC 方法，禁止业务逻辑直连外部 MQTT Broker 客户端。
+- **工业物联网总线解耦 (Decoupled MQTT & Telemetry)**：物联网设备指令交互与遥测采集集中收敛于顶级目录 `src/iot/`。传输层与业务服务一体化内聚，监听统一使用声明式 `@MqttSubscribe(topic, options)` 装饰器；向物理/仿真设备下发控制指令统一调用 `IotCommandService` 或 `MqttService.publish()` / RPC，禁止外部业务逻辑直连外部 MQTT Broker 客户端。
 - 全局基础设施 (Storage/Excel/Mail/Drizzle/Redis) 放 `src/common/` 或 `src/database/`，用 `@Global()` 导出。
 
 ### 环境变量

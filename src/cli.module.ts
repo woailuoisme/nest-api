@@ -5,8 +5,6 @@ import { EventEmitterModule } from '@nestjs/event-emitter';
 import { FEATURE_MODULES } from '@/features';
 import { CommandsModule } from './commands/commands.module';
 import { MediaModule } from './common/media/media.module';
-import { MqttModule } from './common/mqtt/mqtt.module';
-import { RealtimeModule } from './common/realtime/realtime.module';
 import { ResilienceModule } from './common/resilience';
 import { SearchModule } from './common/search/search.module';
 import { StorageModule } from './common/storage/storage.module';
@@ -14,7 +12,9 @@ import { validateEnv } from './config/env.validation';
 import { createBullModuleConfig } from './database/bull.config';
 import { DatabaseModule } from './database/drizzle/drizzle.module';
 import { RedisModule } from './database/redis.module';
+import { IotModule } from './iot/iot.module';
 import { JobsModule } from './jobs/jobs.module';
+import { RealtimeModule } from './realtime/realtime.module';
 
 @Module({
   imports: [
@@ -29,7 +29,7 @@ import { JobsModule } from './jobs/jobs.module';
     StorageModule,
     MediaModule,
     SearchModule,
-    MqttModule,
+    IotModule,
     ResilienceModule,
     ...FEATURE_MODULES,
     RealtimeModule,

@@ -46,7 +46,4 @@ export * from '@/features/admin/dashboard/dashboard.module';
 export * from '@/features/admin/notifications/notifications.module';
 export * from '@/features/admin/users/users.module';
 export * from '@/features/client/auth/auth.module';
-export * from '@/features/system/iot';
-export * from '@/features/system/sse';
 export * from '@/features/system/system.module';
-export * from '@/features/system/websocket';

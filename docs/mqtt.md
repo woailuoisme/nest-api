@@ -205,7 +205,7 @@ NestForge 利用 MQTT 5.0 的 `responseTopic` 与 `correlationData`，实现了�
 
 ## 4. NestForge 服务端实现规范 (Server Implementation)
 
-NestForge 在 `src/common/mqtt/` 与 `src/features/system/iot/` 中提供了现代化的声明式注解与高性能客户端。
+NestForge 在统一顶级模块 `src/iot/` 中提供了现代化的声明式注解、传输适配器与工业物联网服务。
 
 ### 4.1 核心依赖与连接配置
 
@@ -223,7 +223,7 @@ MQTT_URL="mqtts://iot_server_user:secret_token@broker.factory.internal:8883?clie
 ```typescript
 import { Injectable, Logger } from '@nestjs/common';
 import { EventEmitter2 } from '@nestjs/event-emitter';
-import { MqttSubscribe, MqttPayload, MqttParams, MqttCtx, type MqttMessageContext } from '@/common/mqtt';
+import { MqttSubscribe, MqttPayload, MqttParams, MqttCtx, type MqttMessageContext } from '@/iot';
 import { IOT_EVENTS } from '@/common/events';
 
 @Injectable()
@@ -297,7 +297,7 @@ export class IotTelemetryService {
 
 ```typescript
 import { Injectable } from '@nestjs/common';
-import { MqttService } from '@/common/mqtt';
+import { MqttService } from '@/iot';
 
 @Injectable()
 export class IotCommandService {
@@ -569,7 +569,7 @@ mosquitto_pub -h localhost -p 1883 \
 
 ### 7.2 NestForge 内置仿真端点
 
-系统提供了内置的模拟设备仿真接口（[IotController](file:///Users/seaside/Projects/nestjs/nest-drizzle-better-auth/src/features/system/iot/iot.controller.ts)），前端或联调人员可零硬件依赖闭环测试：
+系统提供了内置的模拟设备仿真接口（[IotController](file:///Users/seaside/Projects/nestjs/nest-drizzle-better-auth/src/iot/iot.controller.ts)），前端或联调人员可零硬件依赖闭环测试：
 
 ```bash
 # 1. 模拟工业遥测上报并触发数字影子与告警

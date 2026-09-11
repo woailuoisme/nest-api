@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { type HealthIndicatorResult, HealthIndicatorService } from '@nestjs/terminus';
-import { MqttService } from '@/common/mqtt/mqtt.service';
+import { MqttService } from '@/iot';
 
 /**
  * MQTT 5.0 物联网 Broker 健康检查指示器

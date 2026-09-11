@@ -1,4 +1,4 @@
-import type { DeviceTelemetryDto } from '@/features/system/iot/dto/iot.dto';
+import type { DeviceTelemetryDto } from '@/iot';
 
 export const IOT_EVENTS = {
   TELEMETRY_RECEIVED: 'iot.telemetry.received',

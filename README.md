@@ -52,10 +52,8 @@ NestForge 是一个现代、开箱即用的 NestJS 12 + Fastify 5 企业级后�
     ├── common/        # 全局基础设施与深模块
     │   ├── auth/          # Better Auth 客户端配置与插件装配
     │   ├── constants/     # 角色、权限、路由与系统级常量
-    │   ├── decorators/    # @CurrentUser, @Roles, @Permissions, @MqttSubscribe 等
+    │   ├── decorators/    # @CurrentUser, @Roles, @Permissions 等
     │   ├── media/         # imgproxy JIT 渲染、元数据检测与二维码生成
-    │   ├── mqtt/          # MQTT 5.0 客户端、主题路由匹配器与指令总线
-    │   ├── realtime/      # Centrifugo 纯粹无状态实时发布中枢 (ChannelManager / Presence)
     │   ├── resilience/    # 熔断器 (CircuitBreaker)、过载保护 (LoadShedding)、滑动窗口限流
     │   ├── search/        # Laravel Scout 风格搜索引擎驱动与服务
     │   └── storage/       # 本地 / S3 驱动与补偿性文件事务存储
@@ -65,10 +63,12 @@ NestForge 是一个现代、开箱即用的 NestJS 12 + Fastify 5 企业级后�
     │   ├── search/        # 模型全文索引定义 (*.searchable.ts)
     │   └── seeds/         # 模块化种子数据 (admin.seed.ts, user.seed.ts)
     ├── commands/      # Nest Commander CLI 命令 (route:list, db:seed, jwt:secret 等)
+    ├── realtime/      # 统一实时通信中枢 (Centrifugo 发布 + 模式鉴权 + 多协议路由 + 领域事件)
+    ├── iot/           # 统一工业物联网中枢 (MQTT 5.0 客户端 + 声明式订阅 + 遥测影子 + 同步 RPC)
     ├── features/      # 统一业务特性层 (按端与领域严格正交划分)
     │   ├── client/        # 客户端业务特性 (auth, users)
     │   ├── admin/         # 管理后台自包含领域 (dashboard, notifications, users)
-    │   └── system/        # 系统/基础设施服务 (health, iot, sse, websocket)
+    │   └── system/        # 系统/基础设施服务 (health)
     ├── jobs/          # 异步队列契约与消费者 (mail, media, search, token-cleanup)
     ├── schedules/     # 集中式定时任务调度声明
     ├── setup/         # Fastify 插件、中间件管道、原生 Pino 日志与 Scalar 文档挂载
