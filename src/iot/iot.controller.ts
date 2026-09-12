@@ -1,4 +1,4 @@
-import { Body, Controller, Get, HttpCode, HttpStatus, NotFoundException, Param, Post } from '@nestjs/common';
+import { Body, Controller, Get, HttpCode, HttpStatus, Param, Post } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { Role } from '@/common/constants/roles';
 import { Roles } from '@/common/decorators/roles.decorator';
@@ -32,11 +32,7 @@ export class IotController {
   @ApiOperation({ summary: '查询设备实时状态影子' })
   @ApiSuccessResponse(DeviceShadowEntity, { description: '设备影子状态' })
   getShadow(@Param('deviceId') deviceId: string): DeviceShadowEntity {
-    const shadow = this.telemetryService.getDeviceShadow(deviceId);
-    if (!shadow) {
-      throw new NotFoundException(`设备 [${deviceId}] 影子不存在或尚未上报遥测`);
-    }
-    return shadow;
+    return this.telemetryService.getDeviceShadowOrFail(deviceId);
   }
 
   @Post(':deviceId/command')

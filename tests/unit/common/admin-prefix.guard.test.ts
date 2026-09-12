@@ -85,5 +85,14 @@ describe('AdminPrefixGuard', () => {
       expect(guard.canActivate(createContext('/v1/admin/auth/login', undefined, true))).toBe(true);
       expect(guard.canActivate(createContext('/v2/admin/dashboard/metrics', AdminRole.SUPER_ADMIN))).toBe(true);
     });
+
+    it('携带多级前缀（/api/v1/admin/*, /api/admin/*）或重复斜杠时正确归一化并拦截', () => {
+      expect(guard.canActivate(createContext('/api/v1/admin/users', AdminRole.ADMIN))).toBe(true);
+      expect(guard.canActivate(createContext('/api/v1/admin/users', Role.USER))).toBe(false);
+      expect(guard.canActivate(createContext('/api/admin/users', AdminRole.ADMIN))).toBe(true);
+      expect(guard.canActivate(createContext('/api/admin/users', Role.USER))).toBe(false);
+      expect(guard.canActivate(createContext('//v1//admin/users', AdminRole.ADMIN))).toBe(true);
+      expect(guard.canActivate(createContext('//v1//admin/users', Role.USER))).toBe(false);
+    });
   });
 });

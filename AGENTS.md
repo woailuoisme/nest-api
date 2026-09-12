@@ -53,6 +53,8 @@ just docker-down  # 停止全栈 Docker 容器集群
 just realtime     # 启动 Centrifugo 独立实时服务容器
 just realtime-health # 检查 Centrifugo 健康状态
 just mail-build   # 编译 MJML 邮件模板为 Handlebars (.hbs)
+just i18n-gen     # 生成 i18n TypeScript 强类型定义
+just i18n-check   # 校验多语言翻译字典键值对称性
 
 # CLI (nest-commander)
 just cmd --help           # 查看所有命令 (直接跑 TS 源码)
@@ -79,6 +81,7 @@ src/
 │   ├── constants/  # PATHS、NETWORK、Role、Permission 等常量
 │   ├── decorators/ # @Roles() @Permissions() @CurrentUser() 等
 │   ├── excel/      # ExcelJS 封装
+│   ├── mail/       # 统一邮件服务 (@nestjs-modules/mailer + HandlebarsAdapter + MJML 模板)
 │   ├── media/      # 媒体处理服务 (imgproxy JIT动态实时渲染/纯JS元数据/矢量二维码/命名策略)
 │   ├── resilience/ # 熔断 (CircuitBreaker) / 优雅限流 / 过载保护 (LoadShedding) / 超时拦截
 │   ├── search/     # Laravel Scout 风格搜索引擎抽象 (Meilisearch / Noop / 队列异步同步)

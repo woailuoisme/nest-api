@@ -1,20 +1,18 @@
 import { Injectable } from '@nestjs/common';
 import { type HealthIndicatorResult, HealthIndicatorService } from '@nestjs/terminus';
-import { CircuitBreakerService, type CircuitBreakerStats } from '@/common/resilience';
+import { CircuitBreakerStatus, CircuitBreakerStrategy } from '@/common/resilience';
+
+export type CircuitBreakerHealthStat = ReturnType<typeof CircuitBreakerStrategy.getStats>[number];
 
 @Injectable()
 export class CircuitBreakerHealthIndicator {
-  constructor(
-    private readonly circuitBreakerService: CircuitBreakerService,
-    private readonly healthIndicatorService: HealthIndicatorService,
-  ) {}
+  constructor(private readonly healthIndicatorService: HealthIndicatorService) {}
 
   isHealthy(key = 'circuit_breakers'): HealthIndicatorResult {
     const indicator = this.healthIndicatorService.check(key);
-    const rawStats = this.circuitBreakerService.getStats();
-    const stats = (Array.isArray(rawStats) ? rawStats : rawStats ? [rawStats] : []) as CircuitBreakerStats[];
+    const stats = CircuitBreakerStrategy.getStats();
 
-    const openBreakers = stats.filter((s) => s.state === 'OPEN' || s.state === 'ISOLATED');
+    const openBreakers = stats.filter((s) => s.status === CircuitBreakerStatus.Open);
 
     if (openBreakers.length > 0) {
       return indicator.down({

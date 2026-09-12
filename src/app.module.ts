@@ -10,8 +10,10 @@ import { AdminPrefixGuard } from '@/common/guards/admin-prefix.guard';
 import { BetterAuthGuard } from '@/common/guards/better-auth.guard';
 import { FEATURE_MODULES } from '@/features';
 import { CommandsModule } from './commands/commands.module';
+import { CacheModule } from './common/cache';
 import { ExcelModule } from './common/excel/excel.module';
 import { IdempotencyModule } from './common/idempotency';
+import { MailModule } from './common/mail';
 import { MediaModule } from './common/media/media.module';
 import { LoadSheddingGuard, ResilienceModule } from './common/resilience';
 import { SearchModule } from './common/search/search.module';
@@ -51,7 +53,9 @@ const isWorkerEmbedded = ['true', '1', 'yes', 'on'].includes(String(process.env.
     }),
     DatabaseModule,
     RedisModule,
+    CacheModule,
     StorageModule,
+    MailModule,
     MediaModule,
     SearchModule,
     ExcelModule,

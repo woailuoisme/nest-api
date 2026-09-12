@@ -10,6 +10,7 @@ import { MqttHealthIndicator } from '@/features/system/health/indicators/mqtt-he
 import { RedisHealthIndicator } from '@/features/system/health/indicators/redis-health.indicator';
 import { SearchHealthIndicator } from '@/features/system/health/indicators/search-health.indicator';
 import { StorageHealthIndicator } from '@/features/system/health/indicators/storage-health.indicator';
+import { setAppShuttingDown } from '@/setup/lifecycle';
 
 describe('HealthController (e2e)', () => {
   let app: NestFastifyApplication;
@@ -79,6 +80,7 @@ describe('HealthController (e2e)', () => {
     expect(body.info).toHaveProperty('search');
     expect(body.info).toHaveProperty('imgproxy');
     expect(body.info).toHaveProperty('mqtt');
+    expect(body.info).toHaveProperty('shutdown');
   });
 
   it('/health/liveness (GET)', async () => {
@@ -109,5 +111,30 @@ describe('HealthController (e2e)', () => {
     expect(body.info).toHaveProperty('search');
     expect(body.info).toHaveProperty('imgproxy');
     expect(body.info).toHaveProperty('mqtt');
+    expect(body.info).toHaveProperty('shutdown');
+  });
+
+  it('/health/readiness 在应用优雅停机期间应返回 503 Service Unavailable 并指示 shutdown down，而 liveness 保持 200', async () => {
+    setAppShuttingDown(true);
+    try {
+      const response = await app.inject({
+        method: 'GET',
+        url: '/health/readiness',
+      });
+      expect(response.statusCode).toBe(503);
+      const body = JSON.parse(response.payload);
+      expect(body.status).toBe('error');
+      expect(body.error).toHaveProperty('shutdown');
+      expect(body.error.shutdown.status).toBe('down');
+
+      // 验证在停机期间 Liveness 依然保持健康 (200 OK)，防止 K8s 强杀 Pod
+      const livenessResponse = await app.inject({
+        method: 'GET',
+        url: '/health/liveness',
+      });
+      expect(livenessResponse.statusCode).toBe(200);
+    } finally {
+      setAppShuttingDown(false);
+    }
   });
 });

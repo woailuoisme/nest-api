@@ -3,6 +3,7 @@ import { createInterface } from 'node:readline';
 import { compact } from 'es-toolkit';
 import {
   ALL_LOG_LEVELS,
+  EVENT_LOOP_YIELD_INTERVAL,
   formatBytes,
   LEVEL_MAP,
   LOG_CHUNK_SIZE,
@@ -10,6 +11,7 @@ import {
   type LogEntriesResult,
   type LogFileStatCache,
   MAX_LOG_LINE_BYTES,
+  MAX_SEARCH_SCAN_BYTES,
   MAX_STAT_CACHE_ENTRIES,
   type ParsedLogEntry,
 } from '../constants';
@@ -198,11 +200,23 @@ export async function readLogEntriesReverse(
   let position = stats.size;
   let leftoverBytes: Buffer = Buffer.alloc(0);
   let virtualLineIndex = 0;
+  let totalBytesScanned = 0;
+  let chunkCount = 0;
+  const isCustomFiltered = Boolean(
+    options.searchKeyword || (options.filterLevels && options.filterLevels.length < ALL_LOG_LEVELS.length),
+  );
 
   try {
     while (position > 0) {
+      // 工业级防霸占 Event Loop：每扫描 16 个 block (1MB) 让出一次调度
+      chunkCount++;
+      if (chunkCount % EVENT_LOOP_YIELD_INTERVAL === 0) {
+        await new Promise<void>((resolve) => setImmediate(resolve));
+      }
+
       const readLength = Math.min(LOG_CHUNK_SIZE, position);
       position -= readLength;
+      totalBytesScanned += readLength;
       await fd.read(chunkBuffer, 0, readLength, position);
 
       const rawChunkSlice = chunkBuffer.subarray(0, readLength);
@@ -270,12 +284,14 @@ export async function readLogEntriesReverse(
 
         items.push(entry);
 
-        // 无自定义全文搜索且未收窄级别时，总数由 statCache 保证，达到 limit 即可秒级早退
-        if (
-          !options.searchKeyword &&
-          (!options.filterLevels || options.filterLevels.length === ALL_LOG_LEVELS.length)
-        ) {
+        // 1. 无自定义全文搜索且未收窄级别时，总数由 statCache 保证，达到 limit 即可秒级早退
+        if (!isCustomFiltered) {
           if (items.length >= options.limit) {
+            return { items, totalMatches: items.length, scannedAll: false };
+          }
+        } else {
+          // 2. 自定义搜索/收窄级别：当扫描字节超出 100MB 熔断阈值且已收集到足够当前页条目时，安全熔断早退
+          if (totalBytesScanned >= MAX_SEARCH_SCAN_BYTES && items.length >= options.limit) {
             return { items, totalMatches: items.length, scannedAll: false };
           }
         }

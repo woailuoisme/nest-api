@@ -1,6 +1,7 @@
 import type { IncomingMessage } from 'node:http';
 import { join } from 'node:path';
 import { Writable } from 'node:stream';
+import { isSpanContextValid, trace } from '@opentelemetry/api';
 import pino from 'pino';
 import pretty from 'pino-pretty';
 import pinoRoll from 'pino-roll';
@@ -67,6 +68,25 @@ export function redactUrl(url?: string): string {
 }
 
 /**
+ * OpenTelemetry Trace-to-Log 混入：
+ * 若当前执行上下文存在合法有效的活跃 Span，则自动将 trace_id 和 span_id 混入日志对象，实现 Tempo / Loki 联动。
+ */
+export function traceMixin(): Record<string, string> {
+  const span = trace.getActiveSpan();
+  if (!span) {
+    return {};
+  }
+  const spanContext = span.spanContext();
+  if (!isSpanContextValid(spanContext)) {
+    return {};
+  }
+  return {
+    trace_id: spanContext.traceId,
+    span_id: spanContext.spanId,
+  };
+}
+
+/**
  * 包装目标写入流，过滤掉日常健康的 HTTP 访问日志（2xx/3xx），
  * 自动保留 4xx/5xx 异常访问日志与所有应用层业务/系统日志写入按日滚动文件。
  */
@@ -116,6 +136,7 @@ export async function createPinoLogger(customDestination?: Writable): Promise<pi
       {
         level: 'debug',
         redact: { paths: REDACT_PATHS, censor: '[redacted]' },
+        mixin: traceMixin,
       },
       customDestination,
     );
@@ -156,6 +177,7 @@ export async function createPinoLogger(customDestination?: Writable): Promise<pi
         paths: REDACT_PATHS,
         censor: '[redacted]',
       },
+      mixin: traceMixin,
     },
     pino.multistream(streams),
   );

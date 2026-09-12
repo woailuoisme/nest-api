@@ -9,6 +9,12 @@ export const LOG_CHUNK_SIZE = 64 * 1024;
 /** 单行日志最大跨块累积字节上限 (5MB 熔断保护，防止异常大对象爆内存) */
 export const MAX_LOG_LINE_BYTES = 5 * 1024 * 1024;
 
+/** 带搜索词或筛选级别时倒序扫描的最大扫描字节上限 (100MB 工业级防卡死熔断) */
+export const MAX_SEARCH_SCAN_BYTES = 100 * 1024 * 1024;
+
+/** 连续扫描块数出让 Event Loop 调度间隔 (16 块 = 1MB，防止阻塞主事件循环) */
+export const EVENT_LOOP_YIELD_INTERVAL = 16;
+
 /** 文件统计与行数 LRU 缓存最大保留条目数 */
 export const MAX_STAT_CACHE_ENTRIES = 100;
 

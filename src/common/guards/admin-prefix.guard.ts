@@ -22,7 +22,7 @@ export class AdminPrefixGuard implements CanActivate {
   canActivate(context: ExecutionContext): boolean {
     const request = context.switchToHttp().getRequest();
     const rawUrl = String(request.url ?? '').split('?')[0];
-    const path = rawUrl.replace(/^\/v\d+/, '');
+    const path = rawUrl.replace(/\/+/g, '/').replace(/^\/(?:api\/)?(?:v\d+\/)?/, '/');
 
     if (path !== ADMIN_PREFIX && !path.startsWith(`${ADMIN_PREFIX}/`)) {
       return true;

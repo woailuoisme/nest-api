@@ -88,5 +88,12 @@ describe('UsersController', () => {
         '未接收到文件',
       );
     });
+
+    it('应配置细粒度 @Throttle 限流元数据以防御高开销文件上传攻击', () => {
+      const limit = Reflect.getMetadata('THROTTLER:LIMITdefault', UsersController.prototype.uploadAvatar);
+      const ttl = Reflect.getMetadata('THROTTLER:TTLdefault', UsersController.prototype.uploadAvatar);
+      expect(limit).toBe(10);
+      expect(ttl).toBe(60000);
+    });
   });
 });

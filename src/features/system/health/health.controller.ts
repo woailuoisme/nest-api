@@ -10,6 +10,7 @@ import { ImgproxyHealthIndicator } from './indicators/imgproxy-health.indicator'
 import { MqttHealthIndicator } from './indicators/mqtt-health.indicator';
 import { RedisHealthIndicator } from './indicators/redis-health.indicator';
 import { SearchHealthIndicator } from './indicators/search-health.indicator';
+import { ShutdownHealthIndicator } from './indicators/shutdown-health.indicator';
 import { StorageHealthIndicator } from './indicators/storage-health.indicator';
 
 /** V8 堆内存上限 (500MB)：监控 JavaScript 堆对象分配，防范 JS 层面内存泄漏 */
@@ -36,6 +37,7 @@ export class HealthController {
     private readonly searchIndicator: SearchHealthIndicator,
     private readonly imgproxyIndicator: ImgproxyHealthIndicator,
     private readonly mqttIndicator: MqttHealthIndicator,
+    private readonly shutdownIndicator: ShutdownHealthIndicator,
     private readonly memory: MemoryHealthIndicator,
     private readonly disk: DiskHealthIndicator,
   ) {}
@@ -50,6 +52,7 @@ export class HealthController {
       () => this.searchIndicator.isHealthy('search'),
       () => this.imgproxyIndicator.isHealthy('imgproxy'),
       () => this.mqttIndicator.isHealthy('mqtt'),
+      () => this.shutdownIndicator.isHealthy('shutdown'),
     ];
   }
 

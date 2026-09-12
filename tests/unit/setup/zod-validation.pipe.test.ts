@@ -48,8 +48,18 @@ describe('CustomZodValidationPipe', () => {
     expect(caughtError).toBeInstanceOf(UnprocessableEntityException);
     expect(caughtError?.getStatus()).toBe(422);
 
-    const response = caughtError?.getResponse() as { message: string; errors: Record<string, string[]> };
+    const response = caughtError?.getResponse() as {
+      code?: string;
+      message: string;
+      fields?: Record<string, string[]>;
+      errors: Record<string, string[]>;
+    };
+    expect(response.code).toBe('VALIDATION_FAILED');
     expect(response.message).toBe('Validation failed');
+    expect(response.fields).toBeDefined();
+    expect(response.fields?.name).toBeDefined();
+    expect(response.fields?.email).toBeDefined();
+    expect(response.fields?.age).toBeDefined();
     expect(response.errors).toBeDefined();
     expect(response.errors.name).toBeDefined();
     expect(response.errors.email).toBeDefined();

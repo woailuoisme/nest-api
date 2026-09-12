@@ -11,15 +11,21 @@ import { auth } from '@/common/auth/better-auth';
 import { PATHS } from '@/common/constants/app.constants';
 import { RequestContext } from '@/common/context';
 import { extractIp, PinoLoggerService } from '@/setup/logger';
+import { isAppShuttingDown } from './lifecycle';
 
 /** 仅暴露所需 Hook 与路由 API 的最小 Fastify 接口（规避 platform-fastify 嵌套 fastify 类型差异） */
 type FastifyLike = {
-  addHook: (
-    event: 'onRequest' | 'onResponse',
+  addHook(
+    event: 'onRequest',
     hook:
       | ((request: FastifyRequest, reply: FastifyReply) => Promise<void> | void)
       | ((request: FastifyRequest, reply: FastifyReply, done: (err?: Error) => void) => void),
-  ) => void;
+  ): void;
+  addHook(event: 'onResponse', hook: (request: FastifyRequest, reply: FastifyReply) => Promise<void> | void): void;
+  addHook(
+    event: 'onSend',
+    hook: (request: FastifyRequest, reply: FastifyReply, payload: unknown) => Promise<unknown> | unknown,
+  ): void;
   get: (url: string, handler: (request: FastifyRequest, reply: FastifyReply) => void | Promise<void>) => void;
 };
 
@@ -70,7 +76,15 @@ export async function registerFastifyPlugins(app: NestFastifyApplication): Promi
     });
   });
 
-  // 3. 原生 204 No Content 拦截 /favicon.ico，彻底消除 404 告警与磁盘 I/O，24 小时浏览器缓存
+  // 3. 优雅停机长连接协商 Hook（停机期间向在途响应注入 Connection: close，通知客户端不再复用 Socket）
+  fastify.addHook('onSend', async (_request: FastifyRequest, reply: FastifyReply, payload: unknown) => {
+    if (isAppShuttingDown()) {
+      reply.header('connection', 'close');
+    }
+    return payload;
+  });
+
+  // 4. 原生 204 No Content 拦截 /favicon.ico，彻底消除 404 告警与磁盘 I/O，24 小时浏览器缓存
   fastify.get('/favicon.ico', (_request, reply) => {
     reply.header('Cache-Control', 'public, max-age=86400, immutable');
     reply.code(204).send();

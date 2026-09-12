@@ -2,6 +2,7 @@ import { BullModule } from '@nestjs/bullmq';
 import { Module } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { DEMO_QUEUE, MAIL_QUEUE, MEDIA_QUEUE, SEARCH_QUEUE, TOKEN_CLEANUP_QUEUE } from '@/common/constants/queues';
+import { MailModule } from '@/common/mail';
 import { MediaModule } from '@/common/media/media.module';
 import { SearchModule } from '@/common/search/search.module';
 import { StorageModule } from '@/common/storage/storage.module';
@@ -9,9 +10,7 @@ import { validateEnv } from '@/config/env.validation';
 import { createBullModuleConfig } from '@/database/bull.config';
 import { DatabaseModule } from '@/database/drizzle/drizzle.module';
 import { DemoProcessor } from '@/jobs/demo/demo.processor';
-import { MailHandlers } from '@/jobs/mail/mail.handlers';
 import { MailProcessor } from '@/jobs/mail/mail.processor';
-import { MailTemplateService } from '@/jobs/mail/mail.template.service';
 import { MediaProcessor } from '@/jobs/media/media.processor';
 import { SearchProcessor } from '@/jobs/search/search.processor';
 import { TokenCleanupProcessor } from '@/jobs/token-cleanup/token-cleanup.processor';
@@ -39,18 +38,11 @@ import { LoggerModule } from '@/setup/logger/logger.module';
     ),
     DatabaseModule,
     StorageModule,
+    MailModule,
     MediaModule,
     SearchModule,
     SchedulesModule,
   ],
-  providers: [
-    MailTemplateService,
-    MailHandlers,
-    MailProcessor,
-    TokenCleanupProcessor,
-    DemoProcessor,
-    MediaProcessor,
-    SearchProcessor,
-  ],
+  providers: [MailProcessor, TokenCleanupProcessor, DemoProcessor, MediaProcessor, SearchProcessor],
 })
 export class WorkerModule {}

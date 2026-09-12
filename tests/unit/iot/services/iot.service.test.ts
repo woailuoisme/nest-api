@@ -133,6 +133,12 @@ describe('工业物联网特性服务与控制器 (IoT Feature)', () => {
       expect(telemetryService.getDeviceShadow('non-existent')).toBeNull();
     });
 
+    it('getDeviceShadowOrFail 查询不存在设备应抛出 NotFoundException，存在时应返回影子', () => {
+      expect(() => telemetryService.getDeviceShadowOrFail('non-existent')).toThrow(NotFoundException);
+      telemetryService.recordTelemetry('tenant-1', 'plc-1', sampleTelemetry);
+      expect(telemetryService.getDeviceShadowOrFail('plc-1').deviceId).toBe('plc-1');
+    });
+
     it('listDeviceShadows 应返回所有活跃设备影子列表', () => {
       telemetryService.recordTelemetry('tenant-1', 'plc-1', sampleTelemetry);
       telemetryService.recordTelemetry('tenant-1', 'plc-2', sampleTelemetry);

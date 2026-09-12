@@ -13,7 +13,7 @@ default:
 
 # 启动开发服务器（单进程内嵌 Worker，watch 模式）
 dev:
-    WORKER_EMBEDDED=true nest start --watch
+    kill -9 $(lsof -ti:${PORT:-4300} 2>/dev/null) 2>/dev/null || true; WORKER_EMBEDDED=true nest start --watch
 
 # 并发启动应用与 Worker（两个独立进程）
 dev-all:
@@ -29,26 +29,27 @@ build:
 
 # 启动生产构建
 start:
-    node dist/main.js
+    node --import ./dist/instrumentation.js dist/main.js
 
 # 仅启动 Worker（生产构建）
 start-worker:
-    node dist/workers/worker.main.js
+    node --import ./dist/instrumentation.js dist/workers/worker.main.js
 
 # 启动应用（内嵌 Worker，单进程）
 start-embedded:
-    WORKER_EMBEDDED=true node dist/main.js
+    WORKER_EMBEDDED=true node --import ./dist/instrumentation.js dist/main.js
 
 # 并发启动应用与 Worker（两个独立进程）
 start-all:
-    concurrently -k -n app,worker -c bgBlue.bold,bgMagenta.bold "node dist/main.js" "node dist/workers/worker.main.js"
+    concurrently -k -n app,worker -c bgBlue.bold,bgMagenta.bold "node --import ./dist/instrumentation.js dist/main.js" "node --import ./dist/instrumentation.js dist/workers/worker.main.js"
+
 
 # ----------------------------------------
 # 质量与测试
 # ----------------------------------------
 
-# 检查代码格式、类型与 AST 架构规则
-check: fix fmt type sg-lint sg-test
+# 检查代码格式、类型、AST 架构规则与多语言字典对称性
+check: fix fmt type sg-lint sg-test i18n-check
 
 # TypeScript 类型检查
 type:
@@ -145,6 +146,19 @@ k6-docker scenario='smoke' *args='':
 # 将 MJML 邮件模板编译为 Handlebars (.hbs)
 mail-build:
     bash scripts/build-mail.sh
+
+# ----------------------------------------
+# 国际化 / i18n (nestjs-i18n)
+# ----------------------------------------
+
+# 生成 i18n TypeScript 强类型定义 (I18nTranslations / I18nPath)
+i18n-gen:
+    bun x nestjs-i18n -p src/i18n/translations -o src/i18n/i18n.generated.ts
+
+# 校验各语言翻译字典的键值对称性与完整性
+i18n-check:
+    bun x nestjs-i18n check -p src/i18n/translations
+
 
 # ----------------------------------------
 # Drizzle / 数据库

@@ -1,19 +1,41 @@
 import { Global, Module } from '@nestjs/common';
-import { CircuitBreakerService } from './circuit-breaker/circuit-breaker.service';
-import { ResilienceRegistryService } from './circuit-breaker/resilience-registry.service';
-import { LoadSheddingGuard } from './load-shedding/load-shedding.guard';
-import { SystemLoadSampler } from './load-shedding/system-load-sampler';
+import { LoadSheddingGuard } from './guards/index.js';
+import { ResilienceEventBus } from './resilience.event-bus.js';
+import { ResilienceFactory } from './resilience.factory.js';
+import { ResilienceMetricsRegistry } from './resilience.metrics.js';
+import { ConfigurableModuleClass } from './resilience.module-definition.js';
+import { ResilienceService } from './resilience.service.js';
+import { ResilienceStatesManager } from './resilience.states-manager.js';
+import { SystemLoadSampler } from './samplers/index.js';
 
-/**
- * 全局弹性容错与自适应治理模块 (ResilienceModule)
- *
- * 聚合系统核心韧性能力：
- * 1. 入站自适应负载脱落 (Load Shedding)：防 Event Loop 阻塞与堆内存 OOM；
- * 2. 出站弹性治理管道 (Cockatiel Pipeline)：断路器、重试、仓壁与超时，防下游外部依赖级联雪崩。
- */
+const eventBusProvider = {
+  provide: ResilienceEventBus,
+  useValue: ResilienceEventBus.getInstance(),
+};
+
+const metricsRegistryProvider = {
+  provide: ResilienceMetricsRegistry,
+  useValue: ResilienceMetricsRegistry.getInstance(),
+};
+
 @Global()
 @Module({
-  providers: [SystemLoadSampler, LoadSheddingGuard, ResilienceRegistryService, CircuitBreakerService],
-  exports: [SystemLoadSampler, LoadSheddingGuard, ResilienceRegistryService, CircuitBreakerService],
+  providers: [
+    eventBusProvider,
+    metricsRegistryProvider,
+    ResilienceStatesManager,
+    ResilienceFactory,
+    ResilienceService,
+    SystemLoadSampler,
+    LoadSheddingGuard,
+  ],
+  exports: [
+    eventBusProvider,
+    metricsRegistryProvider,
+    ResilienceFactory,
+    ResilienceService,
+    SystemLoadSampler,
+    LoadSheddingGuard,
+  ],
 })
-export class ResilienceModule {}
+export class ResilienceModule extends ConfigurableModuleClass {}

@@ -27,7 +27,9 @@ export const CustomZodValidationPipe: Type<PipeTransform> = createZodValidationP
       }
     }
     return new UnprocessableEntityException({
+      code: 'VALIDATION_FAILED',
       message: 'Validation failed',
+      fields: formattedErrors,
       errors: formattedErrors,
     });
   },

@@ -53,6 +53,10 @@ const envSchema = z
     THROTTLE_LIMIT: z.coerce.number().default(100),
     /** 全局 HTTP 请求超时时间（毫秒），默认 15000ms（15 秒） */
     HTTP_TIMEOUT_MS: z.coerce.number().positive().default(15_000),
+    /** 优雅停机硬超时保底时间（毫秒），默认 10000ms（10 秒） */
+    SHUTDOWN_TIMEOUT_MS: z.coerce.number().int().positive().default(10_000),
+    /** 优雅停机下线缓冲等待时间（毫秒），收到 SIGTERM 后等待网关/K8s 摘流，默认 0ms */
+    SHUTDOWN_DRAIN_DELAY_MS: z.coerce.number().int().nonnegative().default(0),
     // 存储驱动模式：若未配置，当存在 STORAGE_S3_URL 时自动推导为 's3'，否则默认为 'local'
     STORAGE_DRIVER: z.enum(['local', 's3']).optional(),
     STORAGE_LOCAL_ROOT: z.string().default(`./${PATHS.STORAGE_UPLOADS}`),
@@ -89,6 +93,12 @@ const envSchema = z
     MQTT_URL: z.string().optional(),
     // 是否启用工业设备模拟响应器（Simulated PLC Agent）。默认 false
     IOT_SIMULATED_DEVICE_ENABLED: envBoolean(false),
+    // 是否启用 OpenTelemetry 分布式链路追踪。默认 false
+    OTEL_ENABLED: envBoolean(false),
+    // OpenTelemetry 服务名称。默认 nest-forge
+    OTEL_SERVICE_NAME: z.string().default('nest-forge'),
+    // OpenTelemetry OTLP 导出端点 (HTTP)。默认 http://localhost:4318/v1/traces (对接 Tempo)
+    OTEL_EXPORTER_OTLP_ENDPOINT: z.string().default('http://localhost:4318/v1/traces'),
   })
   .transform((data) => ({
     ...data,

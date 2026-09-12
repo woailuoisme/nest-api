@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import { createFastifyAdapter } from '@/setup/adapter';
-import { setupShutdownHooks } from '@/setup/lifecycle';
+import { isAppShuttingDown, setAppShuttingDown, setupShutdownHooks, setupWorkerShutdownHooks } from '@/setup/lifecycle';
 import { PinoLoggerService } from '@/setup/logger';
 
 describe('Bootstrap Pipeline & Lifecycle Helpers', () => {
@@ -10,13 +10,39 @@ describe('Bootstrap Pipeline & Lifecycle Helpers', () => {
     expect(typeof adapter.getInstance).toBe('function');
   });
 
-  it('setupShutdownHooks 应调用 app.enableShutdownHooks', () => {
+  it('isAppShuttingDown 和 setAppShuttingDown 应正确响应状态变化', () => {
+    setAppShuttingDown(false);
+    expect(isAppShuttingDown()).toBe(false);
+    setAppShuttingDown(true);
+    expect(isAppShuttingDown()).toBe(true);
+    setAppShuttingDown(false);
+  });
+
+  it('setupShutdownHooks 应注册 SIGTERM 和 SIGINT 信号监听', () => {
+    const processOnceSpy = vi.spyOn(process, 'once');
     const mockApp = {
-      enableShutdownHooks: vi.fn(),
+      get: vi.fn().mockReturnValue({ get: vi.fn() }),
+      getHttpServer: vi.fn().mockReturnValue({ closeIdleConnections: vi.fn() }),
+      close: vi.fn().mockResolvedValue(undefined),
     } as any;
 
     setupShutdownHooks(mockApp);
-    expect(mockApp.enableShutdownHooks).toHaveBeenCalled();
+    expect(processOnceSpy).toHaveBeenCalledWith('SIGTERM', expect.any(Function));
+    expect(processOnceSpy).toHaveBeenCalledWith('SIGINT', expect.any(Function));
+    processOnceSpy.mockRestore();
+  });
+
+  it('setupWorkerShutdownHooks 应注册 SIGTERM 和 SIGINT 信号监听', () => {
+    const processOnceSpy = vi.spyOn(process, 'once');
+    const mockApp = {
+      get: vi.fn().mockReturnValue({ get: vi.fn() }),
+      close: vi.fn().mockResolvedValue(undefined),
+    } as any;
+
+    setupWorkerShutdownHooks(mockApp);
+    expect(processOnceSpy).toHaveBeenCalledWith('SIGTERM', expect.any(Function));
+    expect(processOnceSpy).toHaveBeenCalledWith('SIGINT', expect.any(Function));
+    processOnceSpy.mockRestore();
   });
 
   it('PinoLoggerService.logStartupSummary 应正确格式化并输出启动摘要', () => {

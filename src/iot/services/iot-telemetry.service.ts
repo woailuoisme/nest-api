@@ -1,4 +1,4 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import {
   IOT_EVENTS,
@@ -162,6 +162,17 @@ export class IotTelemetryService {
    */
   getDeviceShadow(deviceId: string): DeviceShadowEntity | null {
     return this.deviceShadows.get(deviceId) ?? null;
+  }
+
+  /**
+   * 查询指定设备影子，若不存在则抛出 NotFoundException
+   */
+  getDeviceShadowOrFail(deviceId: string): DeviceShadowEntity {
+    const shadow = this.getDeviceShadow(deviceId);
+    if (!shadow) {
+      throw new NotFoundException(`设备 [${deviceId}] 影子不存在或尚未上报遥测`);
+    }
+    return shadow;
   }
 
   /**

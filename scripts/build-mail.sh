@@ -4,8 +4,8 @@
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-SRC_DIR="$ROOT_DIR/src/queues/mail/templates/src"
-OUT_DIR="$ROOT_DIR/src/queues/mail/templates"
+SRC_DIR="$ROOT_DIR/src/common/mail/templates/src"
+OUT_DIR="$ROOT_DIR/src/common/mail/templates"
 
 for f in "$SRC_DIR"/*.mjml; do
   name="$(basename "$f" .mjml)"

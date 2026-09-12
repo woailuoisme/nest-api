@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { HttpExceptionFilter, resolveErrorEnvelope } from '@/common/filters/http-exception.filter';
 
 /** 共享 mock host 工厂：捕获过滤器写入的 statusCode 与响应体 */
-const createMockHost = (url = '/v1/test') => {
+const createMockHost = (url = '/v1/test', i18nContext?: { lang: string; t: (key: string) => string }) => {
   const state: { statusCode: number | null; responseBody: any } = { statusCode: null, responseBody: null };
 
   const mockResponse = {
@@ -18,9 +18,10 @@ const createMockHost = (url = '/v1/test') => {
   };
 
   const host = {
+    getType: () => 'http',
     switchToHttp: () => ({
       getResponse: () => mockResponse,
-      getRequest: () => ({ url, headers: {} }),
+      getRequest: () => ({ url, headers: {}, i18nContext }),
     }),
   } as unknown as ArgumentsHost;
 
@@ -253,5 +254,66 @@ describe('HttpExceptionFilter 集成', () => {
         message: '数据格式或参数类型无效',
       },
     });
+  });
+
+  it('当存在 I18nContext 且客户端为英文时，PG 唯一键冲突应转译为英文提示', () => {
+    const filter = new HttpExceptionFilter(false);
+    const mockI18n = {
+      lang: 'en',
+      t: (key: string) => {
+        if (key === 'translation.db.uniqueViolation') {
+          return 'Data already exists, please do not duplicate operation';
+        }
+        return key;
+      },
+    };
+    const { host, state } = createMockHost('/v1/users', mockI18n);
+
+    const pgUniqueError = Object.assign(new Error('duplicate key'), {
+      code: '23505',
+    });
+
+    filter.catch(pgUniqueError, host);
+
+    expect(state.statusCode).toBe(409);
+    expect(state.responseBody).toEqual({
+      error: {
+        code: 'CONFLICT',
+        message: 'Data already exists, please do not duplicate operation',
+      },
+    });
+  });
+
+  it('当 HttpException 携带 i18nKey 时，过滤器应自动本地化转译消息', () => {
+    const filter = new HttpExceptionFilter(false);
+    const mockI18n = {
+      lang: 'en',
+      t: (key: string) => (key === 'translation.auth.loginFailed' ? 'Invalid credentials' : key),
+    };
+    const { host, state } = createMockHost('/v1/auth/login', mockI18n);
+
+    const exception = new BadRequestException({
+      message: '用户名或密码错误',
+      i18nKey: 'translation.auth.loginFailed',
+    });
+
+    filter.catch(exception, host);
+
+    expect(state.statusCode).toBe(400);
+    expect(state.responseBody.error.message).toBe('Invalid credentials');
+  });
+
+  it('当 HttpException message 本身为多语言 Key 时，过滤器应自动转译', () => {
+    const filter = new HttpExceptionFilter(false);
+    const mockI18n = {
+      lang: 'en',
+      t: (key: string) => (key === 'translation.common.notFound' ? 'Requested resource not found' : key),
+    };
+    const { host, state } = createMockHost('/v1/items/999', mockI18n);
+
+    filter.catch(new BadRequestException('translation.common.notFound'), host);
+
+    expect(state.statusCode).toBe(400);
+    expect(state.responseBody.error.message).toBe('Requested resource not found');
   });
 });

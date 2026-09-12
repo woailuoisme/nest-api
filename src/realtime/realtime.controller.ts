@@ -35,9 +35,19 @@ export class RealtimeController {
     @Query() query: RealtimeTokenQueryDto,
     @Req() req?: FastifyRequest,
   ): RealtimeTokenResponseDto {
-    const isSsePath = Boolean(req?.url?.includes('/sse'));
-    const protocol = query.protocol ?? (isSsePath ? 'sse' : 'websocket');
+    const protocol = this.resolveProtocol(query.protocol, req?.url);
     return this.eventsService.createConnectionToken(user, protocol);
+  }
+
+  /**
+   * 依据显式查询参数或请求挂载路径智能推导长连接传输协议
+   */
+  private resolveProtocol(queryProtocol?: 'websocket' | 'sse', reqUrl?: string): 'websocket' | 'sse' {
+    if (queryProtocol) {
+      return queryProtocol;
+    }
+    const isSsePath = Boolean(reqUrl?.includes('/sse'));
+    return isSsePath ? 'sse' : 'websocket';
   }
 
   @Post('subscribe')

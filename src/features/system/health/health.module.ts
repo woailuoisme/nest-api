@@ -8,6 +8,7 @@ import { ImgproxyHealthIndicator } from './indicators/imgproxy-health.indicator'
 import { MqttHealthIndicator } from './indicators/mqtt-health.indicator';
 import { RedisHealthIndicator } from './indicators/redis-health.indicator';
 import { SearchHealthIndicator } from './indicators/search-health.indicator';
+import { ShutdownHealthIndicator } from './indicators/shutdown-health.indicator';
 import { StorageHealthIndicator } from './indicators/storage-health.indicator';
 
 @Module({
@@ -22,6 +23,7 @@ import { StorageHealthIndicator } from './indicators/storage-health.indicator';
     SearchHealthIndicator,
     ImgproxyHealthIndicator,
     MqttHealthIndicator,
+    ShutdownHealthIndicator,
   ],
 })
 export class HealthModule {}

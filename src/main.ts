@@ -1,4 +1,5 @@
 import 'dotenv/config';
+import './instrumentation.js';
 import { ConfigService } from '@nestjs/config';
 import { NestFactory } from '@nestjs/core';
 import type { NestFastifyApplication } from '@nestjs/platform-fastify';

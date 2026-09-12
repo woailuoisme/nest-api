@@ -10,15 +10,16 @@ API 统一采用 **URI 路径版本控制**，传输格式固定为 `application
 
 | 环境                         | API Base URL                              | 描述                      |
 | :--------------------------- | :---------------------------------------- | :------------------------ |
-| **本地开发 (Dev)**     | `http://localhost:{port}/v1`              | 本地开发与联调测试        |
 | **测试环境 (Staging)** | `https://staging-api.example.com/v1`      | 集成测试与 QA 验收        |
 | **生产环境 (Prod)**    | `https://api.example.com/v1`              | 线上生产环境 (强制 HTTPS) |
 
-> 💡 **实时通信协议规范**：系统提供统一的无状态实时发布中枢，涵盖全功能 WebSocket 与轻量单向 Server-Sent Events (Uni-SSE)。多端接入与联调指南请参阅：
+> 💡 **协议规范与深度接入指南**：
 >
+> - 🛡️ [API 幂等性工业级客户端接入指南](./idempotency.md)（IETF 草案标准、Key 生成准则、全抖动指数退避重试状态机、多语言 SDK）
 > - 🌐 [实时通信中枢总览与多端选型指南](./realtime.md)（架构设计、双 JWT 鉴权、Channel 拓扑、选型决策树）
 > - ⚡ [WebSocket 全功能实时接入指南](./realtime-websocket.md)（TS / Dart / Android / 微信小程序原生实现与 Bruno 调试）
 > - 📡 [Server-Sent Events (Uni-SSE) 接入指南](./realtime-sse.md)（Web / 微信小程序分块流 / cURL 接入与 Nginx 调优）
+> - 📡 [工业物联网 MQTT 5.0 接入指南](./mqtt.md)（物模型规范、主题拓扑、双向 RPC 通信范式）
 
 ---
 
@@ -115,6 +116,10 @@ Authorization: Bearer <your_access_token>
 3. **载荷防篡改阻断**：服务端记录首个请求 Body 的 SHA-256 哈希。若同 Key 提交了不同载荷，立即拒绝并返回 `422 Unprocessable Entity`。
 4. **并发中途重试阻断**：若前序相同 Key 请求仍在处理中，后续重试请求必须返回 `409 Conflict` 提示退避，禁止并发重复执行。
 5. **留存期覆盖最长重试链**：幂等 Key 的保留期（TTL）必须显著长于客户端最长重试链与异步死信重放周期。
+
+> 📖 **完整工业级客户端接入文档**：涵盖网络两军问题剖析、IETF 规范草案对齐、全抖动退避重试状态机、HTTP 状态码处置矩阵以及 TypeScript(Axios/Fetch)/Go/Python/cURL 多语言完整实现，请参阅专有指南：
+>
+> 🔗 [API 幂等性工业级客户端接入指南](./idempotency.md)
 
 ### 3.4 条件请求与并发防丢失 (Lost Update Prevention via ETag)
 

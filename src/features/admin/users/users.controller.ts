@@ -19,6 +19,7 @@ import {
   ApiPageResponse,
   ApiSuccessResponse,
 } from '@/common/decorators/swagger-response.decorator';
+import type { PaginatedResultResource } from '@/common/dto/pagination.dto';
 import { Idempotent } from '@/common/idempotency';
 import {
   ChangeRoleRequest,
@@ -49,7 +50,7 @@ export class AdminUsersController {
   @Permissions(Permission.UserCreate)
   @ApiOperation({ summary: '创建用户' })
   @ApiSuccessResponse(UserEntity, { status: 201, description: '用户创建成功' })
-  create(@Body() dto: CreateUserRequest) {
+  create(@Body() dto: CreateUserRequest): Promise<UserEntity> {
     return this.usersService.create(dto);
   }
 
@@ -58,7 +59,7 @@ export class AdminUsersController {
   @Permissions(Permission.UserRead)
   @ApiOperation({ summary: '搜索用户' })
   @ApiPageResponse(UserEntity, { description: '搜索命中用户列表' })
-  search(@Query() query: SearchUsersRequest) {
+  search(@Query() query: SearchUsersRequest): Promise<PaginatedResultResource<UserEntity>> {
     return this.usersService.search(query);
   }
 
@@ -67,7 +68,7 @@ export class AdminUsersController {
   @Permissions(Permission.UserRead)
   @ApiOperation({ summary: '用户列表' })
   @ApiPageResponse(UserEntity, { description: '分页用户列表' })
-  findAll(@Query() query: FindUsersRequest) {
+  findAll(@Query() query: FindUsersRequest): Promise<PaginatedResultResource<UserEntity>> {
     return this.usersService.findAll(query);
   }
 
@@ -76,7 +77,7 @@ export class AdminUsersController {
   @Permissions(Permission.UserUpdate)
   @ApiOperation({ summary: '更新用户' })
   @ApiSuccessResponse(UserEntity, { description: '用户信息更新成功' })
-  update(@Param('id', ParseUUIDPipe) id: string, @Body() dto: UpdateUserRequest) {
+  update(@Param('id', ParseUUIDPipe) id: string, @Body() dto: UpdateUserRequest): Promise<UserEntity> {
     return this.usersService.update(id, dto);
   }
 
@@ -84,7 +85,7 @@ export class AdminUsersController {
   @Patch(':id/role')
   @ApiOperation({ summary: '变更角色' })
   @ApiSuccessResponse(UserEntity, { description: '用户角色更新成功' })
-  changeRole(@Param('id', ParseUUIDPipe) id: string, @Body() dto: ChangeRoleRequest) {
+  changeRole(@Param('id', ParseUUIDPipe) id: string, @Body() dto: ChangeRoleRequest): Promise<UserEntity> {
     return this.usersService.changeRole(id, dto.role);
   }
 

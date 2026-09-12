@@ -1,5 +1,7 @@
 import 'dotenv/config';
+import '../instrumentation.js';
 import { NestFactory } from '@nestjs/core';
+import { setupWorkerShutdownHooks } from '@/setup';
 import { PinoLoggerService } from '@/setup/logger/pino-logger.service';
 import { setupTimezone } from '../config/timezone';
 import { WorkerModule } from './worker.module';
@@ -13,22 +15,8 @@ async function bootstrap(): Promise<void> {
   const app = await NestFactory.createApplicationContext(WorkerModule, { bufferLogs: true });
   app.useLogger(app.get(PinoLoggerService));
 
-  // 优雅关机：SIGTERM/SIGINT 触发 app.close()，
-  // @nestjs/bullmq 的 BullExplorer.onApplicationShutdown 会等待当前 job 完成后关闭 worker。
-  const shutdown = async (signal: string): Promise<void> => {
-    // 10s 强制超时保底，防止由于第三方挂起连接导致进程死锁
-    const timer = setTimeout(() => {
-      process.stderr.write(`[Worker Shutdown] Graceful shutdown timed out (10000ms, ${signal}), forcing exit.\n`);
-      process.exit(1);
-    }, 10_000);
-    timer.unref();
-
-    await app.close();
-    process.exit(0);
-  };
-
-  process.once('SIGTERM', () => shutdown('SIGTERM'));
-  process.once('SIGINT', () => shutdown('SIGINT'));
+  // 统一优雅关机钩子（支持 SHUTDOWN_TIMEOUT_MS 超时保底与 BullMQ 消费等待）
+  setupWorkerShutdownHooks(app);
 }
 
 bootstrap();

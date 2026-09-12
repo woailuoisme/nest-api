@@ -1,5 +1,6 @@
 import { BadRequestException, Controller, Get, HttpCode, HttpStatus, Param, ParseUUIDPipe, Post } from '@nestjs/common';
 import { ApiBearerAuth, ApiBody, ApiConsumes, ApiOperation, ApiTags } from '@nestjs/swagger';
+import { Throttle } from '@nestjs/throttler';
 import { ALLOWED_MIME_TYPES, UPLOAD } from '@/common/constants/app.constants';
 import { Permission } from '@/common/constants/permissions';
 import { CurrentUser, type CurrentUserPayload } from '@/common/decorators/current-user.decorator';
@@ -23,6 +24,7 @@ export class UsersController {
   constructor(private readonly usersService: UsersService) {}
 
   /** 上传当前登录用户的头像图片 */
+  @Throttle({ default: { limit: 10, ttl: 60000 } })
   @Post('me/avatar')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: '上传头像' })
@@ -49,7 +51,7 @@ export class UsersController {
       allowedExt: UPLOAD.AVATAR.ALLOWED_EXTENSIONS,
     })
     file: UploadedFile,
-  ) {
+  ): Promise<UserEntity> {
     if (!file) {
       throw new BadRequestException('未接收到文件');
     }
@@ -60,7 +62,7 @@ export class UsersController {
   @Get('me')
   @ApiOperation({ summary: '个人信息' })
   @ApiSuccessResponse(UserEntity, { description: '用户信息获取成功' })
-  findMe(@CurrentUser() user: CurrentUserPayload) {
+  findMe(@CurrentUser() user: CurrentUserPayload): Promise<UserEntity> {
     return this.usersService.findOne(user.id);
   }
 
@@ -69,7 +71,7 @@ export class UsersController {
   @Permissions(Permission.UserRead)
   @ApiOperation({ summary: '用户详情' })
   @ApiSuccessResponse(UserEntity, { description: '用户信息获取成功' })
-  findOne(@Param('id', ParseUUIDPipe) id: string) {
+  findOne(@Param('id', ParseUUIDPipe) id: string): Promise<UserEntity> {
     return this.usersService.findOne(id);
   }
 }

@@ -1,13 +1,6 @@
-import * as perfHooks from 'node:perf_hooks';
 import v8 from 'node:v8';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import {
-  calculateJitteredRetryAfter,
-  DEFAULT_MAX_EVENT_LOOP_DELAY_MS,
-  DEFAULT_MAX_HEAP_USED_RATIO,
-  SystemLoadSampler,
-  TrafficPriority,
-} from '@/common/resilience';
+import { calculateJitteredRetryAfter, SystemLoadSampler, TrafficPriority } from '@/common/resilience';
 
 describe('SystemLoadSampler (系统运行时负载采样器)', () => {
   let sampler: SystemLoadSampler;
