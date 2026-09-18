@@ -31,6 +31,22 @@ export interface CentrifugoHealthStatus {
   error?: string;
 }
 
+/** Centrifugo /api/info 返回的单节点运行时指标 */
+interface CentrifugoNodeInfo {
+  name: string;
+  num_channels: number;
+  num_clients: number;
+  num_users: number;
+  uid: string;
+  uptime: number;
+  version: string;
+}
+
+/** 构造不可用/降级健康响应：统一 0 计数，避免多处重复字面量 */
+function buildUnavailableHealth(status: 'down' | 'degraded', error: string): CentrifugoHealthStatus {
+  return { status, nodesCount: 0, totalClients: 0, totalChannels: 0, error };
+}
+
 /**
  * 原生安全 Base64URL 编码（零外部依赖）
  */
@@ -111,7 +127,7 @@ export class CentrifugoTransport implements RealtimeTransport {
 
     try {
       this.config = parseCentrifugoDsn(dsn);
-      this.logger.log(
+      this.logger.debug(
         `[CentrifugoTransport] Initialized with apiUrl=${this.config.apiUrl} (host=${this.config.host}:${this.config.port})`,
       );
     } catch (err) {
@@ -124,6 +140,28 @@ export class CentrifugoTransport implements RealtimeTransport {
   }
 
   /**
+   * 从 REALTIME_URL 推导客户端连接所需的协议与主机端口段
+   * 标准端口 (80/443) 省略端口号；未配置 REALTIME_URL 时返回 null 由调用方回退默认地址
+   */
+  private resolveEndpointParts(): {
+    wsProtocol: 'ws' | 'wss';
+    httpProtocol: 'http' | 'https';
+    authority: string;
+  } | null {
+    if (!this.config) {
+      return null;
+    }
+
+    const { useTLS, port, host } = this.config;
+    const isStandardPort = (useTLS && port === 443) || (!useTLS && port === 80);
+    const authority = `${host}${isStandardPort ? '' : `:${port}`}`;
+
+    return useTLS
+      ? { wsProtocol: 'wss', httpProtocol: 'https', authority }
+      : { wsProtocol: 'ws', httpProtocol: 'http', authority };
+  }
+
+  /**
    * 获取客户端 WebSocket 连接终端地址
    * 优先读取 CENTRIFUGO_PUBLIC_WS_URL，未配置时从 REALTIME_URL 推导
    */
@@ -133,15 +171,10 @@ export class CentrifugoTransport implements RealtimeTransport {
       return publicUrl;
     }
 
-    if (this.config) {
-      const isStandardPort =
-        (this.config.useTLS && this.config.port === 443) || (!this.config.useTLS && this.config.port === 80);
-      const portPart = isStandardPort ? '' : `:${this.config.port}`;
-      const wsProtocol = this.config.useTLS ? 'wss' : 'ws';
-      return `${wsProtocol}://${this.config.host}${portPart}/connection/websocket`;
-    }
-
-    return 'ws://127.0.0.1:8000/connection/websocket';
+    const parts = this.resolveEndpointParts();
+    return parts
+      ? `${parts.wsProtocol}://${parts.authority}/connection/websocket`
+      : 'ws://127.0.0.1:8000/connection/websocket';
   }
 
   /**
@@ -154,15 +187,41 @@ export class CentrifugoTransport implements RealtimeTransport {
       return publicUrl;
     }
 
-    if (this.config) {
-      const isStandardPort =
-        (this.config.useTLS && this.config.port === 443) || (!this.config.useTLS && this.config.port === 80);
-      const portPart = isStandardPort ? '' : `:${this.config.port}`;
-      const httpProtocol = this.config.useTLS ? 'https' : 'http';
-      return `${httpProtocol}://${this.config.host}${portPart}/connection/sse`;
-    }
+    const parts = this.resolveEndpointParts();
+    return parts ? `${parts.httpProtocol}://${parts.authority}/connection/sse` : 'http://127.0.0.1:8000/connection/sse';
+  }
 
-    return 'http://127.0.0.1:8000/connection/sse';
+  /**
+   * 获取已配置的 HMAC 签名密钥；未配置时直接抛错，杜绝静默签发无法被网关验签的凭据
+   */
+  private requireTokenSecret(): string {
+    const tokenSecret = this.config?.tokenSecret;
+    if (!tokenSecret) {
+      throw new Error('Centrifugo tokenSecret is not configured (check REALTIME_URL)');
+    }
+    return tokenSecret;
+  }
+
+  /**
+   * 构造标准 Claims：sub(用户 ID) + exp(过期时间) + info(用户画像)
+   */
+  private buildTokenClaims(
+    user: CurrentUserPayload,
+    ttlSeconds: number,
+  ): { claims: Record<string, unknown>; expiresAt: number } {
+    const exp = Math.floor(Date.now() / 1000) + ttlSeconds;
+    return {
+      claims: {
+        sub: String(user.id),
+        exp,
+        info: {
+          id: user.id,
+          email: user.email,
+          role: user.role,
+        },
+      },
+      expiresAt: exp * 1000,
+    };
   }
 
   /**
@@ -170,25 +229,10 @@ export class CentrifugoTransport implements RealtimeTransport {
    * 客户端连接 Centrifugo 时在 Header/Query 携带，Centrifugo 本地验证 sub 声明。
    */
   generateConnectionToken(user: CurrentUserPayload, ttlSeconds = 86400): { token: string; expiresAt: number } {
-    if (!this.config?.tokenSecret) {
-      throw new Error('Centrifugo tokenSecret is not configured (check REALTIME_URL)');
-    }
+    const tokenSecret = this.requireTokenSecret();
+    const { claims, expiresAt } = this.buildTokenClaims(user, ttlSeconds);
 
-    const nowSeconds = Math.floor(Date.now() / 1000);
-    const exp = nowSeconds + ttlSeconds;
-
-    const payload = {
-      sub: String(user.id),
-      exp,
-      info: {
-        id: user.id,
-        email: user.email,
-        role: user.role,
-      },
-    };
-
-    const token = signHs256Jwt(payload, this.config.tokenSecret);
-    return { token, expiresAt: exp * 1000 };
+    return { token: signHs256Jwt(claims, tokenSecret), expiresAt };
   }
 
   /**
@@ -201,30 +245,15 @@ export class CentrifugoTransport implements RealtimeTransport {
     client?: string,
     ttlSeconds = 86400,
   ): { token: string; channel: string; expiresAt: number } {
-    if (!this.config?.tokenSecret) {
-      throw new Error('Centrifugo tokenSecret is not configured (check REALTIME_URL)');
-    }
+    const tokenSecret = this.requireTokenSecret();
+    const { claims, expiresAt } = this.buildTokenClaims(user, ttlSeconds);
 
-    const nowSeconds = Math.floor(Date.now() / 1000);
-    const exp = nowSeconds + ttlSeconds;
-
-    const payload: Record<string, unknown> = {
-      sub: String(user.id),
-      channel,
-      exp,
-      info: {
-        id: user.id,
-        email: user.email,
-        role: user.role,
-      },
-    };
-
+    claims.channel = channel;
     if (client) {
-      payload.client = client;
+      claims.client = client;
     }
 
-    const token = signHs256Jwt(payload, this.config.tokenSecret);
-    return { token, channel, expiresAt: exp * 1000 };
+    return { token: signHs256Jwt(claims, tokenSecret), channel, expiresAt };
   }
 
   /**
@@ -285,57 +314,28 @@ export class CentrifugoTransport implements RealtimeTransport {
    */
   async checkHealth(): Promise<CentrifugoHealthStatus> {
     if (!this.config) {
-      return {
-        status: 'down',
-        nodesCount: 0,
-        totalClients: 0,
-        totalChannels: 0,
-        error: 'Centrifugo not configured (missing REALTIME_URL)',
-      };
+      return buildUnavailableHealth('down', 'Centrifugo not configured (missing REALTIME_URL)');
     }
 
     try {
-      const res = await this.callApi<{
-        nodes?: Array<{
-          name: string;
-          num_channels: number;
-          num_clients: number;
-          num_users: number;
-          uid: string;
-          uptime: number;
-          version: string;
-        }>;
-      }>('info', {});
+      const res = await this.callApi<{ nodes?: CentrifugoNodeInfo[] }>('info', {});
 
       if (!res?.nodes || res.nodes.length === 0) {
-        return {
-          status: 'degraded',
-          nodesCount: 0,
-          totalClients: 0,
-          totalChannels: 0,
-          error: 'Centrifugo returned empty node list',
-        };
+        return buildUnavailableHealth('degraded', 'Centrifugo returned empty node list');
       }
 
       const totalClients = res.nodes.reduce((acc, n) => acc + (n.num_clients || 0), 0);
       const totalChannels = res.nodes.reduce((acc, n) => acc + (n.num_channels || 0), 0);
-      const version = res.nodes[0]?.version;
 
       return {
         status: 'up',
         nodesCount: res.nodes.length,
         totalClients,
         totalChannels,
-        version,
+        version: res.nodes[0]?.version,
       };
     } catch (err) {
-      return {
-        status: 'down',
-        nodesCount: 0,
-        totalClients: 0,
-        totalChannels: 0,
-        error: (err as Error).message,
-      };
+      return buildUnavailableHealth('down', (err as Error).message);
     }
   }
 

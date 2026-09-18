@@ -1,1 +1,3 @@
-export const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+import { delay } from 'es-toolkit';
+
+export const sleep = delay;

@@ -3,6 +3,18 @@ import { Role } from '@/common/constants/roles';
 
 // ─── 响应 DTO ────────────────────────────────────────────
 
+/** 秒级时间戳上界：小于该量级视为秒级（毫秒时间戳自 1973 年起即远超此值） */
+const SECONDS_TIMESTAMP_UPPER_BOUND = 1e11;
+
+/** 归一化时间字段：兼容 Date / 秒级或毫秒级时间戳 / 日期字符串 */
+function toDate(value: Date | number | string): Date {
+  if (value instanceof Date) {
+    return value;
+  }
+  const ms = typeof value === 'number' && value < SECONDS_TIMESTAMP_UPPER_BOUND ? value * 1000 : value;
+  return new Date(ms);
+}
+
 /**
  * 用户实体（前端自助面）
  *
@@ -50,18 +62,10 @@ export class UserEntity {
     Object.assign(this, partial);
     this.role = (partial.role as Role) ?? Role.USER;
     if (partial.createdAt) {
-      const ts =
-        typeof partial.createdAt === 'number' && partial.createdAt < 1e11
-          ? partial.createdAt * 1000
-          : partial.createdAt;
-      this.createdAt = partial.createdAt instanceof Date ? partial.createdAt : new Date(ts);
+      this.createdAt = toDate(partial.createdAt);
     }
     if (partial.updatedAt) {
-      const ts =
-        typeof partial.updatedAt === 'number' && partial.updatedAt < 1e11
-          ? partial.updatedAt * 1000
-          : partial.updatedAt;
-      this.updatedAt = partial.updatedAt instanceof Date ? partial.updatedAt : new Date(ts);
+      this.updatedAt = toDate(partial.updatedAt);
     }
     this.avatarUrl = partial.avatarUrl ?? partial.image ?? null;
     this.image = partial.image ?? partial.avatarUrl ?? null;

@@ -166,13 +166,13 @@ Authorization: Bearer <your_access_token>
 
 系统遵循简洁高效的 RESTful 响应契约：
 
-- **核心原则**：全系统**仅分页列表**采用 `{"items": [...], "pagination": {...}}` 信封；其余所有单资源、操作结果、异步任务等成功响应**一律直接返回裸 JSON 对象**，彻底废除无意义的 `success`、`code`、`message` 外层包装。
+- **核心原则**：全系统**仅分页列表**采用 `{"items": [...], "meta": {...}}` 信封；其余所有单资源、操作结果、异步任务等成功响应**一律直接返回裸 JSON 对象**，彻底废除无意义的 `success`、`code`、`message` 外层包装。
 
 ### 5.1 成功响应 (Success Response)
 
 #### 1. 分页数据响应（全系统唯一的分页信封）
 
-所有分页列表请求统一包裹在 `items` 与 `pagination` 中：
+所有分页列表请求统一包裹在 `items` 与 `meta` 中：
 
 ```json
 {
@@ -182,7 +182,7 @@ Authorization: Bearer <your_access_token>
       "<attribute>": "<value>"
     }
   ],
-  "pagination": {
+  "meta": {
     "page": 1,
     "pageSize": 20,
     "total": 100,
@@ -196,7 +196,7 @@ Authorization: Bearer <your_access_token>
 > ```json
 > {
 >   "items": [],
->   "pagination": {
+>   "meta": {
 >     "page": 1,
 >     "pageSize": 20,
 >     "total": 0,
@@ -303,7 +303,7 @@ Authorization: Bearer <your_access_token>
     "items": [
       { "id": "<resource_id>", "<attribute>": "<value>" }
     ],
-    "pagination": {
+    "meta": {
       "page": 1,
       "pageSize": 20,
       "total": 100,
@@ -322,7 +322,7 @@ Authorization: Bearer <your_access_token>
     "items": [
       { "id": "<resource_id>", "<attribute>": "<value>" }
     ],
-    "pagination": {
+    "meta": {
       "hasMore": true,
       "nextCursor": "<opaque_cursor_string>",
       "prevCursor": "<opaque_cursor_string>"
@@ -388,7 +388,7 @@ X-RateLimit-Reset: 1756137600
 
 在任何新接口上线或既有接口变更合并前，必须逐项核对：
 
-- [ ] **响应信封精准**：仅分页列表采用 `{"items": [...], "pagination": {...}}` 信封，其余所有单对象/业务结果均直接返回裸 JSON 对象；
+- [ ] **响应信封精准**：仅分页列表采用 `{"items": [...], "meta": {...}}` 信封，其余所有单对象/业务结果均直接返回裸 JSON 对象；
 - [ ] **空值保底完备**：列表为空时强制返回 `{"items": [], ...}`，严禁输出 `null`；
 - [ ] **强类型输入与输出**：每个端点都定义了清晰的 Request DTO 与 Resource DTO，输入输出严格解耦；
 - [ ] **边界校验完备**：所有输入数据在 HTTP 接入层均通过校验器处理，校验失败标准返回 `422 Unprocessable Entity` 与 `fields` 字段；

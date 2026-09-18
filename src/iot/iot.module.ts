@@ -5,10 +5,11 @@ import { connect } from 'mqtt';
 import { MqttExplorerService } from './explorer/mqtt-explorer.service';
 import { IotController } from './iot.controller';
 import { IotCommandService } from './services/iot-command.service';
+import { IotDeviceCredentialService } from './services/iot-device-credential.service';
 import { IotTelemetryService } from './services/iot-telemetry.service';
 import { MQTT_CLIENT_TOKEN, MQTT_OPTIONS_TOKEN, type MqttOptions } from './transports/interfaces/mqtt.interface';
 import { MqttService } from './transports/mqtt.service';
-import { parseMqttDsn } from './transports/utils/dsn.parser';
+import { parseMqttDsn, resolveMqttBrokerUrl } from './transports/utils/dsn.parser';
 
 /**
  * 全局工业物联网与 MQTT 5.0 设备控制核心模块
@@ -37,8 +38,7 @@ import { parseMqttDsn } from './transports/utils/dsn.parser';
       provide: MQTT_CLIENT_TOKEN,
       useFactory: (options: MqttOptions | null) => {
         if (!options) return null;
-        const brokerUrl = options.url || `${options.protocol}://${options.host}:${options.port}`;
-        return connect(brokerUrl, options);
+        return connect(resolveMqttBrokerUrl(options), options);
       },
       inject: [MQTT_OPTIONS_TOKEN],
     },
@@ -46,8 +46,16 @@ import { parseMqttDsn } from './transports/utils/dsn.parser';
     MqttExplorerService,
     IotCommandService,
     IotTelemetryService,
+    IotDeviceCredentialService,
   ],
-  exports: [MqttService, MQTT_CLIENT_TOKEN, MQTT_OPTIONS_TOKEN, IotCommandService, IotTelemetryService],
+  exports: [
+    MqttService,
+    MQTT_CLIENT_TOKEN,
+    MQTT_OPTIONS_TOKEN,
+    IotCommandService,
+    IotTelemetryService,
+    IotDeviceCredentialService,
+  ],
 })
 export class IotModule {}
 

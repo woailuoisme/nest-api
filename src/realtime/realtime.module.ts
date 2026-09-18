@@ -1,6 +1,5 @@
 import { Global, Module } from '@nestjs/common';
 import { DiscoveryModule } from '@nestjs/core';
-import { RedisModule } from '@/database/redis.module';
 import { ChannelExplorerService } from './channels/channel-explorer.service';
 import { ChannelManager } from './channels/channel-manager.service';
 import { PresenceService } from './channels/presence.service';
@@ -19,7 +18,7 @@ import { REALTIME_PRIMARY_TRANSPORT } from './transports/realtime-transport.inte
  */
 @Global()
 @Module({
-  imports: [DiscoveryModule, RedisModule],
+  imports: [DiscoveryModule],
   controllers: [RealtimeController],
   providers: [
     ChannelManager,

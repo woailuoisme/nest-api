@@ -19,6 +19,46 @@ function resolveDescription(options: ApiSuccessResponseOptions, fallback: string
   return options.description ?? options.message ?? fallback;
 }
 
+/** 分页响应信封共建配置：Offset 与 Cursor 分页仅元数据模型与默认描述不同 */
+interface PaginatedResponseConfig {
+  /** 分页元数据模型（PageMetaResource / CursorPageMetaResource） */
+  metaModel: Type<unknown>;
+  /** 分页信封模型，仅用于注册 OpenAPI Schema */
+  metaWrapperModel: Type<unknown>;
+  /** 未显式传描述时的兜底文案 */
+  fallbackDescription: string;
+}
+
+/**
+ * 分页响应共建函数：统一生成 { items, meta } 信封文档，确保两种分页形态结构永不漂移
+ */
+function buildPaginatedResponse<TModel extends Type<unknown>>(
+  model: TModel,
+  options: ApiSuccessResponseOptions,
+  config: PaginatedResponseConfig,
+) {
+  const status = options.status ?? 200;
+  const description = resolveDescription(options, config.fallbackDescription);
+
+  return applyDecorators(
+    ApiExtraModels(config.metaWrapperModel, config.metaModel, model),
+    ApiResponse({
+      status,
+      description,
+      schema: {
+        type: 'object',
+        properties: {
+          items: {
+            type: 'array',
+            items: { $ref: getSchemaPath(model) },
+          },
+          meta: { $ref: getSchemaPath(config.metaModel) },
+        },
+      },
+    }),
+  );
+}
+
 /**
  * Swagger 成功响应装饰器：自动生成符合系统统一 JSON 结构的 OpenAPI 成功响应文档。
  *
@@ -91,26 +131,11 @@ export function ApiNoContentResponse(options: ApiSuccessResponseOptions = {}) {
  * @param options 可选配置（HTTP 状态码、文档描述）
  */
 export function ApiPageResponse<TModel extends Type<unknown>>(model: TModel, options: ApiSuccessResponseOptions = {}) {
-  const status = options.status ?? 200;
-  const description = resolveDescription(options, 'Paginated list retrieved successfully');
-
-  return applyDecorators(
-    ApiExtraModels(ApiPaginatedResponseResource, PageMetaResource, model),
-    ApiResponse({
-      status,
-      description,
-      schema: {
-        type: 'object',
-        properties: {
-          items: {
-            type: 'array',
-            items: { $ref: getSchemaPath(model) },
-          },
-          pagination: { $ref: getSchemaPath(PageMetaResource) },
-        },
-      },
-    }),
-  );
+  return buildPaginatedResponse(model, options, {
+    metaModel: PageMetaResource,
+    metaWrapperModel: ApiPaginatedResponseResource,
+    fallbackDescription: 'Paginated list retrieved successfully',
+  });
 }
 
 /**
@@ -123,26 +148,11 @@ export function ApiCursorPageResponse<TModel extends Type<unknown>>(
   model: TModel,
   options: ApiSuccessResponseOptions = {},
 ) {
-  const status = options.status ?? 200;
-  const description = resolveDescription(options, 'Cursor paginated list retrieved successfully');
-
-  return applyDecorators(
-    ApiExtraModels(ApiCursorPaginatedResponseResource, CursorPageMetaResource, model),
-    ApiResponse({
-      status,
-      description,
-      schema: {
-        type: 'object',
-        properties: {
-          items: {
-            type: 'array',
-            items: { $ref: getSchemaPath(model) },
-          },
-          pagination: { $ref: getSchemaPath(CursorPageMetaResource) },
-        },
-      },
-    }),
-  );
+  return buildPaginatedResponse(model, options, {
+    metaModel: CursorPageMetaResource,
+    metaWrapperModel: ApiCursorPaginatedResponseResource,
+    fallbackDescription: 'Cursor paginated list retrieved successfully',
+  });
 }
 
 /**

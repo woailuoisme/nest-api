@@ -1,9 +1,19 @@
 import { Body, Controller, Get, HttpCode, HttpStatus, Param, Post } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
+import { Throttle } from '@nestjs/throttler';
 import { Role } from '@/common/constants/roles';
+import { Public } from '@/common/decorators/public.decorator';
 import { Roles } from '@/common/decorators/roles.decorator';
 import { ApiSuccessResponse } from '@/common/decorators/swagger-response.decorator';
-import { CommandResponseEntity, DeviceShadowEntity, MockTelemetryDto, SendCommandDto } from './dto/iot.dto';
+import {
+  CommandResponseEntity,
+  DeviceCriticalEventDto,
+  DeviceShadowEntity,
+  DeviceTokenRequestDto,
+  DeviceTokenResponseDto,
+  MockTelemetryDto,
+  SendCommandDto,
+} from './dto/iot.dto';
 import { IotCommandService } from './services/iot-command.service';
 import { IotTelemetryService } from './services/iot-telemetry.service';
 
@@ -44,6 +54,16 @@ export class IotController {
     return this.commandService.sendCommand(deviceId, dto.command, dto.params, dto.timeoutMs);
   }
 
+  @Post('token')
+  @Public()
+  @Throttle({ default: { limit: 5, ttl: 60000 } })
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: '签发设备认证凭据' })
+  @ApiSuccessResponse(DeviceTokenResponseDto, { description: 'Mosquitto 认证专用 JWT 凭据' })
+  issueDeviceToken(@Body() dto: DeviceTokenRequestDto): DeviceTokenResponseDto {
+    return this.telemetryService.issueDeviceToken(dto);
+  }
+
   @Post('mock-telemetry')
   @Roles(Role.OPERATOR, Role.ADMIN, Role.SUPER_ADMIN)
   @HttpCode(HttpStatus.OK)
@@ -51,5 +71,14 @@ export class IotController {
   @ApiSuccessResponse(DeviceShadowEntity, { description: '遥测上报成功并更新影子' })
   async mockTelemetry(@Body() dto: MockTelemetryDto): Promise<DeviceShadowEntity> {
     return this.telemetryService.simulateTelemetry(dto.tenantId, dto.deviceId, dto.telemetry);
+  }
+
+  @Post('mock-event')
+  @Roles(Role.OPERATOR, Role.ADMIN, Role.SUPER_ADMIN)
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: '模拟工业设备硬件告警' })
+  async mockEvent(@Body() dto: DeviceCriticalEventDto): Promise<{ success: boolean }> {
+    await this.telemetryService.simulateEvent(dto);
+    return { success: true };
   }
 }

@@ -61,13 +61,16 @@ export const RequestContext = {
     if (!store) {
       return undefined;
     }
-    if (store.isStreaming || (store.deadline !== undefined && store.deadline <= 0)) {
+
+    const { deadline, isStreaming } = store;
+    // 长连接流式端点，或显式 deadline<=0（禁用超时）视为无限制预算
+    if (isStreaming || (deadline !== undefined && deadline <= 0)) {
       return Number.POSITIVE_INFINITY;
     }
-    if (store.deadline === undefined) {
+    if (deadline === undefined) {
       return undefined;
     }
-    return Math.max(0, store.deadline - Date.now());
+    return Math.max(0, deadline - Date.now());
   },
 
   /**
@@ -81,10 +84,9 @@ export const RequestContext = {
     if (store.signal?.aborted) {
       return true;
     }
-    if (store.deadline && store.deadline > 0 && Date.now() >= store.deadline) {
-      return true;
-    }
-    return false;
+
+    const { deadline } = store;
+    return deadline !== undefined && deadline > 0 && Date.now() >= deadline;
   },
 
   /**
@@ -95,11 +97,9 @@ export const RequestContext = {
     if (!store) {
       return;
     }
-    if (timeoutMs > 0) {
-      store.deadline = Date.now() + timeoutMs;
-    } else {
-      store.deadline = 0;
-    }
+
+    // deadline = 0 表示禁用超时（长耗时/流式端点）
+    store.deadline = timeoutMs > 0 ? Date.now() + timeoutMs : 0;
     if (signal) {
       store.signal = signal;
     }

@@ -4,7 +4,13 @@ import type { Logger as PinoInstance } from 'pino';
 export const PINO_LOGGER = Symbol('PINO_LOGGER');
 
 /** 启动阶段静默过滤的框架内部上下文集合（屏蔽日常加载与映射日志，保留 warn/error） */
-export const SILENT_BOOTSTRAP_CONTEXTS = new Set(['InstanceLoader', 'RoutesResolver', 'RouterExplorer']);
+export const SILENT_BOOTSTRAP_CONTEXTS = new Set([
+  'InstanceLoader',
+  'RoutesResolver',
+  'RouterExplorer',
+  'NestApplication',
+  'NestFactory',
+]);
 
 /** HTTP 访问日志负载结构 */
 export interface HttpAccessLogPayload {
@@ -47,6 +53,10 @@ export class PinoLoggerService implements LoggerService {
     }
   }
 
+  /**
+   * 记录标准应用信息日志。
+   * 特性：自动过滤启动期高频但无意义的框架加载日常输出。
+   */
   log(message: unknown, context?: string): void {
     this.callPino('info', message, context);
   }
@@ -86,19 +96,18 @@ export class PinoLoggerService implements LoggerService {
     }
   }
 
-  /** 输出应用引导启动摘要（服务地址、时区、Worker 状态、挂载的运维面板） */
+  /** 输出应用引导启动摘要（服务地址、时区、Worker 状态、挂载的运维面板，紧凑双行输出） */
   logStartupSummary(params: {
     appUrl: string;
     timezone: string;
     isWorkerEmbedded?: boolean;
     panels: Array<{ label: string; url: string }>;
   }): void {
-    this.log(`[App] Server is running: ${params.appUrl} (timezone=${params.timezone})`);
-    if (params.isWorkerEmbedded) {
-      this.log('[Worker] Embedded worker active (processing queues & schedules)');
-    }
-    for (const panel of params.panels) {
-      this.log(`[App] ${panel.label}: ${panel.url}`);
+    const workerTag = params.isWorkerEmbedded ? ' [Worker: active]' : '';
+    this.log(`[App] Server is running: ${params.appUrl} (timezone=${params.timezone})${workerTag}`);
+    if (params.panels.length > 0) {
+      const panelList = params.panels.map((p) => `${p.label}: ${p.url}`).join(' | ');
+      this.log(`[App] ${panelList}`);
     }
   }
 

@@ -40,14 +40,12 @@ export async function computeFileHash(file: UploadedFile, contentBuffer?: Buffer
     return createHash('sha256').update(file.buffer).digest('hex');
   }
 
-  // 流式模式：从临时文件计算哈希
-  return new Promise((resolve, reject) => {
-    const hash = createHash('sha256');
-    const stream = createReadStream(file.tmpPath);
-    stream.on('data', (chunk) => hash.update(chunk));
-    stream.on('end', () => resolve(hash.digest('hex')));
-    stream.on('error', reject);
-  });
+  // 流式模式：从临时文件增量计算哈希（for-await 与项目其余流处理保持一致，异常自然上抛）
+  const hash = createHash('sha256');
+  for await (const chunk of createReadStream(file.tmpPath)) {
+    hash.update(chunk);
+  }
+  return hash.digest('hex');
 }
 
 /**

@@ -3,6 +3,7 @@ export * from './dto/iot.dto';
 export * from './iot.controller';
 export * from './iot.module';
 export * from './services/iot-command.service';
+export * from './services/iot-device-credential.service';
 export * from './services/iot-telemetry.service';
 export * from './transports/interfaces/mqtt.interface';
 export * from './transports/mqtt.service';

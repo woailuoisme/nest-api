@@ -11,6 +11,7 @@ describe('RealtimeController', () => {
   let mockEventsService: {
     createConnectionToken: ReturnType<typeof vi.fn>;
     subscribeChannel: ReturnType<typeof vi.fn>;
+    handleProxySubscribe: ReturnType<typeof vi.fn>;
   };
   let mockChannelsService: {
     listRegisteredChannels: ReturnType<typeof vi.fn>;
@@ -31,6 +32,7 @@ describe('RealtimeController', () => {
         protocol,
       })),
       subscribeChannel: vi.fn().mockResolvedValue({ token: 'sub-token-abc' }),
+      handleProxySubscribe: vi.fn().mockResolvedValue({ result: {} }),
     };
 
     mockChannelsService = {
@@ -85,6 +87,20 @@ describe('RealtimeController', () => {
       const result = await controller.subscribe(mockUser, dto);
       expect(mockEventsService.subscribeChannel).toHaveBeenCalledWith(mockUser, dto.channel, dto.client);
       expect(result.token).toBe('sub-token-abc');
+    });
+  });
+
+  describe('proxySubscribe', () => {
+    it('应透传 Centrifugo Proxy Webhook 鉴权请求并返回结果', async () => {
+      const dto = {
+        channel: 'private:notifications.user_123',
+        user: 'user_123',
+        client: 'client_xyz',
+      };
+
+      const result = await controller.proxySubscribe(dto);
+      expect(mockEventsService.handleProxySubscribe).toHaveBeenCalledWith(dto);
+      expect(result).toEqual({ result: {} });
     });
   });
 

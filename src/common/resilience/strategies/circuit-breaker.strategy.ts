@@ -147,7 +147,7 @@ export class CircuitBreakerStrategy extends Strategy<CircuitBreakerOptions> {
     }
   }
 
-  public get stateName(): 'CLOSED' | 'OPEN' | 'HALF_OPEN' | 'ISOLATED' {
+  public get stateName(): 'CLOSED' | 'OPEN' | 'HALF_OPEN' {
     switch (this._lastStatus) {
       case CircuitBreakerStatus.Open:
         return 'OPEN';

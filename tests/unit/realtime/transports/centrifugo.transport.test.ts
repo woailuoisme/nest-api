@@ -525,11 +525,7 @@ describe('CentrifugoTransport', () => {
         },
       ]);
 
-      const presenceService = new PresenceService(
-        undefined,
-        mockConfigService as unknown as ConfigService<any, true>,
-        transport,
-      );
+      const presenceService = new PresenceService(transport);
 
       const members = await presenceService.getMembers('presence:room-demo');
 

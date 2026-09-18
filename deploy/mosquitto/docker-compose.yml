@@ -7,9 +7,19 @@ services:
       - "${MOSQUITTO_PORT:-1883}:1883"
       - "${MOSQUITTO_WS_PORT:-9001}:9001"
     volumes:
+      # 生产形态配置：强制账号密码 + 主题级 ACL（见 config/mosquitto.conf 头部说明）
       - ./config/mosquitto.conf:/mosquitto/config/mosquitto.conf:ro
+      # 运行期凭据（password.txt / acl.txt），由运维生成且不入库；缺失时 Broker 启动失败
+      - ./config/credentials:/mosquitto/config/credentials:ro
       - mosquitto_data:/mosquitto/data
       - mosquitto_log:/mosquitto/log
+    healthcheck:
+      # 监听器级探针：验证 1883 可建连（业务级连通性由 API 侧 /health 的 MQTT 指示器覆盖）
+      test: ["CMD", "nc", "-z", "127.0.0.1", "1883"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
     networks:
       - backend
 

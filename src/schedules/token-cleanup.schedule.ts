@@ -42,6 +42,6 @@ export class TokenCleanupSchedule implements OnApplicationBootstrap {
       },
     );
 
-    this.logger.log('Token cleanup schedule registered (daily at 03:00)');
+    this.logger.debug('Token cleanup schedule registered (daily at 03:00)');
   }
 }

@@ -7,6 +7,12 @@ import type { Role } from '@/common/constants/roles';
 import type { CurrentUserPayload } from '@/common/decorators/current-user.decorator';
 import { IS_PUBLIC_KEY } from '@/common/decorators/public.decorator';
 
+/** 鉴权载荷挂载点：由本守卫写入 request，供 @CurrentUser / @Session 装饰器读取 */
+type AuthenticatedRequest = FastifyRequest & {
+  user?: CurrentUserPayload;
+  session?: unknown;
+};
+
 /**
  * 全局 Better Auth 会话守卫 (BetterAuthGuard)
  *
@@ -30,7 +36,7 @@ export class BetterAuthGuard implements CanActivate {
       return true;
     }
 
-    const request = context.switchToHttp().getRequest<FastifyRequest>();
+    const request = context.switchToHttp().getRequest<AuthenticatedRequest>();
     const headers = fromNodeHeaders(request.headers);
 
     // 支持 Query String ?token=<session_token> 提取并转换为 Bearer 头（适配 EventSource / 某些移动端场景）
@@ -64,8 +70,8 @@ export class BetterAuthGuard implements CanActivate {
         image: user.image,
       };
 
-      (request as unknown as { user: CurrentUserPayload }).user = currentUser;
-      (request as unknown as { session: typeof sessionData.session }).session = sessionData.session;
+      request.user = currentUser;
+      request.session = sessionData.session;
 
       return true;
     } catch (err) {

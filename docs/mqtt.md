@@ -523,26 +523,89 @@ void publish_telemetry(MQTTClient client, float temp, float vibration) {
 * **严禁明文暴露**：生产环境严禁开启未加密的 `1883` 端口，强制使用 TLS 1.3 (`8883` 端口) 或 WSS (`9002` 端口)。
 * **双向身份验签 (Mutual TLS)**：工业设备内部集成安全单元（TPM 2.0 芯片或 ATECC608 加密元件），在设备出厂时烧录唯一设备证书（X.509）。Broker 强制校验证书链（CA 根证书），杜绝恶意伪造设备。
 
-### 6.2 细粒度主题级访问控制 (Strict ACL)
+### 6.2 Broker 鉴权与主题级访问控制 (Auth & Strict ACL)
 
-Broker 必须严格配置 ACL 准入策略，**严禁设备拥有任意通配符 (`#` / `+`) 发布权限**：
+`deploy/mosquitto` **只有生产形态**：`allow_anonymous false` + `password_file` + `acl_file`（白名单模式），匿名连接一律拒绝。
 
-```hocon
-# EMQX acl.conf 生产配置示例
-# 规则 1: 设备仅能向自身租户和设备 ID 发布遥测和状态
-{allow, {username, "^device_(.*)$"}, publish, ["devices/${username}/%c/#"]}.
-
-# 规则 2: 设备仅能订阅针对自身的控制指令
-{allow, {username, "^device_(.*)$"}, subscribe, ["devices/${username}/command"]}.
-
-# 规则 3: 严禁设备订阅平台 RPC 回复通道或其他租户频道
-{deny, all, subscribe, ["app/rpc/#", "devices/+/+/status"]}.
+```text
+deploy/mosquitto/
+├── docker-compose.yml             # 挂载配置 + 凭据目录；healthcheck 探测 1883 监听器
+└── config/
+    ├── mosquitto.conf             # 监听器 / 鉴权 / 持久化 / 性能 / 日志（单一权威配置）
+    ├── acl.example                # ACL 模板（复制为 credentials/acl.txt 后按租户/设备调整）
+    └── credentials/               # 运行期凭据（已 gitignore，仅保留 .gitkeep）
+        ├── password.txt           # 由 just mqtt-passwd 生成
+        └── acl.txt                # 由 just mqtt-acl 生成
 ```
+
+凭据准备（**首次启动前必须完成**，凭据不入库；缺失时 Broker 会启动失败，属预期快速失败）：
+
+```bash
+# 平台账号（用户名/密码须与 deploy/.env 的 MQTT_URL 逐字一致）
+just mqtt-passwd -c -b /creds/password.txt nestforge-api '<强密码>'
+# 设备账号（一机一密；-b 从参数读密码，切勿用 -c，否则会清空已有账号）
+just mqtt-passwd -b /creds/password.txt cnc-001 '<设备密钥>'
+# ACL 规则文件
+just mqtt-acl
+```
+
+修改凭据后无需重启容器，执行 `docker kill -s HUP mosquitto` 即可热重载（`password_file` / `acl_file` 均支持）。
+
+ACL 编写要点（Mosquitto `acl_file` 语义，详见 `config/acl.example`）：
+
+1. **启用 `acl_file` 即白名单模式**：未出现的主题一律不可访问；`password_file` 的账号名才是 `user`/`%u` 的匹配对象，**不是 clientId**；
+2. **`deny` 优先级高于同主题的授权**，因此不要用 `deny app/rpc/#` 去"封场"再对设备单独授权——会被 deny 直接否决；正确做法是只写最小授权（设备侧仅 `pattern write app/rpc/+/reply` 允许回执）；
+3. **设备侧默认形态**：
+
+   ```text
+   pattern readwrite devices/+/%u/#    # 仅自身 deviceId 子树（遥测/状态/告警）
+   pattern read devices/%u/command     # 接收平台下发的控制指令
+   pattern write app/rpc/+/reply       # 仅能写定向 RPC 回执，无法订阅该通道
+   ```
+
+   该写法覆盖"同名 deviceId 跨租户"的残留越权面；如需绝对租户隔离，改为按设备逐条 `user` 规则（大规模建议由设备台账脚本生成）；
+4. `pattern` 缺少 `%u`/`%c` 时 Mosquitto 会打印 `Warning: ACL pattern ... does not contain '%c' or '%u'`，属预期提示（如 `app/rpc/+/reply` 本身就是与设备身份无关的规则）。
+
+**已实测验证**（`eclipse-mosquitto:2.1-alpine`，本仓库配置）：匿名连接与错误密码均被拒绝（`not authorised`）、设备可发布自身主题且平台可收到、设备伪造他厂设备遥测的消息**未被投递**、设备订阅他厂设备子树**收不到任何数据**。
 
 ### 6.3 边缘弱网续传与反压机制 (Backpressure & Offline Storage)
 
 1. **边缘环形缓冲区 (Circular Buffer)**：工业现场极易遭遇电磁干扰与基站切换。边缘网关采集到的数据必须先进入本地轻量时序库（DuckDB/SQLite）或带掉电保护的内存环形队列。
 2. **断网重传合并 (Coalescing)**：网络重连后，边缘网关应当限速补发历史数据，并在 Header 标注 `replayed=true`，防止瞬间万条历史数据冲垮云端时序数据库。
+
+### 6.4 设备凭证签发与密钥域隔离 (Device Credential Issuance)
+
+设备通过 `POST /v1/iot/devices/token` 以**预置密钥换票**：NestJS 恒定时间校验 `deviceSecret` 后签发设备 JWT 凭据（含 `jti`，便于审计与吊销）。
+
+```bash
+curl -X POST http://localhost:4300/v1/iot/devices/token \
+  -H "Content-Type: application/json" \
+  -d '{"deviceId": "cnc-001", "deviceSecret": "s3cr3t-def456", "tenantId": "factory-alpha"}'
+```
+
+> **当前语义与演进路线（务必对齐）**
+> Broker 侧鉴权采用 **原生 `password_file` + `acl_file`（零插件，见 §6.2）**，设备接入 Broker 使用**一机一密账号**：`username=<deviceId>`、`password=<deviceSecret>`（同一密钥需由运维写入 `password.txt`）。
+> 因此本端点当前承担的是**准入校验 + 凭据签发审计**职责，其签发的 JWT **尚未被 Broker 消费**（无插件即无 JWT 验签器）。要闭合该环，需二选一：
+>
+> * **方案 A 后续**：把端点语义改为"发放/轮换 Broker 凭据"（如接入 Mosquitto Dynamic Security 或受控调用 `mosquitto_passwd`），无需引入插件；
+> * **方案 B/C**：让 Broker 原生支持 JWT（`mosquitto-go-auth` 已于 2025-06 归档且 Alpine 镜像不可用；或迁移 EMQX/HiveMQ 等具备 JWKS 的 Broker）。
+> 未完成上述演进前，请勿在安全评审中把设备 JWT 视为 Broker 准入控制手段。
+
+相关环境变量：
+
+| 变量 | 说明 |
+| --- | --- |
+| `IOT_DEVICE_CREDENTIALS` | 设备凭证表 `deviceId:secret,deviceId:secret`；**留空表示禁止换票**（一律 401） |
+| `IOT_JWT_SECRET` | 设备接入 JWT 独立签名密钥（≥32 字符），**必须与 `BETTER_AUTH_SECRET` 域分离**；未配置时返回 503 |
+| `IOT_DEVICE_PEPPER` | 凭证摘要的 HMAC 加固盐值（≥16 字符），生产环境务必显式配置 |
+| `IOT_TOKEN_TTL_SECONDS` | 凭据有效期（秒），默认 30 天；缩短有效期需设备侧配合静默续签 |
+
+安全语义：
+
+1. **恒定时间比较**：密钥错误与设备未注册返回同一条 `401 设备凭证无效`，且两条路径均执行完整的 HMAC 比较，杜绝通过响应耗时探测设备是否已注册；
+2. **绝不回退硬编码密钥**：`IOT_JWT_SECRET` 缺失时 fail fast（503），避免弱默认密钥被用于伪造设备身份；
+3. **限流**：该端点位于 `@Public()` 白名单（设备无法持有用户会话），已叠加 `@Throttle` 每分钟 5 次，防止凭证爆破；
+4. **吊销与轮换**：JWT 携带 `jti` 以支持黑名单即时吊销；轮换设备密钥需**双处同步**——平台侧 `IOT_DEVICE_CREDENTIALS`（滚动重启 API）与 Broker 侧 `password.txt`（`docker kill -s HUP mosquitto` 热重载），否则会出现"能换票但连不上 Broker"或反之的割裂状态。
 
 ---
 
@@ -552,12 +615,15 @@ Broker 必须严格配置 ACL 准入策略，**严禁设备拥有任意通配符
 
 #### 1. CLI 命令行调试工具 (mosquitto-clients)
 
+> Broker 已强制鉴权，以下命令均需携带凭据：设备侧 `-u <deviceId> -P <设备密钥>`，平台侧 `-u nestforge-api -P <平台密码>`（账号须已写入 `deploy/mosquitto/config/credentials/password.txt`）。
+
 ```bash
 # 1. 模拟设备监听指令并自动回复 (MQTT 5.0)
-mosquitto_sub -h localhost -p 1883 -t "devices/cnc-01/command" -F "%p (Props: %P)" -V 5
+mosquitto_sub -h localhost -p 1883 -u cnc-01 -P '<设备密钥>' \
+  -t "devices/cnc-01/command" -F "%p (Props: %P)" -V 5
 
 # 2. 模拟边缘网关向 NestForge 上报遥测
-mosquitto_pub -h localhost -p 1883 \
+mosquitto_pub -h localhost -p 1883 -u cnc-01 -P '<设备密钥>' \
   -t "devices/tenant-demo/cnc-01/telemetry" \
   -m '{"temperature": 88.5, "status": "operating", "timestamp": 1726053600000}' \
   -q 1 -V 5

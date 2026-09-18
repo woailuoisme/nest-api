@@ -10,6 +10,7 @@ describe('RealtimeEventsService', () => {
   let mockRealtimeService: {
     createConnectionToken: ReturnType<typeof vi.fn>;
     authorizeSubscription: ReturnType<typeof vi.fn>;
+    canSubscribe: ReturnType<typeof vi.fn>;
     broadcast: ReturnType<typeof vi.fn>;
     sendToUser: ReturnType<typeof vi.fn>;
     getWsUrl: ReturnType<typeof vi.fn>;
@@ -32,6 +33,7 @@ describe('RealtimeEventsService', () => {
       authorizeSubscription: vi.fn().mockResolvedValue({
         token: 'fake-sub-token',
       }),
+      canSubscribe: vi.fn().mockResolvedValue({ authorized: true }),
       broadcast: vi.fn().mockResolvedValue(undefined),
       sendToUser: vi.fn().mockResolvedValue(undefined),
       getWsUrl: vi.fn().mockReturnValue('ws://127.0.0.1:8000/connection/websocket'),
@@ -70,6 +72,41 @@ describe('RealtimeEventsService', () => {
     });
   });
 
+  describe('handleProxySubscribe', () => {
+    it('当鉴权通过时，应返回成功的 result 空对象', async () => {
+      mockRealtimeService.canSubscribe.mockResolvedValueOnce({ authorized: true });
+      const result = await service.handleProxySubscribe({
+        channel: 'private:notifications.usr_abc123',
+        user: 'usr_abc123',
+        client: 'client-1',
+      });
+
+      expect(mockRealtimeService.canSubscribe).toHaveBeenCalledWith(
+        expect.objectContaining({ id: 'usr_abc123' }),
+        'private:notifications.usr_abc123',
+      );
+      expect(result).toEqual({ result: {} });
+    });
+
+    it('当鉴权拒绝时，应返回包含 103 错误码的标准 error 对象', async () => {
+      mockRealtimeService.canSubscribe.mockResolvedValueOnce({
+        authorized: false,
+        reason: 'Forbidden to join channel',
+      });
+      const result = await service.handleProxySubscribe({
+        channel: 'private:admin.orders',
+        user: 'usr_regular',
+      });
+
+      expect(result).toEqual({
+        error: {
+          code: 103,
+          message: 'Forbidden to join channel',
+        },
+      });
+    });
+  });
+
   describe('handleNotificationSent', () => {
     const mockPayload = {
       id: 'notif_123',
@@ -79,26 +116,15 @@ describe('RealtimeEventsService', () => {
       timestamp: 1710000000000,
     };
 
-    it('应同时向规范频道、历史兼容频道与底层 sendToUser 推送单播通知', async () => {
+    it('应通过底层 sendToUser 推送单播通知，消除多重冗余广播', async () => {
       await service.handleNotificationSent({
         userId: 'usr_abc123',
         payload: mockPayload,
       });
 
-      // 规范频道
-      const canonical = REALTIME_CHANNELS.USER_NOTIFICATION.replace('{userId}', 'usr_abc123');
-      expect(mockRealtimeService.broadcast).toHaveBeenCalledWith(canonical, 'notification', mockPayload);
-
-      // 兼容 ws 频道
-      const wsChannel = REALTIME_CHANNELS.WS_USER_NOTIFICATION.replace('{userId}', 'usr_abc123');
-      expect(mockRealtimeService.broadcast).toHaveBeenCalledWith(wsChannel, 'notification', mockPayload);
-
-      // 兼容 sse 频道
-      const sseChannel = REALTIME_CHANNELS.SSE_USER_NOTIFICATION.replace('{userId}', 'usr_abc123');
-      expect(mockRealtimeService.broadcast).toHaveBeenCalledWith(sseChannel, 'notification', mockPayload);
-
-      // sendToUser
+      // 仅通过 sendToUser 单播推流
       expect(mockRealtimeService.sendToUser).toHaveBeenCalledWith('usr_abc123', 'notification', mockPayload);
+      expect(mockRealtimeService.broadcast).not.toHaveBeenCalled();
     });
 
     it('当缺少 userId 时静默忽略', async () => {
@@ -120,23 +146,14 @@ describe('RealtimeEventsService', () => {
       timestamp: 1710000000000,
     };
 
-    it('应同时向规范广播频道与兼容广播频道推送', async () => {
+    it('应仅向规范广播频道推送，不产生重复推流', async () => {
       await service.handleNotificationBroadcast({
         payload: mockPayload,
       });
 
+      expect(mockRealtimeService.broadcast).toHaveBeenCalledTimes(1);
       expect(mockRealtimeService.broadcast).toHaveBeenCalledWith(
         REALTIME_CHANNELS.BROADCAST_NOTIFICATION,
-        'notification',
-        mockPayload,
-      );
-      expect(mockRealtimeService.broadcast).toHaveBeenCalledWith(
-        REALTIME_CHANNELS.WS_BROADCAST_NOTIFICATION,
-        'notification',
-        mockPayload,
-      );
-      expect(mockRealtimeService.broadcast).toHaveBeenCalledWith(
-        REALTIME_CHANNELS.SSE_BROADCAST_NOTIFICATION,
         'notification',
         mockPayload,
       );
@@ -154,7 +171,7 @@ describe('RealtimeEventsService', () => {
       timestamp: now,
     };
 
-    it('handleIotTelemetry 应向规范设备频道及兼容频道广播遥测数据', async () => {
+    it('handleIotTelemetry 应向规范设备频道单一广播遥测数据', async () => {
       const telemetryEvent = {
         deviceId: 'dev_100',
         tenantId: 'tenant_1',
@@ -164,15 +181,11 @@ describe('RealtimeEventsService', () => {
       await service.handleIotTelemetry(telemetryEvent);
 
       const canonical = REALTIME_CHANNELS.DEVICE_TELEMETRY.replace('{deviceId}', 'dev_100');
-      const wsChannel = REALTIME_CHANNELS.WS_DEVICE_TELEMETRY.replace('{deviceId}', 'dev_100');
-      const sseChannel = REALTIME_CHANNELS.SSE_DEVICE_TELEMETRY.replace('{deviceId}', 'dev_100');
-
+      expect(mockRealtimeService.broadcast).toHaveBeenCalledTimes(1);
       expect(mockRealtimeService.broadcast).toHaveBeenCalledWith(canonical, 'telemetry', telemetryEvent);
-      expect(mockRealtimeService.broadcast).toHaveBeenCalledWith(wsChannel, 'telemetry', telemetryEvent);
-      expect(mockRealtimeService.broadcast).toHaveBeenCalledWith(sseChannel, 'telemetry', telemetryEvent);
     });
 
-    it('handleIotStatusChanged 应向规范设备频道及兼容频道广播状态变更', async () => {
+    it('handleIotStatusChanged 应向规范设备频道单一广播状态变更', async () => {
       const statusEvent = {
         deviceId: 'dev_100',
         tenantId: 'tenant_1',
@@ -183,6 +196,7 @@ describe('RealtimeEventsService', () => {
       await service.handleIotStatusChanged(statusEvent);
 
       const canonical = REALTIME_CHANNELS.DEVICE_TELEMETRY.replace('{deviceId}', 'dev_100');
+      expect(mockRealtimeService.broadcast).toHaveBeenCalledTimes(1);
       expect(mockRealtimeService.broadcast).toHaveBeenCalledWith(canonical, 'status', statusEvent);
     });
 
@@ -201,10 +215,9 @@ describe('RealtimeEventsService', () => {
       await service.handleIotAlarmTriggered(alarmEvent);
 
       const canonicalDevice = REALTIME_CHANNELS.DEVICE_TELEMETRY.replace('{deviceId}', 'dev_100');
+      expect(mockRealtimeService.broadcast).toHaveBeenCalledTimes(2);
       expect(mockRealtimeService.broadcast).toHaveBeenCalledWith(canonicalDevice, 'alarm', alarmEvent);
       expect(mockRealtimeService.broadcast).toHaveBeenCalledWith(REALTIME_CHANNELS.IOT_ALARMS, 'alarm', alarmEvent);
-      expect(mockRealtimeService.broadcast).toHaveBeenCalledWith(REALTIME_CHANNELS.WS_IOT_ALARMS, 'alarm', alarmEvent);
-      expect(mockRealtimeService.broadcast).toHaveBeenCalledWith(REALTIME_CHANNELS.SSE_IOT_ALARMS, 'alarm', alarmEvent);
     });
 
     it('handleIotCommandExecuted 应向设备专属频道广播指令执行回执', async () => {
@@ -219,6 +232,7 @@ describe('RealtimeEventsService', () => {
       await service.handleIotCommandExecuted(commandEvent);
 
       const canonical = REALTIME_CHANNELS.DEVICE_TELEMETRY.replace('{deviceId}', 'dev_100');
+      expect(mockRealtimeService.broadcast).toHaveBeenCalledTimes(1);
       expect(mockRealtimeService.broadcast).toHaveBeenCalledWith(canonical, 'command_receipt', commandEvent);
     });
   });

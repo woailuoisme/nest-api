@@ -23,6 +23,12 @@ history_size: 100
 history_ttl: "300s"
 force_recovery: true
 
+# 反向代理授权配置 (Proxy Subscribe Webhook)
+# 客户端订阅受限私有频道时，Centrifugo 反向回调业务后端进行动态准入鉴定
+proxy_subscribe:
+  url: "http://app:3000/v1/realtime/proxy/subscribe"
+  timeout: "2s"
+
 # 频道命名空间隔离策略
 namespaces:
   # 个人专属频道：支持断线消息自动补发与历史回溯 (如 private:user.{userId})
@@ -44,6 +50,7 @@ namespaces:
     history_ttl: "300s"
     force_recovery: true
 
-  # 管理员监控频道：严禁客户端直接订阅，必须由后端严格鉴权代理
+  # 管理员监控频道：严禁客户端直接订阅，通过后端 Proxy Subscribe 动态鉴权准入
   - name: "admin"
     allow_subscribe_for_client: false
+    proxy_subscribe: true

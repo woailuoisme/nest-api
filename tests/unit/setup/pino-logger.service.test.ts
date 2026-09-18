@@ -71,13 +71,14 @@ describe('PinoLoggerService', () => {
   });
 
   describe('SILENT_BOOTSTRAP_CONTEXTS 启动日志静默过滤', () => {
-    it('应自动过滤 InstanceLoader / RoutesResolver / RouterExplorer 的 info 级别日志', () => {
+    it('应自动过滤 InstanceLoader / RoutesResolver / RouterExplorer / NestApplication 的 info 级别日志', () => {
       const mockPino = createMockPino();
       const service = new PinoLoggerService(mockPino as never);
 
       service.log('ExcelModule dependencies initialized', 'InstanceLoader');
       service.log('AppController {/} (version: Neutral):', 'RoutesResolver');
       service.log('Mapped {/, GET} (version: Neutral) route', 'RouterExplorer');
+      service.log('Nest application successfully started', 'NestApplication');
 
       expect(mockPino.info).not.toHaveBeenCalled();
     });
@@ -100,8 +101,8 @@ describe('PinoLoggerService', () => {
       const mockPino = createMockPino();
       const service = new PinoLoggerService(mockPino as never);
 
-      service.log('Starting Nest application...', 'NestFactory');
-      service.log('Nest application successfully started', 'NestApplication');
+      service.log('Starting custom service...', 'CustomService');
+      service.log('Worker initialized', 'WorkerModule');
 
       expect(mockPino.info).toHaveBeenCalledTimes(2);
     });

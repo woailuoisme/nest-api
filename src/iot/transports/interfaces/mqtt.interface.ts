@@ -100,19 +100,11 @@ export interface MqttMessageContext {
 export type MqttContext = MqttMessageContext;
 
 /**
- * 主题处理器元数据包装
+ * @MqttSubscribe 装饰器写入的元数据（供 MqttExplorerService 扫描读取）
  */
-export interface MqttHandlerMetadata {
+export interface MqttSubscribeMetadata {
   pattern: string;
-  effectivePattern: string;
   options: MqttSubscribeOptions;
-  target: object;
-  methodName: string;
-  paramMetadata?: Array<{
-    index: number;
-    type: 'payload' | 'params' | 'context';
-    paramName?: string;
-  }>;
 }
 
 export type { IPublishPacket, MqttClient };

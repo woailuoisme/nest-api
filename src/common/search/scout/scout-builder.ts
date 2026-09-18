@@ -131,12 +131,7 @@ export class ScoutSearchBuilder<TEntity = unknown, TDoc extends Record<string, u
    */
   async get(): Promise<TDoc[] | TEntity[]> {
     const rawResult = await this.raw();
-
-    if (!this.shouldHydrate) {
-      return rawResult.hits;
-    }
-
-    return this.performHydration(rawResult.hits);
+    return this.resolveHits(rawResult.hits);
   }
 
   /**
@@ -166,7 +161,7 @@ export class ScoutSearchBuilder<TEntity = unknown, TDoc extends Record<string, u
     this.offset(offset);
 
     const rawResult = await this.raw();
-    const items = this.shouldHydrate ? await this.performHydration(rawResult.hits) : rawResult.hits;
+    const items = await this.resolveHits(rawResult.hits);
 
     const total = rawResult.totalHits ?? rawResult.estimatedTotalHits ?? rawResult.hits.length;
 
@@ -177,6 +172,11 @@ export class ScoutSearchBuilder<TEntity = unknown, TDoc extends Record<string, u
       limit,
       processingTimeMs: rawResult.processingTimeMs,
     };
+  }
+
+  /** 按需回源水合：未开启 hydrate 时直接返回搜索引擎命中 */
+  private async resolveHits(hits: TDoc[]): Promise<TDoc[] | TEntity[]> {
+    return this.shouldHydrate ? this.performHydration(hits) : hits;
   }
 
   /**

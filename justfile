@@ -29,19 +29,19 @@ build:
 
 # 启动生产构建
 start:
-    node --import ./dist/instrumentation.js dist/main.js
+    node dist/main.js
 
 # 仅启动 Worker（生产构建）
 start-worker:
-    node --import ./dist/instrumentation.js dist/workers/worker.main.js
+    node dist/workers/worker.main.js
 
 # 启动应用（内嵌 Worker，单进程）
 start-embedded:
-    WORKER_EMBEDDED=true node --import ./dist/instrumentation.js dist/main.js
+    WORKER_EMBEDDED=true node dist/main.js
 
 # 并发启动应用与 Worker（两个独立进程）
 start-all:
-    concurrently -k -n app,worker -c bgBlue.bold,bgMagenta.bold "node --import ./dist/instrumentation.js dist/main.js" "node --import ./dist/instrumentation.js dist/workers/worker.main.js"
+    concurrently -k -n app,worker -c bgBlue.bold,bgMagenta.bold "node dist/main.js" "node dist/workers/worker.main.js"
 
 
 # ----------------------------------------
@@ -259,6 +259,14 @@ docker-up *args='':
 # 停止全栈 Docker 容器集群
 docker-down *args='':
     docker compose -f deploy/docker-compose.yml --env-file deploy/.env down {{args}}
+
+# 生成/更新 Mosquitto 凭据 (透传 mosquitto_passwd，用法: just mqtt-passwd -c -b /creds/password.txt <用户名> '<密码>')
+mqtt-passwd *args='':
+    docker run --rm -v "{{justfile_directory()}}/deploy/mosquitto/config/credentials:/creds" eclipse-mosquitto:2.1-alpine mosquitto_passwd {{args}}
+
+# 初始化 Mosquitto ACL 规则文件 (从模板复制，随后按租户/设备调整)
+mqtt-acl:
+    cp deploy/mosquitto/config/acl.example deploy/mosquitto/config/credentials/acl.txt
 
 # 启动 Centrifugo 实时服务容器
 realtime:

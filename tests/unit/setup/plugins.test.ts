@@ -110,5 +110,33 @@ describe('registerFastifyPlugins', () => {
     expect(faviconReply.header).toHaveBeenCalledWith('Cache-Control', 'public, max-age=86400, immutable');
     expect(faviconReply.code).toHaveBeenCalledWith(204);
     expect(faviconReply.send).toHaveBeenCalled();
+
+    // 4. 运维面板（/docs、/queues、/logs）正常流量不写入访问日志
+    mockLoggerService.logHttp.mockClear();
+    const opsPanelUrls = [
+      '/docs',
+      '/docs/admin',
+      '/docs/auth',
+      '/docs-json',
+      '/docs-admin-json',
+      '/queues',
+      '/logs',
+      '/logs/api/files',
+      '/logs/api/stream',
+    ];
+    for (const url of opsPanelUrls) {
+      await onResponseHook({ ...completedReq, url }, mockReply);
+    }
+    expect(mockLoggerService.logHttp).not.toHaveBeenCalled();
+
+    // 5. 运维面板的异常响应仍需记录（便于发现鉴权失败与面板异常）
+    const unauthorizedReply = { ...mockReply, statusCode: 401 };
+    await onResponseHook({ ...completedReq, url: '/logs' }, unauthorizedReply);
+    expect(mockLoggerService.logHttp).toHaveBeenCalledWith(expect.objectContaining({ url: '/logs', statusCode: 401 }));
+
+    // 6. 非运维面板路径（如 /api/v1/users 前缀相近路径）不受影响
+    mockLoggerService.logHttp.mockClear();
+    await onResponseHook({ ...completedReq, url: '/api/v1/docs-preview' }, mockReply);
+    expect(mockLoggerService.logHttp).toHaveBeenCalledTimes(1);
   });
 });

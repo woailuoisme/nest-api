@@ -5,6 +5,23 @@ import type { ImgproxyConfig } from './imgproxy.interface';
 import { ImgproxyBuilder } from './imgproxy-builder';
 
 /**
+ * 从 STORAGE_S3_URL 中解析 bucket 名称（如 s3://key:secret@endpoint:port/bucket）
+ * 解析异常或缺少 bucket 时返回 undefined，交由调用方走默认值
+ */
+function parseS3Bucket(s3Url?: string): string | undefined {
+  if (!s3Url) {
+    return undefined;
+  }
+  try {
+    const parsed = new URL(s3Url.replace(/^s3:\/\//, 'http://'));
+    const [bucket] = parsed.pathname.split('/').filter(Boolean);
+    return bucket || undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+/**
  * 统一 imgproxy 动态图像处理服务 (ImgproxyService)
  *
  * 管理连接凭据、感知底层存储拓扑（Local 挂载 vs S3 桶协议），
@@ -21,17 +38,7 @@ export class ImgproxyService {
   constructor(private readonly configService: ConfigService) {
     this.appUrl = this.configService.get<string>('APP_URL') ?? 'http://localhost:4300';
     this.storageDriver = this.configService.get<'local' | 's3'>('STORAGE_DRIVER') ?? 'local';
-
-    const s3Url = this.configService.get<string>('STORAGE_S3_URL');
-    if (s3Url) {
-      try {
-        const parsed = new URL(s3Url.replace(/^s3:\/\//, 'http://'));
-        const [bucket] = parsed.pathname.split('/').filter(Boolean);
-        if (bucket) this.s3Bucket = bucket;
-      } catch {
-        // S3 URL 解析异常时静默忽略，依赖默认值
-      }
-    }
+    this.s3Bucket = parseS3Bucket(this.configService.get<string>('STORAGE_S3_URL'));
 
     const dsn = this.configService.get<string>('IMGPROXY_URL');
     if (dsn) {

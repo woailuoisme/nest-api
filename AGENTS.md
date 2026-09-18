@@ -160,6 +160,7 @@ tests/
 - **多写原子事务 (Transaction)**：涉及多表关联写入（如创建用户并绑定 OAuth 账户）或多步更新时，使用显式原生闭包 `await this.db.transaction(async (tx) => { ... })` 保证强一致性与自动回滚。
 - **全文搜索模型解耦 (Laravel Scout 模式)**：数据表/实体如需支持全文检索，统一在 `src/database/search/` 目录下实现 `Searchable` 契约（如 `user.searchable.ts`）并注册入全局索引映射；业务数据增删改时通过 `SearchSyncService` 发布队列异步同步任务，严禁在业务 Service 中直接硬编码调用底层搜索引擎 SDK（如 Meilisearch 客户端），保障驱动可插拔性（Meilisearch / Noop 空驱动降级）。
 - **工业物联网总线解耦 (Decoupled MQTT & Telemetry)**：物联网设备指令交互与遥测采集集中收敛于顶级目录 `src/iot/`。传输层与业务服务一体化内聚，监听统一使用声明式 `@MqttSubscribe(topic, options)` 装饰器；向物理/仿真设备下发控制指令统一调用 `IotCommandService` 或 `MqttService.publish()` / RPC，禁止外部业务逻辑直连外部 MQTT Broker 客户端。
+- **上传链路单一实现 (Single Multipart Pipeline)**：文件上传仅有一条链路 —— 参数装饰器 `@UploadedFile/@UploadedFiles`（`src/common/decorators/uploaded.decorator.ts`）写入 metadata → 全局 `MultipartInterceptor` 收集与校验 → `UploadedFile` 载荷 → `StorageService` / `MediaService.save()` 落盘（流式模式消费即删）。**禁止再引入并行的 multipart 解析实现**（如 multer / `@dollarsign/nestjs-multipart` 风格的按路由 `FileInterceptor` 移植），历史上曾存在一份未接线的 `src/common/upload/` 移植实现，因与全局拦截器争抢同一条 busboy 流已于本次清理删除；如确需按路由细粒度控制，请扩展 `UploadOptions` 而非新增第二套解析器。
 - 全局基础设施 (Storage/Excel/Mail/Drizzle/Redis) 放 `src/common/` 或 `src/database/`，用 `@Global()` 导出。
 
 ### 环境变量
@@ -206,7 +207,7 @@ BullMQ 队列由 `AuthModule → MailJobs` 依赖，CLI 模块也需 `BullModule
 - **日志**: 业务服务、控制器与基础设施使用注入的 `Logger` (Pino)，严禁在业务逻辑中使用 `console.log`（CLI / Seeder 终端输出除外）。
   - **原生极速架构**: 彻底消除 `nestjs-pino` / `pino-http` 额外包装层，基于原生 `@Global()` `LoggerModule` 与 `PinoLoggerService` 实现。
   - **双通道流分离**: 终端控制台通过 `pino-pretty` 彩色高亮；磁盘文件由 `pino-roll` 按日切割并经过 `createFileFilterStream` 剥离冗余 HTTP 访问流，只持久化纯业务/异常日志。
-  - **框架噪音过滤**: `SILENT_BOOTSTRAP_CONTEXTS` 自动静默 `InstanceLoader`、`RoutesResolver` 和 `RouterExplorer` 的 `INFO` 级别日常输出，WARN / ERROR 异常无损放行。
+  - **框架噪音过滤**: `SILENT_BOOTSTRAP_CONTEXTS` 自动静默 `InstanceLoader`、`RoutesResolver`、`RouterExplorer` 和 `NestApplication` 的 `INFO` 级别日常输出，WARN / ERROR 异常无损放行。
 - **分层异常处理 (Tiered Exception Handling)**:
   - **Controller 层**: 严禁写任何 `try-catch`，所有错误 100% 冒泡交由全局过滤器。
   - **Service 层 (常规)**: 默认不写 `try-catch` 包裹正常业务，业务校验失败直接直抛标准异常 (`NotFoundException` / `BadRequestException` 等)。

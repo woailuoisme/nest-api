@@ -40,17 +40,16 @@ export class SearchSyncService {
       return;
     }
 
-    const indexName = def.index ?? def.indexName ?? '';
+    const indexName = this.resolveIndexName(def);
     const transform = (record: TEntity) =>
       def.toSearchable ? def.toSearchable(record) : def.toSearchableArray(record);
     const documents = list.map(transform);
-    const isQueueEnabled = this.configService.get('SEARCH_QUEUE_ENABLED', { infer: true }) ?? false;
 
     this.logger.debug(
-      `Dispatching sync for ${documents.length} document(s) in index "${indexName}" (queue=${isQueueEnabled})`,
+      `Dispatching sync for ${documents.length} document(s) in index "${indexName}" (queue=${this.isQueueEnabled})`,
     );
 
-    if (isQueueEnabled && this.searchJobs) {
+    if (this.isQueueEnabled && this.searchJobs) {
       await this.searchJobs.dispatchIndex(indexName, documents, def.primaryKey ?? 'id');
       return;
     }
@@ -107,14 +106,13 @@ export class SearchSyncService {
       return;
     }
 
-    const indexName = def.index ?? def.indexName ?? '';
-    const isQueueEnabled = this.configService.get('SEARCH_QUEUE_ENABLED', { infer: true }) ?? false;
+    const indexName = this.resolveIndexName(def);
 
     this.logger.debug(
-      `Dispatching remove for ${idList.length} document(s) in index "${indexName}" (queue=${isQueueEnabled})`,
+      `Dispatching remove for ${idList.length} document(s) in index "${indexName}" (queue=${this.isQueueEnabled})`,
     );
 
-    if (isQueueEnabled && this.searchJobs) {
+    if (this.isQueueEnabled && this.searchJobs) {
       await this.searchJobs.dispatchDelete(indexName, idList);
       return;
     }
@@ -125,5 +123,15 @@ export class SearchSyncService {
     } catch (err) {
       this.logger.warn(`Failed to delete documents from search index "${indexName}": ${(err as Error).message}`);
     }
+  }
+
+  /** 解析索引名：优先显式 index，其次兼容 indexName 别名 */
+  private resolveIndexName(def: { index?: string; indexName?: string }): string {
+    return def.index ?? def.indexName ?? '';
+  }
+
+  /** 是否启用异步队列同步（未配置时按禁用处理） */
+  private get isQueueEnabled(): boolean {
+    return this.configService.get('SEARCH_QUEUE_ENABLED', { infer: true }) ?? false;
   }
 }

@@ -16,6 +16,15 @@ interface HttpResponse {
   end?: (chunk: string) => void;
 }
 
+/** 兼容 FastifyReply.header 与原生 ServerResponse.setHeader 的响应头写入 */
+function applyResponseHeader(response: HttpResponse, name: string, value: string): void {
+  if (typeof response.header === 'function') {
+    response.header(name, value);
+  } else {
+    response.setHeader?.(name, value);
+  }
+}
+
 /** PostgreSQL 常见约束错误码转译映射表 */
 const PG_ERROR_MAP: Record<string, { status: HttpStatus; message: string; i18nKey: I18nPath }> = {
   '23505': {
@@ -243,16 +252,9 @@ export class HttpExceptionFilter implements ExceptionFilter {
 
     if (isLoadShedError(exception)) {
       const retryAfterSeconds = calculateJitteredRetryAfter(5);
-      const setHeader = (name: string, value: string) => {
-        if (typeof response.header === 'function') {
-          response.header(name, value);
-        } else {
-          response.setHeader?.(name, value);
-        }
-      };
-      setHeader('Retry-After', String(retryAfterSeconds));
-      setHeader('X-Retry-After-Ms', String(retryAfterSeconds * 1000));
-      setHeader('X-Load-Shed-Priority', exception.priority);
+      applyResponseHeader(response, 'Retry-After', String(retryAfterSeconds));
+      applyResponseHeader(response, 'X-Retry-After-Ms', String(retryAfterSeconds * 1000));
+      applyResponseHeader(response, 'X-Load-Shed-Priority', exception.priority);
     }
 
     if (typeof response.code === 'function') {

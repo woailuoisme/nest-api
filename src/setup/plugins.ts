@@ -8,10 +8,11 @@ import type { NestFastifyApplication } from '@nestjs/platform-fastify';
 import { fromNodeHeaders } from 'better-auth/node';
 import type { FastifyReply, FastifyRequest } from 'fastify';
 import { auth } from '@/common/auth/better-auth';
-import { PATHS } from '@/common/constants/app.constants';
+import { PATHS, ROUTES } from '@/common/constants/app.constants';
 import { RequestContext } from '@/common/context';
 import { extractIp, PinoLoggerService } from '@/setup/logger';
 import { isAppShuttingDown } from './lifecycle';
+import { LOG_VIEWER_PATH } from './log-viewer/constants';
 
 /** 仅暴露所需 Hook 与路由 API 的最小 Fastify 接口（规避 platform-fastify 嵌套 fastify 类型差异） */
 type FastifyLike = {
@@ -31,6 +32,19 @@ type FastifyLike = {
 
 /** /uploads/ 下无需鉴权的公开子目录（如产品图、公开头像） */
 const PUBLIC_UPLOAD_PREFIX = '/uploads/public/';
+
+/**
+ * 不写入访问日志的路径前缀：API 文档、队列看板与日志查看器的高频轮询与 SSE 心跳属自检流量，
+ * 逐条记录只会淹没业务请求日志。`/docs` 同时覆盖 docs-json、docs/admin 与 docs/auth。
+ */
+const ACCESS_LOG_EXCLUDED_PREFIXES = [`/${ROUTES.DOCS}`, `/${ROUTES.QUEUES}`, LOG_VIEWER_PATH];
+
+/** 请求路径是否命中运维面板（含 /docs-json 等以短横线派生的 JSON 端点） */
+function isOpsPanelPath(url: string): boolean {
+  return ACCESS_LOG_EXCLUDED_PREFIXES.some(
+    (prefix) => url === prefix || url.startsWith(`${prefix}/`) || url.startsWith(`${prefix}-`),
+  );
+}
 
 /**
  * 注册 Fastify 插件（Helmet, Static 文件服务, Multipart 文件上传）与原生全链路可观测性 Hooks。
@@ -66,6 +80,11 @@ export async function registerFastifyPlugins(app: NestFastifyApplication): Promi
   // 2. 全链路 HTTP 访问日志 Hook（Fastify 原生 onResponse，100% 覆盖包括 401/403/404/429/500 在内的所有流量）
   fastify.addHook('onResponse', async (request: FastifyRequest, reply: FastifyReply) => {
     const url = request.url?.split('?')[0] || '/';
+
+    // 运维面板（/docs、/queues、/logs）的自检流量不计入访问日志；4xx/5xx 仍保留，便于发现鉴权失败与面板异常
+    if (isOpsPanelPath(url) && reply.statusCode < 400) {
+      return;
+    }
 
     loggerService.logHttp({
       method: request.method,

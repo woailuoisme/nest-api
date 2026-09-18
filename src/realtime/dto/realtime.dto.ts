@@ -105,6 +105,68 @@ export class RealtimeChannelInfoDto {
   isPrivate!: boolean;
 }
 
+/**
+ * Centrifugo Proxy Webhook 频道订阅鉴权请求 DTO Schema
+ */
+export const CentrifugoProxySubscribeSchema = z.object({
+  client: z.string().optional(),
+  transport: z.string().optional(),
+  protocol: z.string().optional(),
+  encoding: z.string().optional(),
+  user: z.string().default(''),
+  channel: z.string().min(1, 'channel 不能为空'),
+  data: z.unknown().optional(),
+  bidi: z.boolean().optional(),
+});
+
+export class CentrifugoProxySubscribeDto extends createZodDto(CentrifugoProxySubscribeSchema) {
+  @ApiPropertyOptional({ description: '客户端连接唯一 Client ID', example: 'client_xyz789' })
+  client?: string;
+
+  @ApiPropertyOptional({ description: '客户端传输协议类型', example: 'websocket' })
+  transport?: string;
+
+  @ApiPropertyOptional({ description: '传输层协议', example: 'json' })
+  protocol?: string;
+
+  @ApiPropertyOptional({ description: '数据编码格式', example: 'json' })
+  encoding?: string;
+
+  @ApiProperty({ description: '已鉴权用户唯一 ID', example: 'usr_abc123' })
+  user!: string;
+
+  @ApiProperty({ description: '待订阅的频道全名', example: 'private:notifications.usr_abc123' })
+  channel!: string;
+
+  @ApiPropertyOptional({ description: '客户端随订阅附带的自定义载荷' })
+  data?: unknown;
+
+  @ApiPropertyOptional({ description: '是否开启双向流通信' })
+  bidi?: boolean;
+}
+
+/**
+ * Centrifugo Proxy Webhook 响应错误对象
+ */
+export class CentrifugoProxyErrorDto {
+  @ApiProperty({ description: 'Centrifugo 协议错误码 (如 103 PermissionDenied)', example: 103 })
+  code!: number;
+
+  @ApiProperty({ description: '错误描述信息', example: 'Permission denied' })
+  message!: string;
+}
+
+/**
+ * Centrifugo Proxy Webhook 频道订阅统一响应 DTO
+ */
+export class CentrifugoProxyResponseDto {
+  @ApiPropertyOptional({ description: '准入成功时的结果对象' })
+  result?: Record<string, unknown>;
+
+  @ApiPropertyOptional({ description: '鉴权失败时的错误对象', type: CentrifugoProxyErrorDto })
+  error?: CentrifugoProxyErrorDto;
+}
+
 // 兼容别名导出，确保历史引用零侵入
 export type WebsocketTokenQueryDto = RealtimeTokenQueryDto;
 export type WebsocketTokenResponseDto = RealtimeTokenResponseDto;

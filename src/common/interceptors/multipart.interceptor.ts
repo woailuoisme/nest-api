@@ -69,9 +69,9 @@ export class MultipartInterceptor implements NestInterceptor {
     if (options === undefined) return next.handle();
 
     const req = context.switchToHttp().getRequest<MultipartRequest>();
-    const files = await this.#collectFiles(req, options?.streamToDisk === true);
+    const files = await this.#collectFiles(req, options.streamToDisk === true);
     try {
-      this.#validate(files, options ?? {});
+      this.#validate(files, options);
     } catch (err) {
       // 校验失败 → 清理已写 tmp 后重抛，避免孤儿文件
       await this.#cleanupUnusedTmp(files);

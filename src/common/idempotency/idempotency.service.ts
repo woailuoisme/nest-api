@@ -148,7 +148,7 @@ export class IdempotencyService {
    * 校验 Idempotency-Key 请求头合法性（遵循 IETF 草案与 Stripe 工业标准）
    */
   validateIdempotencyKey(key: string): void {
-    if (!key || key.length === 0) {
+    if (!key) {
       throw new BadRequestException('Idempotency-Key header cannot be empty');
     }
     if (key.length > MAX_IDEMPOTENCY_KEY_LENGTH) {
@@ -249,9 +249,7 @@ export class IdempotencyService {
 
       // 2. 尝试获取分布式排他锁（抢占执行权）
       const lockToken = randomUUID();
-      const acquired = await this.redis.getClient().set(lockKey, lockToken, 'PX', lockTtlMs, 'NX');
-
-      if (acquired === 'OK') {
+      if (await this.tryAcquireLock(lockKey, lockToken, lockTtlMs)) {
         return { acquired: true, lockToken, cacheKey, lockKey };
       }
 
@@ -404,8 +402,7 @@ export class IdempotencyService {
       }
 
       // b. 若尚未写入缓存，检查前一个持有锁的请求是否失败退出了（锁已释放）
-      const retryAcquire = await this.redis.getClient().set(lockKey, lockToken, 'PX', lockTtlMs, 'NX');
-      if (retryAcquire === 'OK') {
+      if (await this.tryAcquireLock(lockKey, lockToken, lockTtlMs)) {
         // 成功接管锁执行权，转为当前请求执行
         return { acquired: true, lockToken, cacheKey, lockKey };
       }
@@ -415,6 +412,12 @@ export class IdempotencyService {
     throw new ConflictException(
       'A previous request with the same Idempotency-Key is currently in progress. Please retry after a backoff.',
     );
+  }
+
+  /** 尝试抢占分布式排他锁（SET NX PX），成功返回 true */
+  private async tryAcquireLock(lockKey: string, lockToken: string, lockTtlMs: number): Promise<boolean> {
+    const result = await this.redis.getClient().set(lockKey, lockToken, 'PX', lockTtlMs, 'NX');
+    return result === 'OK';
   }
 
   /** 使用 Lua 脚本基于 Token 原子安全释放锁 */

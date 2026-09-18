@@ -40,12 +40,7 @@ export class MediaCompensationManager {
       await this.cancelVariantJobs(result, mediaJobs);
 
       // 仅回滚本次操作新创建的物理主文件和已就绪变体
-      const variantPaths = result.variants
-        ? Object.values(result.variants)
-            .filter((v) => v.isNew !== false && v.status === 'ready')
-            .map((v) => v.path)
-        : [];
-      const pathsToDelete = compact([result.isNew !== false ? result.path : null, ...variantPaths]);
+      const pathsToDelete = this.collectRollbackPaths(result);
       if (pathsToDelete.length > 0) {
         await this.deletePaths(disk, pathsToDelete);
       }
@@ -114,6 +109,17 @@ export class MediaCompensationManager {
         });
       }
     }
+  }
+
+  /** 收集需回滚的物理路径：仅本次新建的主图与已就绪变体（避免误删去重共享的已存在文件） */
+  private collectRollbackPaths(result: MediaUploadResult): string[] {
+    const variantPaths = result.variants
+      ? Object.values(result.variants)
+          .filter((v) => v.isNew !== false && v.status === 'ready')
+          .map((v) => v.path)
+      : [];
+
+    return compact([result.isNew !== false ? result.path : null, ...variantPaths]);
   }
 
   /** 提取并扁平化旧文件 URL 清单 */

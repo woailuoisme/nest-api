@@ -182,22 +182,31 @@ describe('Canonical JSON & Deterministic Hashing', () => {
   });
 });
 
+/**
+ * Redis 依赖桩：IdempotencyService 仅用到 getClient() 暴露的 set/get/eval 与 key() 命名空间拼接，
+ * 统一在此构造，避免多个 describe 重复声明同一套 mock 形状与类型转型。
+ */
+function createMockIdempotencyRedis() {
+  const client = {
+    set: vi.fn(),
+    get: vi.fn(),
+    eval: vi.fn(),
+  };
+  const redis = {
+    getClient: vi.fn(() => client),
+    key: vi.fn((...args: string[]) => args.join(':')),
+  };
+  return { client, redis: redis as unknown as RedisService };
+}
+
 describe('IdempotencyService', () => {
   let service: IdempotencyService;
   let mockRedisClient: any;
-  let mockRedis: any;
 
   beforeEach(() => {
-    mockRedisClient = {
-      set: vi.fn(),
-      get: vi.fn(),
-      eval: vi.fn(),
-    };
-    mockRedis = {
-      getClient: vi.fn(() => mockRedisClient),
-      key: vi.fn((...args: string[]) => args.join(':')),
-    };
-    service = new IdempotencyService(mockRedis as unknown as RedisService);
+    const { client, redis } = createMockIdempotencyRedis();
+    mockRedisClient = client;
+    service = new IdempotencyService(redis);
   });
 
   describe('validateIdempotencyKey', () => {
@@ -572,20 +581,12 @@ describe('IdempotencyInterceptor', () => {
   let reflector: Reflector;
   let realService: IdempotencyService;
   let mockRedisClient: any;
-  let mockRedis: any;
 
   beforeEach(() => {
+    const { client, redis } = createMockIdempotencyRedis();
     reflector = new Reflector();
-    mockRedisClient = {
-      set: vi.fn(),
-      get: vi.fn(),
-      eval: vi.fn(),
-    };
-    mockRedis = {
-      getClient: vi.fn(() => mockRedisClient),
-      key: vi.fn((...args: string[]) => args.join(':')),
-    };
-    realService = new IdempotencyService(mockRedis as unknown as RedisService);
+    mockRedisClient = client;
+    realService = new IdempotencyService(redis);
     interceptor = new IdempotencyInterceptor(reflector, realService);
   });
 

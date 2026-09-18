@@ -1,6 +1,6 @@
 import { BullModule } from '@nestjs/bullmq';
 import { Global, Module } from '@nestjs/common';
-import { DEMO_QUEUE, MAIL_QUEUE, MEDIA_QUEUE, SEARCH_QUEUE, TOKEN_CLEANUP_QUEUE } from '@/common/constants/queues';
+import { ALL_QUEUE_NAMES } from '@/common/constants/queues';
 import { DemoJobs } from './demo/demo.jobs';
 import { MailJobs } from './mail/mail.jobs';
 import { MediaJobs } from './media/media.jobs';
@@ -13,15 +13,7 @@ import { SearchJobs } from './search/search.jobs';
  */
 @Global()
 @Module({
-  imports: [
-    BullModule.registerQueue(
-      { name: MAIL_QUEUE },
-      { name: TOKEN_CLEANUP_QUEUE },
-      { name: DEMO_QUEUE },
-      { name: MEDIA_QUEUE },
-      { name: SEARCH_QUEUE },
-    ),
-  ],
+  imports: [BullModule.registerQueue(...ALL_QUEUE_NAMES.map((name) => ({ name })))],
   providers: [MailJobs, DemoJobs, MediaJobs, SearchJobs],
   exports: [MailJobs, DemoJobs, MediaJobs, SearchJobs],
 })

@@ -45,6 +45,6 @@ export class DemoSchedule implements OnApplicationBootstrap {
     // 启动时投递一个延迟 30 秒的演示 job，便于直接观测延迟执行日志
     await this.queue.add(DemoJobName.Delayed, { message: 'delayed at boot' }, { delay: 30_000 });
 
-    this.logger.log('Demo schedule registered (tick every minute, delayed job in 30s)');
+    this.logger.debug('Demo schedule registered (tick every minute, delayed job in 30s)');
   }
 }

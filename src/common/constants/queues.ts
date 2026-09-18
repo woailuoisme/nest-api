@@ -21,3 +21,9 @@ export const MEDIA_QUEUE = 'media';
 
 /** 全文搜索索引同步队列名 (Meilisearch 异步增删改索引) */
 export const SEARCH_QUEUE = 'search';
+
+/**
+ * 全部队列清单 — 生产者（JobsModule）与消费者（WorkerModule）统一据此注册，
+ * 确保两侧队列集合恒定一致（新增队列只需在此追加一次）。
+ */
+export const ALL_QUEUE_NAMES = [MAIL_QUEUE, TOKEN_CLEANUP_QUEUE, DEMO_QUEUE, MEDIA_QUEUE, SEARCH_QUEUE] as const;

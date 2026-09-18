@@ -32,12 +32,12 @@ export class MailService {
    * 发送邮箱验证邮件
    */
   async sendVerificationEmail({ to, name, token, locale }: MailJobData): Promise<void> {
-    const link = `${this.appUrl}/auth/verify-email?token=${token}`;
-    await this.mailerService.sendMail({
+    await this.sendTemplateMail({
       to,
-      subject: MAIL_SUBJECTS[MailJobName.VerifyEmail][locale],
-      template: `verify-email.${locale}.hbs`,
-      context: { name, link },
+      name,
+      locale,
+      jobName: MailJobName.VerifyEmail,
+      link: `${this.appUrl}/auth/verify-email?token=${token}`,
     });
   }
 
@@ -45,12 +45,12 @@ export class MailService {
    * 发送密码重置邮件
    */
   async sendPasswordResetEmail({ to, name, token, locale }: MailJobData): Promise<void> {
-    const link = `${this.appUrl}/auth/reset-password?token=${token}`;
-    await this.mailerService.sendMail({
+    await this.sendTemplateMail({
       to,
-      subject: MAIL_SUBJECTS[MailJobName.ResetPassword][locale],
-      template: `reset-password.${locale}.hbs`,
-      context: { name, link },
+      name,
+      locale,
+      jobName: MailJobName.ResetPassword,
+      link: `${this.appUrl}/auth/reset-password?token=${token}`,
     });
   }
 
@@ -58,12 +58,12 @@ export class MailService {
    * 发送欢迎邮件（注册后，无 token）
    */
   async sendWelcomeEmail({ to, name, locale }: MailJobData): Promise<void> {
-    const link = `${this.appUrl}/login`;
-    await this.mailerService.sendMail({
+    await this.sendTemplateMail({
       to,
-      subject: MAIL_SUBJECTS[MailJobName.Welcome][locale],
-      template: `welcome.${locale}.hbs`,
-      context: { name, link },
+      name,
+      locale,
+      jobName: MailJobName.Welcome,
+      link: `${this.appUrl}/login`,
     });
   }
 
@@ -72,5 +72,23 @@ export class MailService {
    */
   sendMail(options: ISendMailOptions) {
     return this.mailerService.sendMail(options);
+  }
+
+  /**
+   * 统一模板发信：主题与模板名均由 MailJobName + locale 推导（MailJobName 枚举值即模板基名）
+   */
+  private async sendTemplateMail(params: {
+    to: string;
+    name: string;
+    locale: MailLocale;
+    jobName: MailJobName;
+    link: string;
+  }): Promise<void> {
+    await this.mailerService.sendMail({
+      to: params.to,
+      subject: MAIL_SUBJECTS[params.jobName][params.locale],
+      template: `${params.jobName}.${params.locale}.hbs`,
+      context: { name: params.name, link: params.link },
+    });
   }
 }

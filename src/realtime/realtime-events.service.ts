@@ -1,5 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { OnEvent } from '@nestjs/event-emitter';
+import { Role } from '@/common/constants/roles';
 import type { CurrentUserPayload } from '@/common/decorators/current-user.decorator';
 import {
   IOT_EVENTS,
@@ -10,13 +11,18 @@ import {
 } from '@/common/events';
 import type { NotificationBroadcastEvent, NotificationSentEvent } from '@/common/events/notification.event';
 import { REALTIME_CHANNELS } from './channels/realtime-channels.service';
-import type { RealtimeSubscribeResponseDto, RealtimeTokenResponseDto } from './dto/realtime.dto';
+import type {
+  CentrifugoProxyResponseDto,
+  CentrifugoProxySubscribeDto,
+  RealtimeSubscribeResponseDto,
+  RealtimeTokenResponseDto,
+} from './dto/realtime.dto';
 import { RealtimeService } from './realtime.service';
 
 /**
  * 统一实时业务与通信事件中枢服务 (RealtimeEventsService)
- * 1. 负责长连接 Token 签发与订阅鉴权（支持 WebSocket 与 SSE 双协议）；
- * 2. 集中监听系统与业务领域事件，通过 Centrifugo 规范频道下发，同时兼容推送历史 ws/sse 频道。
+ * 1. 负责长连接 Token 签发与订阅鉴权（支持 Centrifugo Proxy Webhook 与 Token 双模）；
+ * 2. 集中监听系统与业务领域事件，通过 Centrifugo 规范频道单一分发，彻底消除多倍推流与冗余克隆。
  */
 @Injectable()
 export class RealtimeEventsService {
@@ -41,7 +47,7 @@ export class RealtimeEventsService {
   }
 
   /**
-   * 处理私有频道订阅鉴权
+   * 处理私有频道订阅鉴权 (客户端 Token 模式)
    */
   async subscribeChannel(
     user: CurrentUserPayload,
@@ -53,6 +59,37 @@ export class RealtimeEventsService {
   }
 
   /**
+   * 处理 Centrifugo 反向代理订阅鉴权 (Proxy Subscribe Webhook 模式)
+   */
+  async handleProxySubscribe(dto: CentrifugoProxySubscribeDto): Promise<CentrifugoProxyResponseDto> {
+    // Proxy 模式下 Centrifugo 会在订阅附带载荷中透传用户画像（email / role）
+    const userData = (dto.data ?? {}) as Record<string, unknown>;
+    const userPayload: CurrentUserPayload = {
+      id: dto.user || '',
+      email: (userData.email as string) || '',
+      role: (userData.role as Role) || Role.USER,
+    };
+
+    const authResult = await this.realtimeService.canSubscribe(userPayload, dto.channel);
+    if (!authResult.authorized) {
+      this.logger.warn(
+        `[Realtime] Centrifugo Proxy 订阅鉴权拒绝: channel=[${dto.channel}], user=[${dto.user}], reason=${authResult.reason}`,
+      );
+      return {
+        error: {
+          code: 103,
+          message: authResult.reason ?? 'Permission denied',
+        },
+      };
+    }
+
+    this.logger.debug(`[Realtime] Centrifugo Proxy 订阅鉴权通过: channel=[${dto.channel}], user=[${dto.user}]`);
+    return {
+      result: {},
+    };
+  }
+
+  /**
    * 监听领域事件：特定用户通知派发
    */
   @OnEvent('notification.sent')
@@ -60,17 +97,7 @@ export class RealtimeEventsService {
     if (!event.userId) return;
     this.logger.debug(`[Realtime] 接收到单播通知事件，准备推送到用户 [${event.userId}]`);
 
-    // 1. 推送到规范频道
-    const canonicalChannel = REALTIME_CHANNELS.USER_NOTIFICATION.replace('{userId}', event.userId);
-    await this.realtimeService.broadcast(canonicalChannel, 'notification', event.payload);
-
-    // 2. 兼容模式：推送到历史 ws 与 sse 专属频道
-    const wsChannel = REALTIME_CHANNELS.WS_USER_NOTIFICATION.replace('{userId}', event.userId);
-    const sseChannel = REALTIME_CHANNELS.SSE_USER_NOTIFICATION.replace('{userId}', event.userId);
-    await this.realtimeService.broadcast(wsChannel, 'notification', event.payload);
-    await this.realtimeService.broadcast(sseChannel, 'notification', event.payload);
-
-    // 3. 推送到 Centrifugo 默认用户级推流 (sendToUser)
+    // 规范单一推流：直接通过 Centrifugo 用户专属通道推送 (user#${userId})，彻底终结 4 倍网络放大
     await this.realtimeService.sendToUser(event.userId, 'notification', event.payload);
   }
 
@@ -81,12 +108,8 @@ export class RealtimeEventsService {
   async handleNotificationBroadcast(event: NotificationBroadcastEvent): Promise<void> {
     this.logger.debug('[Realtime] 接收到广播通知事件，准备进行全站实时推送');
 
-    // 1. 推送到规范广播频道
+    // 规范单一推流：推送到全站广播频道
     await this.realtimeService.broadcast(REALTIME_CHANNELS.BROADCAST_NOTIFICATION, 'notification', event.payload);
-
-    // 2. 兼容模式：推送到历史 ws 与 sse 广播频道
-    await this.realtimeService.broadcast(REALTIME_CHANNELS.WS_BROADCAST_NOTIFICATION, 'notification', event.payload);
-    await this.realtimeService.broadcast(REALTIME_CHANNELS.SSE_BROADCAST_NOTIFICATION, 'notification', event.payload);
   }
 
   /**
@@ -102,7 +125,7 @@ export class RealtimeEventsService {
       timestamp: event.timestamp,
     };
 
-    await this.broadcastDeviceTriple(event.deviceId, 'telemetry', payload);
+    await this.broadcastDeviceChannel(event.deviceId, 'telemetry', payload);
   }
 
   /**
@@ -119,7 +142,7 @@ export class RealtimeEventsService {
       timestamp: event.timestamp,
     };
 
-    await this.broadcastDeviceTriple(event.deviceId, 'status', payload);
+    await this.broadcastDeviceChannel(event.deviceId, 'status', payload);
   }
 
   /**
@@ -128,13 +151,11 @@ export class RealtimeEventsService {
   @OnEvent(IOT_EVENTS.ALARM_TRIGGERED)
   async handleIotAlarmTriggered(event: IotAlarmTriggeredEvent): Promise<void> {
     this.logger.warn(`[Realtime] 接收到设备 [${event.deviceId}] 告警事件: ${event.message}`);
-    // 1. 设备专属频道（规范 + 兼容）
-    await this.broadcastDeviceTriple(event.deviceId, 'alarm', event);
+    // 1. 设备专属规范频道
+    await this.broadcastDeviceChannel(event.deviceId, 'alarm', event);
 
-    // 2. 全系统告警中枢频道（规范 + 兼容）
+    // 2. 全系统告警中枢规范频道
     await this.realtimeService.broadcast(REALTIME_CHANNELS.IOT_ALARMS, 'alarm', event);
-    await this.realtimeService.broadcast(REALTIME_CHANNELS.WS_IOT_ALARMS, 'alarm', event);
-    await this.realtimeService.broadcast(REALTIME_CHANNELS.SSE_IOT_ALARMS, 'alarm', event);
   }
 
   /**
@@ -143,20 +164,15 @@ export class RealtimeEventsService {
   @OnEvent(IOT_EVENTS.COMMAND_EXECUTED)
   async handleIotCommandExecuted(event: IotCommandExecutedEvent): Promise<void> {
     this.logger.debug(`[Realtime] 接收到设备 [${event.deviceId}] 指令 [${event.command}] 回执事件`);
-    await this.broadcastDeviceTriple(event.deviceId, 'command_receipt', event);
+    await this.broadcastDeviceChannel(event.deviceId, 'command_receipt', event);
   }
 
   /**
-   * 辅助方法：向设备专属三合一频道（规范频道 + WebSocket 兼容 + SSE 兼容）广播消息
+   * 辅助方法：向设备专属规范频道广播消息
    */
-  private async broadcastDeviceTriple<T>(deviceId: string, event: string, payload: T): Promise<void> {
+  private async broadcastDeviceChannel<T>(deviceId: string, event: string, payload: T): Promise<void> {
     const canonicalChannel = REALTIME_CHANNELS.DEVICE_TELEMETRY.replace('{deviceId}', deviceId);
-    const wsChannel = REALTIME_CHANNELS.WS_DEVICE_TELEMETRY.replace('{deviceId}', deviceId);
-    const sseChannel = REALTIME_CHANNELS.SSE_DEVICE_TELEMETRY.replace('{deviceId}', deviceId);
-
     await this.realtimeService.broadcast(canonicalChannel, event, payload);
-    await this.realtimeService.broadcast(wsChannel, event, payload);
-    await this.realtimeService.broadcast(sseChannel, event, payload);
   }
 
   /**

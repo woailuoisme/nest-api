@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   IotCommandService,
   IotController,
+  IotDeviceCredentialService,
   IotModule,
   IotTelemetryService,
   MQTT_CLIENT_TOKEN,
@@ -28,5 +29,6 @@ describe('IotModule (物联网与 MQTT 核心模块)', () => {
     expect(exports).toContain(MQTT_OPTIONS_TOKEN);
     expect(exports).toContain(IotCommandService);
     expect(exports).toContain(IotTelemetryService);
+    expect(exports).toContain(IotDeviceCredentialService);
   });
 });

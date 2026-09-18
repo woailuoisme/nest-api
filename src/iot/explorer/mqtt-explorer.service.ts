@@ -6,6 +6,7 @@ import {
   MQTT_PARAM_METADATA,
   MQTT_SUBSCRIBE_METADATA,
   type MqttMessageContext,
+  type MqttSubscribeMetadata,
   type MqttSubscribeOptions,
 } from '../transports/interfaces/mqtt.interface';
 import { MqttService } from '../transports/mqtt.service';
@@ -17,6 +18,16 @@ interface RegisteredMqttRoute {
   instance: Record<string, unknown>;
   methodName: string;
   paramBindings?: MqttParamBinding[];
+}
+
+/** 反序列化 MQTT 报文：合法 JSON 解析为对象，否则回退为 UTF-8 字符串 */
+function parseMqttPayload(rawPayload: Buffer): unknown {
+  const text = rawPayload.toString('utf-8');
+  try {
+    return JSON.parse(text);
+  } catch {
+    return text;
+  }
 }
 
 @Injectable()
@@ -67,21 +78,14 @@ export class MqttExplorerService implements OnApplicationBootstrap {
           continue;
         }
 
-        const metadata = this.reflector.get<
-          | {
-              pattern: string;
-              options: MqttSubscribeOptions;
-            }
-          | undefined
-        >(MQTT_SUBSCRIBE_METADATA, targetCallback);
-
+        const metadata = this.reflector.get<MqttSubscribeMetadata | undefined>(MQTT_SUBSCRIBE_METADATA, targetCallback);
         if (!metadata) {
           continue;
         }
 
-        const paramBindings =
-          (Reflect.getMetadata(MQTT_PARAM_METADATA, prototype, methodName) as MqttParamBinding[] | undefined) ||
-          undefined;
+        const paramBindings = Reflect.getMetadata(MQTT_PARAM_METADATA, prototype, methodName) as
+          | MqttParamBinding[]
+          | undefined;
 
         this.routes.push({
           pattern: metadata.pattern,
@@ -126,19 +130,13 @@ export class MqttExplorerService implements OnApplicationBootstrap {
    * 将接收到的 MQTT 消息精准分发至匹配的业务方法
    */
   async dispatch(topic: string, rawPayload: Buffer, packet: IPublishPacket): Promise<void> {
+    // Payload 反序列化与匹配的路由无关，单条消息仅解析一次
+    const payload = parseMqttPayload(rawPayload);
+
     for (const route of this.routes) {
       const matchResult = matchTopic(route.pattern, topic);
       if (!matchResult.matched) {
         continue;
-      }
-
-      // 解构/反序列化 Payload
-      let payload: unknown;
-      const strPayload = rawPayload.toString('utf-8');
-      try {
-        payload = JSON.parse(strPayload);
-      } catch {
-        payload = strPayload;
       }
 
       const context: MqttMessageContext = {
@@ -151,29 +149,9 @@ export class MqttExplorerService implements OnApplicationBootstrap {
         userProperties: packet.properties?.userProperties as Record<string, string | string[]> | undefined,
       };
 
-      // 组装参数
-      let args: unknown[];
-      if (route.paramBindings && route.paramBindings.length > 0) {
-        const maxIndex = Math.max(...route.paramBindings.map((b) => b.index));
-        args = new Array(maxIndex + 1);
-
-        for (const binding of route.paramBindings) {
-          if (binding.type === 'payload') {
-            args[binding.index] = payload;
-          } else if (binding.type === 'params') {
-            args[binding.index] = binding.paramName ? matchResult.params[binding.paramName] : matchResult.params;
-          } else if (binding.type === 'context') {
-            args[binding.index] = context;
-          }
-        }
-      } else {
-        // 未声明具体参数装饰器时的默认入参约定: (payload, context)
-        args = [payload, context];
-      }
-
       try {
         const targetMethod = route.instance[route.methodName] as (...fnArgs: unknown[]) => Promise<unknown> | unknown;
-        await targetMethod.apply(route.instance, args);
+        await targetMethod.apply(route.instance, this.resolveArgs(route, payload, matchResult.params, context));
       } catch (error) {
         this.logger.error(
           `执行 MQTT 主题 [${topic}] 业务处理器 ${route.instance.constructor.name}.${route.methodName}() 发生异常: ${(error as Error).message}`,
@@ -185,5 +163,33 @@ export class MqttExplorerService implements OnApplicationBootstrap {
 
   getRegisteredRoutes(): RegisteredMqttRoute[] {
     return [...this.routes];
+  }
+
+  /**
+   * 内部方法：按方法上声明的 @MqttPayload / @MqttParams / @MqttCtx 顺序组装实参
+   * 未声明任何参数装饰器时，遵循默认入参约定 (payload, context)
+   */
+  private resolveArgs(
+    route: RegisteredMqttRoute,
+    payload: unknown,
+    params: Record<string, string>,
+    context: MqttMessageContext,
+  ): unknown[] {
+    const bindings = route.paramBindings;
+    if (!bindings?.length) {
+      return [payload, context];
+    }
+
+    const args: unknown[] = new Array(Math.max(...bindings.map((binding) => binding.index)) + 1);
+    for (const binding of bindings) {
+      if (binding.type === 'payload') {
+        args[binding.index] = payload;
+      } else if (binding.type === 'params') {
+        args[binding.index] = binding.paramName ? params[binding.paramName] : params;
+      } else {
+        args[binding.index] = context;
+      }
+    }
+    return args;
   }
 }

@@ -33,13 +33,13 @@ export class TransformInterceptor<T> implements NestInterceptor<T, unknown> {
           return data;
         }
 
-        // 分页对象自动归一化为标准的 items 与 pagination 信封
+        // 分页对象自动归一化为标准的 items 与 meta 信封
         if (data && typeof data === 'object' && 'items' in data) {
           const obj = data as { items: unknown; pagination?: unknown; meta?: unknown };
-          if (obj.pagination || obj.meta) {
+          if (obj.meta || obj.pagination) {
             return {
               items: Array.isArray(obj.items) ? obj.items : [],
-              pagination: obj.pagination ?? obj.meta,
+              meta: obj.meta ?? obj.pagination,
             };
           }
         }

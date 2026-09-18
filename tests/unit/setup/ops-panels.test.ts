@@ -46,11 +46,11 @@ describe('registerOpsPanels', () => {
     });
     expect(setupApiDocumentation).toHaveBeenCalledWith(app, 'http://localhost:4300');
     expect(panels).toEqual([
-      { label: 'Scalar Client API Document', url: 'http://localhost:4300/docs' },
-      { label: 'Scalar Admin API Document', url: 'http://localhost:4300/docs/admin' },
-      { label: 'Scalar Auth API Document', url: 'http://localhost:4300/docs/auth' },
-      { label: 'BullMQ Queue Dashboard', url: 'http://localhost:4300/queues' },
-      { label: 'Web Log Viewer', url: 'http://localhost:4300/logs' },
+      { label: 'Docs', url: 'http://localhost:4300/docs' },
+      { label: 'Admin', url: 'http://localhost:4300/docs/admin' },
+      { label: 'Auth', url: 'http://localhost:4300/docs/auth' },
+      { label: 'Queues', url: 'http://localhost:4300/queues' },
+      { label: 'Logs', url: 'http://localhost:4300/logs' },
     ]);
   });
 
@@ -67,9 +67,9 @@ describe('registerOpsPanels', () => {
     const panels = await registerOpsPanels(app);
 
     expect(panels).toEqual([
-      { label: 'Scalar Client API Document', url: 'http://localhost:4300/docs' },
-      { label: 'Scalar Admin API Document', url: 'http://localhost:4300/docs/admin' },
-      { label: 'Scalar Auth API Document', url: 'http://localhost:4300/docs/auth' },
+      { label: 'Docs', url: 'http://localhost:4300/docs' },
+      { label: 'Admin', url: 'http://localhost:4300/docs/admin' },
+      { label: 'Auth', url: 'http://localhost:4300/docs/auth' },
     ]);
   });
 
@@ -81,7 +81,7 @@ describe('registerOpsPanels', () => {
     const panels = await registerOpsPanels(app);
 
     expect(setupApiDocumentation).not.toHaveBeenCalled();
-    expect(panels.map((panel) => panel.label)).toEqual(['BullMQ Queue Dashboard', 'Web Log Viewer']);
+    expect(panels.map((panel) => panel.label)).toEqual(['Queues', 'Logs']);
   });
 
   it('全部面板被拒挂时应返回空列表', async () => {

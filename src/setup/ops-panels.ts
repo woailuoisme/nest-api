@@ -30,15 +30,15 @@ export async function registerOpsPanels(app: NestFastifyApplication): Promise<Mo
 
   const panels: MountedPanel[] = [];
   if (docUrls) {
-    panels.push({ label: 'Scalar Client API Document', url: docUrls.clientDocsUrl });
-    panels.push({ label: 'Scalar Admin API Document', url: docUrls.adminDocsUrl });
-    panels.push({ label: 'Scalar Auth API Document', url: docUrls.authDocsUrl });
+    panels.push({ label: 'Docs', url: docUrls.clientDocsUrl });
+    panels.push({ label: 'Admin', url: docUrls.adminDocsUrl });
+    panels.push({ label: 'Auth', url: docUrls.authDocsUrl });
   }
   if (bullBoardUrl) {
-    panels.push({ label: 'BullMQ Queue Dashboard', url: bullBoardUrl });
+    panels.push({ label: 'Queues', url: bullBoardUrl });
   }
   if (logViewerUrl) {
-    panels.push({ label: 'Web Log Viewer', url: logViewerUrl });
+    panels.push({ label: 'Logs', url: logViewerUrl });
   }
   return panels;
 }

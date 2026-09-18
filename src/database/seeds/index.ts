@@ -65,17 +65,15 @@ export async function seedDatabase(
   options?: { only?: string[] | null; log?: (msg: string) => void },
 ): Promise<void> {
   const { only, log = console.log } = options ?? {};
-  const toRun = only ? only.filter((name) => name in seeders) : Object.keys(seeders);
 
-  if (only) {
-    const invalid = only.filter((name) => !(name in seeders));
-    if (invalid.length > 0) {
-      throw new Error(`Unknown seeder(s): ${invalid.join(', ')}`);
-    }
-    log(`🌱 Running seeders: ${toRun.join(', ')}\n`);
-  } else {
-    log('🌱 Seeding database...\n');
+  // 先校验未知名，避免静默跳过导致"看似成功实则未执行"
+  const unknown = only?.filter((name) => !(name in seeders)) ?? [];
+  if (unknown.length > 0) {
+    throw new Error(`Unknown seeder(s): ${unknown.join(', ')}`);
   }
+
+  const toRun = only ?? Object.keys(seeders);
+  log(only ? `🌱 Running seeders: ${toRun.join(', ')}\n` : '🌱 Seeding database...\n');
 
   for (const name of toRun) {
     await seeders[name].run(db);

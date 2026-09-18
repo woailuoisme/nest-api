@@ -1,7 +1,7 @@
 import { BullModule } from '@nestjs/bullmq';
 import { Module } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
-import { DEMO_QUEUE, MAIL_QUEUE, MEDIA_QUEUE, SEARCH_QUEUE, TOKEN_CLEANUP_QUEUE } from '@/common/constants/queues';
+import { ALL_QUEUE_NAMES } from '@/common/constants/queues';
 import { MailModule } from '@/common/mail';
 import { MediaModule } from '@/common/media/media.module';
 import { SearchModule } from '@/common/search/search.module';
@@ -29,13 +29,7 @@ import { LoggerModule } from '@/setup/logger/logger.module';
       inject: [ConfigService],
       useFactory: createBullModuleConfig,
     }),
-    BullModule.registerQueue(
-      { name: MAIL_QUEUE },
-      { name: TOKEN_CLEANUP_QUEUE },
-      { name: DEMO_QUEUE },
-      { name: MEDIA_QUEUE },
-      { name: SEARCH_QUEUE },
-    ),
+    BullModule.registerQueue(...ALL_QUEUE_NAMES.map((name) => ({ name }))),
     DatabaseModule,
     StorageModule,
     MailModule,

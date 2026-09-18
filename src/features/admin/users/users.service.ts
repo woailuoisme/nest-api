@@ -113,31 +113,22 @@ export class UsersService {
       }
     }
 
-    const updateData: Partial<typeof user.$inferInsert> = {
-      ...pick(dto, ['name', 'email']),
-      updatedAt: new Date(),
-    };
-
-    const [updatedUser] = await this.db.update(user).set(updateData).where(eq(user.id, id)).returning();
-
-    if (!updatedUser) {
-      throw new NotFoundException('User not found');
-    }
-    await this.searchSyncService.sync(userSearchable, updatedUser);
-    return new UserEntity(updatedUser);
+    return this.applyUserUpdate(id, { ...pick(dto, ['name', 'email']), updatedAt: new Date() });
   }
 
   /** 变更用户角色 — 仅具备权限的管理员可调用 */
   async changeRole(id: string, role: Role) {
-    const [updatedUser] = await this.db
-      .update(user)
-      .set({ role, updatedAt: new Date() })
-      .where(eq(user.id, id))
-      .returning();
+    return this.applyUserUpdate(id, { role, updatedAt: new Date() });
+  }
+
+  /** 内部方法：原子更新并回查 → 未命中抛 404 → 同步搜索引擎（消除 update/changeRole 的重复流程） */
+  private async applyUserUpdate(id: string, patch: Partial<typeof user.$inferInsert>): Promise<UserEntity> {
+    const [updatedUser] = await this.db.update(user).set(patch).where(eq(user.id, id)).returning();
 
     if (!updatedUser) {
       throw new NotFoundException('User not found');
     }
+
     await this.searchSyncService.sync(userSearchable, updatedUser);
     return new UserEntity(updatedUser);
   }

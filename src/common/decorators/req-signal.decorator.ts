@@ -22,9 +22,7 @@ export const REQUEST_SIGNAL_SYMBOL = Symbol.for('NESTFORGE:REQUEST_SIGNAL');
  */
 export const ReqSignal = createParamDecorator((_data: unknown, ctx: ExecutionContext): AbortSignal => {
   const req = ctx.switchToHttp().getRequest<FastifyRequest & { [REQUEST_SIGNAL_SYMBOL]?: AbortSignal }>();
-  if (req?.[REQUEST_SIGNAL_SYMBOL]) {
-    return req[REQUEST_SIGNAL_SYMBOL];
-  }
-  // 兜底回退到 Fastify 底层 Node IncomingMessage.signal 或永久处于非中止态的空 signal
-  return req?.raw?.signal ?? new AbortController().signal;
+
+  // 依次回退：请求级 signal → Fastify 底层 Node IncomingMessage.signal → 永不中止的空 signal
+  return req?.[REQUEST_SIGNAL_SYMBOL] ?? req?.raw?.signal ?? new AbortController().signal;
 });

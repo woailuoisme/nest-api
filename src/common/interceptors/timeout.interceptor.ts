@@ -19,6 +19,19 @@ import type { EnvConfig } from '@/config/env.validation';
 export const DEFAULT_REQUEST_TIMEOUT_MS = 15_000;
 
 /**
+ * 解析默认超时时间：支持直接传入毫秒数（手工装配/测试覆盖）或注入 ConfigService 读取 HTTP_TIMEOUT_MS
+ */
+function resolveDefaultTimeoutMs(source?: number | ConfigService<EnvConfig, true>): number {
+  if (typeof source === 'number') {
+    return source;
+  }
+  if (source instanceof ConfigService) {
+    return source.get('HTTP_TIMEOUT_MS', { infer: true }) ?? DEFAULT_REQUEST_TIMEOUT_MS;
+  }
+  return DEFAULT_REQUEST_TIMEOUT_MS;
+}
+
+/**
  * 生产级双轨协作式超时拦截器 (Dual-Track Cooperative TimeoutInterceptor)
  *
  * 核心机制：
@@ -36,19 +49,9 @@ export class TimeoutInterceptor implements NestInterceptor {
 
   constructor(
     private readonly reflector: Reflector,
-    @Optional() defaultTimeoutOrConfig?: number | ConfigService<EnvConfig, true>,
-    @Optional() maybeDefaultTimeoutMs?: number,
+    @Optional() defaultTimeoutSource?: number | ConfigService<EnvConfig, true>,
   ) {
-    if (typeof defaultTimeoutOrConfig === 'number') {
-      this.defaultTimeoutMs = defaultTimeoutOrConfig;
-    } else if (defaultTimeoutOrConfig instanceof ConfigService) {
-      this.defaultTimeoutMs =
-        defaultTimeoutOrConfig.get('HTTP_TIMEOUT_MS', { infer: true }) ?? DEFAULT_REQUEST_TIMEOUT_MS;
-    } else if (typeof maybeDefaultTimeoutMs === 'number') {
-      this.defaultTimeoutMs = maybeDefaultTimeoutMs;
-    } else {
-      this.defaultTimeoutMs = DEFAULT_REQUEST_TIMEOUT_MS;
-    }
+    this.defaultTimeoutMs = resolveDefaultTimeoutMs(defaultTimeoutSource);
   }
 
   intercept(context: ExecutionContext, next: CallHandler): Observable<unknown> {

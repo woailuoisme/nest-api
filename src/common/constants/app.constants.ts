@@ -16,6 +16,14 @@ export function isProductionEnv(): boolean {
   return process.env.APP_ENV === APP_ENV_VALUES.PRODUCTION;
 }
 
+/**
+ * Laravel FILTER_VALIDATE_BOOLEAN 语义的布尔解析：'true'/'1'/'on'/'yes' → true，其余（含未定义/空串）→ false。
+ * 模块工厂阶段（ConfigService 尚不可用）与 zod env 校验共用同一真值集合，避免两处判定漂移。
+ */
+export function isTruthyEnv(value: unknown): boolean {
+  return ['true', '1', 'on', 'yes'].includes(String(value).toLowerCase());
+}
+
 /** 文件系统路径常量 — 统一管理全系统运行时数据与存储目录 */
 export const PATHS = {
   STORAGE_ROOT: 'storage',

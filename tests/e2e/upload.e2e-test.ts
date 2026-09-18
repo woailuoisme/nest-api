@@ -148,9 +148,13 @@ describe('上传链路 (e2e)', () => {
     });
   }
 
+  /** 构造单文件 multipart 请求（Buffer 拼接保证二进制无损） */
+  function postFile(url: string, filename: string, mimetype: string, content: Buffer) {
+    return post(url, buildMultipart([filePart(filename, mimetype, content)], boundary));
+  }
+
   it('单文件 streamToDisk 请求不挂起并返回 tmpPath（P0 回归）', async () => {
-    const payload = buildMultipart([filePart('a.png', 'image/png', Buffer.from('hello e2e'))], boundary);
-    const response = await post('/test-upload/stream', payload);
+    const response = await postFile('/test-upload/stream', 'a.png', 'image/png', Buffer.from('hello e2e'));
 
     expect(response.statusCode).toBe(201);
     const body = JSON.parse(response.payload);
@@ -172,8 +176,7 @@ describe('上传链路 (e2e)', () => {
 
   it('内存模式收集 buffer 与精确 size', async () => {
     const content = Buffer.from('hello e2e');
-    const payload = buildMultipart([filePart('a.png', 'image/png', content)], boundary);
-    const response = await post('/test-upload/memory', payload);
+    const response = await postFile('/test-upload/memory', 'a.png', 'image/png', content);
 
     expect(response.statusCode).toBe(201);
     expect(JSON.parse(response.payload)).toMatchObject({ ok: true, filename: 'a.png', size: content.length });
@@ -181,8 +184,7 @@ describe('上传链路 (e2e)', () => {
 
   it('流式 save 落盘到最终路径并返回 URL，tmp 消费即删', async () => {
     const content = Buffer.from('final content');
-    const payload = buildMultipart([filePart('a.png', 'image/png', content)], boundary);
-    const response = await post('/test-upload/stream-save', payload);
+    const response = await postFile('/test-upload/stream-save', 'a.png', 'image/png', content);
 
     expect(response.statusCode).toBe(201);
     const { url } = JSON.parse(response.payload) as { url: string };
@@ -194,8 +196,12 @@ describe('上传链路 (e2e)', () => {
   });
 
   it('超过 fileSize 上限 → 写盘后判定截断抛 413，失败路径无孤儿残留', async () => {
-    const payload = buildMultipart([filePart('big.bin', 'application/octet-stream', Buffer.alloc(4096, 1))], boundary);
-    const response = await post('/test-upload/stream-save', payload);
+    const response = await postFile(
+      '/test-upload/stream-save',
+      'big.bin',
+      'application/octet-stream',
+      Buffer.alloc(4096, 1),
+    );
 
     expect(response.statusCode).toBe(413);
     // 失败路径不残留最终文件
@@ -207,22 +213,24 @@ describe('上传链路 (e2e)', () => {
   });
 
   it('内存模式超限 → 拦截器直接抛 413', async () => {
-    const payload = buildMultipart([filePart('big.bin', 'application/octet-stream', Buffer.alloc(4096, 1))], boundary);
-    const response = await post('/test-upload/memory', payload);
+    const response = await postFile(
+      '/test-upload/memory',
+      'big.bin',
+      'application/octet-stream',
+      Buffer.alloc(4096, 1),
+    );
 
     expect(response.statusCode).toBe(413);
   });
 
   it('mime 不在白名单 → 400', async () => {
-    const payload = buildMultipart([filePart('a.exe', 'application/x-msdownload', Buffer.from('x'))], boundary);
-    const response = await post('/test-upload/validated', payload);
+    const response = await postFile('/test-upload/validated', 'a.exe', 'application/x-msdownload', Buffer.from('x'));
 
     expect(response.statusCode).toBe(400);
   });
 
   it('请求结束后 storage/tmp 无残留文件（finalize / onResponse 兜底）', async () => {
-    const payload = buildMultipart([filePart('a.png', 'image/png', Buffer.from('x'))], boundary);
-    await post('/test-upload/stream', payload);
+    await postFile('/test-upload/stream', 'a.png', 'image/png', Buffer.from('x'));
 
     await vi.waitFor(async () => {
       expect(await listTmpFiles()).toHaveLength(0);

@@ -1,16 +1,39 @@
-import { NotFoundException, ServiceUnavailableException } from '@nestjs/common';
+import { NotFoundException, ServiceUnavailableException, UnauthorizedException } from '@nestjs/common';
+import type { ConfigService } from '@nestjs/config';
 import type { EventEmitter2 } from '@nestjs/event-emitter';
 import type { IPublishPacket } from 'mqtt';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { IOT_EVENTS } from '@/common/events';
+import type { EnvConfig } from '@/config/env.validation';
 import {
   type DeviceTelemetryDto,
   IotCommandService,
   IotController,
+  IotDeviceCredentialService,
   IotTelemetryService,
+  MAX_COMMAND_HISTORY,
   type MqttMessageContext,
   type MqttService,
 } from '@/iot';
+
+/** 测试用设备凭证表（与下方换票用例中的 deviceId/deviceSecret 严格对应） */
+const DEVICE_CREDENTIALS = 'cnc-001:secret123456,plc-token-test:secret-key-12345';
+const DEVICE_PEPPER = 'test-iot-device-pepper-16chars';
+const IOT_JWT_SECRET = 'test-iot-jwt-secret-32-characters-minimum';
+const TOKEN_TTL_SECONDS = 3600;
+
+/** 构造设备凭证服务，可覆盖任意 env 以验证 fail fast 分支 */
+function createCredentialService(overrides: Record<string, unknown> = {}): IotDeviceCredentialService {
+  const values: Record<string, unknown> = {
+    IOT_DEVICE_CREDENTIALS: DEVICE_CREDENTIALS,
+    IOT_DEVICE_PEPPER: DEVICE_PEPPER,
+    IOT_JWT_SECRET,
+    IOT_TOKEN_TTL_SECONDS: TOKEN_TTL_SECONDS,
+    ...overrides,
+  };
+  const configService = { get: (key: string) => values[key] } as unknown as ConfigService<EnvConfig, true>;
+  return new IotDeviceCredentialService(configService);
+}
 
 describe('工业物联网特性服务与控制器 (IoT Feature)', () => {
   let telemetryService: IotTelemetryService;
@@ -20,6 +43,7 @@ describe('工业物联网特性服务与控制器 (IoT Feature)', () => {
     isConnected: ReturnType<typeof vi.fn>;
     request: ReturnType<typeof vi.fn>;
     publish: ReturnType<typeof vi.fn>;
+    getBrokerUrl: ReturnType<typeof vi.fn>;
   };
   let mockEventEmitter: {
     emit: ReturnType<typeof vi.fn>;
@@ -30,6 +54,7 @@ describe('工业物联网特性服务与控制器 (IoT Feature)', () => {
       isConnected: vi.fn().mockReturnValue(true),
       request: vi.fn(),
       publish: vi.fn().mockResolvedValue(undefined),
+      getBrokerUrl: vi.fn().mockReturnValue('mqtt://localhost:1883'),
     };
 
     mockEventEmitter = {
@@ -39,6 +64,7 @@ describe('工业物联网特性服务与控制器 (IoT Feature)', () => {
     telemetryService = new IotTelemetryService(
       mockEventEmitter as unknown as EventEmitter2,
       mockMqttService as unknown as MqttService,
+      createCredentialService(),
     );
     commandService = new IotCommandService(
       mockMqttService as unknown as MqttService,
@@ -164,6 +190,112 @@ describe('工业物联网特性服务与控制器 (IoT Feature)', () => {
       expect(shadow.deviceId).toBe('plc-4');
       expect(shadow.online).toBe(true);
     });
+
+    it('issueDeviceToken 应校验设备密钥后签发包含 jti 等标准 Claims 的 JWT 凭证', () => {
+      const res = telemetryService.issueDeviceToken({
+        deviceId: 'cnc-001',
+        deviceSecret: 'secret123456',
+        tenantId: 'factory-a',
+      });
+
+      expect(res.token.split('.')).toHaveLength(3); // 标准 JWT 三段式
+      expect(res.expiresIn).toBe(TOKEN_TTL_SECONDS);
+      expect(res.brokerUrl).toBe('mqtt://localhost:1883');
+
+      const claims = JSON.parse(Buffer.from(res.token.split('.')[1], 'base64url').toString('utf8'));
+      expect(claims).toMatchObject({ sub: 'cnc-001', tenantId: 'factory-a', role: 'device' });
+      expect(claims.jti).toMatch(/^[0-9a-f-]{36}$/);
+      expect(claims.exp - claims.iat).toBe(TOKEN_TTL_SECONDS);
+    });
+
+    it('设备密钥错误或设备未注册时应抛出同一语义的 UnauthorizedException（不泄露注册状态）', () => {
+      const capture = (deviceId: string, deviceSecret: string): Error => {
+        try {
+          telemetryService.issueDeviceToken({ deviceId, deviceSecret });
+        } catch (error) {
+          return error as Error;
+        }
+        throw new Error('预期应抛出 UnauthorizedException');
+      };
+
+      const wrongSecretError = capture('cnc-001', 'wrong-secret');
+      const unknownDeviceError = capture('unknown-device', 'secret123456');
+
+      expect(wrongSecretError).toBeInstanceOf(UnauthorizedException);
+      expect(unknownDeviceError).toBeInstanceOf(UnauthorizedException);
+      expect(wrongSecretError.message).toBe(unknownDeviceError.message);
+    });
+
+    it('未配置 IOT_JWT_SECRET 时应拒绝签发设备凭据（fail fast，不回退硬编码密钥）', () => {
+      const staleService = new IotTelemetryService(
+        mockEventEmitter as unknown as EventEmitter2,
+        mockMqttService as unknown as MqttService,
+        createCredentialService({ IOT_JWT_SECRET: undefined }),
+      );
+
+      expect(() => staleService.issueDeviceToken({ deviceId: 'cnc-001', deviceSecret: 'secret123456' })).toThrow(
+        ServiceUnavailableException,
+      );
+    });
+
+    it('未配置任何设备凭证时应拒绝所有换票请求', () => {
+      const noCredentialService = new IotTelemetryService(
+        mockEventEmitter as unknown as EventEmitter2,
+        mockMqttService as unknown as MqttService,
+        createCredentialService({ IOT_DEVICE_CREDENTIALS: '' }),
+      );
+
+      expect(() => noCredentialService.issueDeviceToken({ deviceId: 'cnc-001', deviceSecret: 'secret123456' })).toThrow(
+        UnauthorizedException,
+      );
+    });
+
+    it('handleDeviceEvent 应正确处理突发硬件告警并派发 ALARM_TRIGGERED 领域事件', () => {
+      telemetryService.handleDeviceEvent(
+        {
+          tenantId: 'factory-a',
+          deviceId: 'cnc-001',
+          level: 'critical',
+          metric: 'e_stop',
+          value: 1,
+          threshold: 0,
+          message: '急停按钮被按下',
+        },
+        'factory-a',
+        'cnc-001',
+      );
+
+      expect(mockEventEmitter.emit).toHaveBeenCalledWith(
+        IOT_EVENTS.ALARM_TRIGGERED,
+        expect.objectContaining({
+          tenantId: 'factory-a',
+          deviceId: 'cnc-001',
+          level: 'critical',
+          metric: 'e_stop',
+          message: '急停按钮被按下',
+        }),
+      );
+    });
+
+    it('simulateEvent 应向 Broker 发送告警并触发领域事件', async () => {
+      await telemetryService.simulateEvent({
+        tenantId: 'factory-a',
+        deviceId: 'cnc-002',
+        level: 'warning',
+        metric: 'vibration_limit',
+        value: 4.5,
+        threshold: 3.0,
+        message: '主轴轴承振动超标',
+      });
+
+      expect(mockMqttService.publish).toHaveBeenCalledWith(
+        'devices/factory-a/cnc-002/events',
+        expect.objectContaining({
+          metric: 'vibration_limit',
+        }),
+        { qos: 1 },
+      );
+    });
   });
 
   describe('IotCommandService (指令下发与设备模拟)', () => {
@@ -205,6 +337,43 @@ describe('工业物联网特性服务与控制器 (IoT Feature)', () => {
           data: { ack: true, motorSpeed: 1500 },
         }),
       );
+    });
+
+    it('sendCommand 应维护指令状态机并在成功时记录 SUCCESS 审计历史', async () => {
+      mockMqttService.request.mockResolvedValue({ ack: true });
+
+      await commandService.sendCommand('plc-audit-1', 'powerOn', { mode: 'auto' });
+
+      const history = commandService.getCommandHistory('plc-audit-1');
+      expect(history).toHaveLength(1);
+      expect(history[0].status).toBe('SUCCESS');
+      expect(history[0].deviceId).toBe('plc-audit-1');
+      expect(history[0].command).toBe('powerOn');
+      expect(history[0].data).toEqual({ ack: true });
+    });
+
+    it('指令审计历史应按「最新在前」返回', async () => {
+      mockMqttService.request.mockResolvedValue({ ack: true });
+
+      await commandService.sendCommand('plc-order-1', 'first');
+      await commandService.sendCommand('plc-order-1', 'second');
+
+      const history = commandService.getCommandHistory('plc-order-1');
+      expect(history.map((record) => record.command)).toEqual(['second', 'first']);
+    });
+
+    it('审计历史超过容量上限时应淘汰最旧记录并保持恒定容量', async () => {
+      mockMqttService.request.mockResolvedValue({ ack: true });
+
+      const total = MAX_COMMAND_HISTORY + 1;
+      for (let index = 0; index < total; index++) {
+        await commandService.sendCommand('plc-cap-1', `cmd-${index}`);
+      }
+
+      const history = commandService.getCommandHistory();
+      expect(history).toHaveLength(MAX_COMMAND_HISTORY);
+      expect(history[0].command).toBe(`cmd-${total - 1}`);
+      expect(history.at(-1)?.command).toBe('cmd-1'); // 最旧的 cmd-0 已被淘汰
     });
 
     it('模拟设备响应器收到指令时应原路回送带有相同 correlationData 的确认消息', async () => {
@@ -265,6 +434,37 @@ describe('工业物联网特性服务与控制器 (IoT Feature)', () => {
       );
       expect(shadow.deviceId).toBe('plc-88');
       expect(shadow.online).toBe(true);
+    });
+
+    it('issueDeviceToken 应调用 telemetryService 成功签发凭证', () => {
+      const res = controller.issueDeviceToken({
+        deviceId: 'plc-token-test',
+        deviceSecret: 'secret-key-12345',
+        tenantId: 'tenant-test',
+      });
+
+      expect(res.token).toBeDefined();
+      expect(res.brokerUrl).toBe('mqtt://localhost:1883');
+      expect(res.expiresIn).toBe(TOKEN_TTL_SECONDS);
+    });
+
+    it('mockEvent 应向 Broker 发送硬件告警并返回成功', async () => {
+      const res = await controller.mockEvent({
+        tenantId: 'tenant-test',
+        deviceId: 'plc-alarm-test',
+        level: 'critical',
+        metric: 'e_stop',
+        value: 1,
+        threshold: 0,
+        message: '急停按钮触发',
+      });
+
+      expect(res.success).toBe(true);
+      expect(mockMqttService.publish).toHaveBeenCalledWith(
+        'devices/tenant-test/plc-alarm-test/events',
+        expect.objectContaining({ metric: 'e_stop' }),
+        { qos: 1 },
+      );
     });
   });
 });

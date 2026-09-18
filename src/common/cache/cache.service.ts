@@ -138,15 +138,12 @@ export class CacheService implements OnModuleInit, OnModuleDestroy {
   async get<T>(key: string): Promise<T | null | undefined> {
     const raw = await this.cacheManager.get<T | string>(key);
 
-    if (raw === undefined || raw === null) {
+    // 未命中 → undefined；命中防穿透空值哨兵 → null
+    if (isNil(raw)) {
       return undefined;
     }
 
-    if (raw === NULL_CACHE_SENTINEL) {
-      return null;
-    }
-
-    return raw as T;
+    return raw === NULL_CACHE_SENTINEL ? null : (raw as T);
   }
 
   /**

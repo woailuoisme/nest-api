@@ -1,12 +1,5 @@
-import {
-  baseThresholds,
-  scenarioProfiles,
-  smokeThresholds,
-  soakThresholds,
-  spikeThresholds,
-  stressThresholds,
-} from './config.js';
-import { ScenarioRunner } from './workflow.js';
+import { scenarioRegistry } from './config.js';
+import { createScenarioRunner } from './workflow.js';
 
 /**
  * ==============================================================================
@@ -24,37 +17,8 @@ import { ScenarioRunner } from './workflow.js';
  */
 
 const targetScenario = (__ENV.SCENARIO || 'load').toLowerCase();
-
-const scenarioConfigs = {
-  smoke: {
-    profile: scenarioProfiles.smoke,
-    thresholds: smokeThresholds,
-    thinkTime: 0.5,
-    enableRegister: true,
-  },
-  load: {
-    profile: scenarioProfiles.load,
-    thresholds: baseThresholds,
-    thinkTime: 0.2,
-  },
-  stress: {
-    profile: scenarioProfiles.stress,
-    thresholds: stressThresholds,
-    thinkTime: 0.1,
-  },
-  spike: {
-    profile: scenarioProfiles.spike,
-    thresholds: spikeThresholds,
-    thinkTime: 0.05,
-  },
-  soak: {
-    profile: scenarioProfiles.soak,
-    thresholds: soakThresholds,
-    thinkTime: 0.3,
-  },
-};
-
-const active = scenarioConfigs[targetScenario] || scenarioConfigs.load;
+// 未注册场景回退 load 的负载模型与阈值（场景键仍沿用用户输入，保证报告命名一致）
+const active = scenarioRegistry[targetScenario] || scenarioRegistry.load;
 
 export const options = {
   scenarios: {
@@ -63,11 +27,11 @@ export const options = {
   thresholds: active.thresholds,
 };
 
-const runner = ScenarioRunner.create({
+const runner = createScenarioRunner({
   scenario: targetScenario,
   title: `NestForge [${targetScenario.toUpperCase()}] Performance Test Report`,
   thinkTime: active.thinkTime,
-  enableRegister: active.enableRegister || false,
+  enableRegister: active.enableRegister,
 });
 
 export const setup = runner.setup;

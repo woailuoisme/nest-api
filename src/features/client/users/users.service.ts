@@ -36,12 +36,8 @@ export class UsersService {
    * 3. 失败自动回滚新写入文件，成功自动回收旧头像（支持 Local 与 S3）。
    */
   async updateAvatar(id: string, file: UploadedFile) {
-    const current = await this.db.query.user.findFirst({
-      where: eq(user.id, id),
-    });
-    if (!current) {
-      throw new NotFoundException('User not found');
-    }
+    // 复用自助详情查询完成存在性预检（不存在即 404），并取得当前头像用于成功后回收
+    const current = await this.findOne(id);
 
     return this.mediaService.storeWithCompensation(
       file,

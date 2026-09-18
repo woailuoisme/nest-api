@@ -23,25 +23,18 @@ export class AccessControlGuard implements CanActivate {
   constructor(private readonly reflector: Reflector) {}
 
   canActivate(context: ExecutionContext): boolean {
-    const requiredRoles = this.reflector.getAllAndOverride<Role[]>(ROLES_KEY, [
-      context.getHandler(),
-      context.getClass(),
-    ]);
+    // 方法级声明优先于类级（getAllAndOverride 单遍读取，避免重复构造目标数组）
+    const targets = [context.getHandler(), context.getClass()];
 
-    const requiredPermissions = this.reflector.getAllAndOverride<Permission[]>(PERMISSIONS_KEY, [
-      context.getHandler(),
-      context.getClass(),
-    ]);
+    const requiredRoles = this.reflector.getAllAndOverride<Role[]>(ROLES_KEY, targets);
+    const requiredPermissions = this.reflector.getAllAndOverride<Permission[]>(PERMISSIONS_KEY, targets);
 
     // 无角色且无权限约束，90%+ 常规路由在此 O(1) 极速短路放行
     if (!requiredRoles?.length && !requiredPermissions?.length) {
       return true;
     }
 
-    const isPublic = this.reflector.getAllAndOverride<boolean>(IS_PUBLIC_KEY, [
-      context.getHandler(),
-      context.getClass(),
-    ]);
+    const isPublic = this.reflector.getAllAndOverride<boolean>(IS_PUBLIC_KEY, targets);
     if (isPublic) return true;
 
     const { user } = context.switchToHttp().getRequest();

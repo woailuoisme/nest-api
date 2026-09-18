@@ -1,0 +1,45 @@
+# Mosquitto 主题级 ACL 模板 (Industrial ACL Template)
+# =============================================================
+# 用法：cp acl.example ../credentials/acl.txt 后按租户/设备调整
+# 生效前提：production 档位（acl_file 仅在生产 profile 中启用）
+#
+# 语法要点（Mosquitto acl_file 语义）：
+#   - 未出现在本文件中的主题 = 不可访问；一旦启用 acl_file 即白名单模式
+#   - `topic [read|write|readwrite] <主题>`：缺省为 readwrite；read 覆盖订阅与接收
+#   - `user <用户名>`：其后的规则归属该账号，用户名匹配 password_file（不是 clientid）
+#   - `pattern`：可用 %u 代入用户名、%c 代入 clientid，**对所有用户生效**
+#   - `deny` 的优先级高于同主题的 readwrite 授权，因此本文件不使用 deny（避免与授权规则互斥）
+#   - 本文件首段（任何 user 行之前）的规则归属匿名客户端；生产档位已关闭匿名，故留空
+
+# ─────────────────────────────────────────────────────────────
+# 1. NestJS 平台自身（用户名须与 deploy/.env 的 MQTT_URL 完全一致）
+# ─────────────────────────────────────────────────────────────
+user nestforge-api
+# 全量设备命名空间：下发指令、接收遥测/状态/告警
+topic readwrite devices/#
+# 平台 RPC 回复通道：订阅 app/rpc/{podId}/reply
+topic readwrite app/rpc/#
+# 运维观测：仅只读，不授予 $SYS 写入（Mosquitto 亦不支持改写 $SYS）
+topic read $SYS/#
+
+# ─────────────────────────────────────────────────────────────
+# 2. 工业设备（一机一密：用户名 = deviceId，密码由 mosquitto_passwd 写入 password.txt）
+# ─────────────────────────────────────────────────────────────
+# 仅能访问「自身 deviceId」所在子树（遥测/状态/告警上报 + 自身指令接收）
+# 说明：租户层级用 + 通配是为了兼容 devices/{tenantId}/{deviceId}/... 的主题布局；
+#      越权面已被限制为「同名 deviceId 跨租户」，如要求绝对隔离请改为按设备逐条 user 规则
+pattern readwrite devices/+/%u/#
+
+# 接收平台下发的控制指令（当前主题布局 devices/{deviceId}/command 无租户层级）
+pattern read devices/%u/command
+
+# 仅能向平台 RPC 回复通道写入定向回执（app/rpc/{podId}/reply），无法订阅该通道
+pattern write app/rpc/+/reply
+
+# ─────────────────────────────────────────────────────────────
+# 3. 可选：按租户细化（规模较大时建议由脚本从设备台账生成）
+# ─────────────────────────────────────────────────────────────
+# user cnc-001
+# topic readwrite devices/factory-alpha/cnc-001/#
+# topic read devices/cnc-001/command
+# topic write app/rpc/+/reply

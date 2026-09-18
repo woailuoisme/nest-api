@@ -1,7 +1,18 @@
 import { InjectQueue } from '@nestjs/bullmq';
 import { Injectable } from '@nestjs/common';
-import type { Job, Queue } from 'bullmq';
+import type { Job, JobsOptions, Queue } from 'bullmq';
 import { SEARCH_QUEUE } from '@/common/constants/queues';
+
+/** 搜索任务统一重试与保留策略：指数退避 3 次；成功保留 100 条、失败保留 500 条便于排障 */
+const SEARCH_JOB_OPTIONS: JobsOptions = {
+  attempts: 3,
+  backoff: {
+    type: 'exponential',
+    delay: 1000,
+  },
+  removeOnComplete: 100,
+  removeOnFail: 500,
+};
 
 /** 搜索队列任务名称枚举 */
 export enum SearchJobName {
@@ -37,37 +48,13 @@ export class SearchJobs {
     documents: Record<string, unknown>[],
     primaryKey?: string,
   ): Promise<Job<SearchIndexJobData>> {
-    return this.queue.add(
-      SearchJobName.Index,
-      { indexName, documents, primaryKey },
-      {
-        attempts: 3,
-        backoff: {
-          type: 'exponential',
-          delay: 1000,
-        },
-        removeOnComplete: 100,
-        removeOnFail: 500,
-      },
-    );
+    return this.queue.add(SearchJobName.Index, { indexName, documents, primaryKey }, SEARCH_JOB_OPTIONS);
   }
 
   /**
    * 投递文档批量删除任务
    */
   async dispatchDelete(indexName: string, ids: (string | number)[]): Promise<Job<SearchDeleteJobData>> {
-    return this.queue.add(
-      SearchJobName.Delete,
-      { indexName, ids },
-      {
-        attempts: 3,
-        backoff: {
-          type: 'exponential',
-          delay: 1000,
-        },
-        removeOnComplete: 100,
-        removeOnFail: 500,
-      },
-    );
+    return this.queue.add(SearchJobName.Delete, { indexName, ids }, SEARCH_JOB_OPTIONS);
   }
 }

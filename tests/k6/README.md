@@ -8,11 +8,11 @@
 
 ```text
 tests/k6/
-├── config.js         # 环境变量、5大阶段负载模型 (profiles) 与 SLA 质量守门标准 (thresholds)
+├── config.js         # 环境变量、5 大负载模型 (profiles)、SLA 阈值 (thresholds) 与场景注册表 (scenarioRegistry)
 ├── client.js         # 极简 HTTP Client、核心指标注册与 <50ms 快速鉴权预热
-├── workflow.js       # 核心确定性业务流水线 (health -> users/me -> users?page=1... -> 可选注册)
+├── workflow.js       # 核心确定性业务流水线 (health -> users/me -> users?page=1... -> 可选注册) + createScenarioRunner 工厂
 ├── reporter.js       # 基于 Tailwind CSS 4 + Alpine.js 的独立交互式 HTML 报告器
-├── scenarios/        # 5 大经典压测场景入口 (纯粹声明 options + createRunner)
+├── scenarios/        # 5 大经典压测场景入口 (纯声明 options + createScenarioRunner，配置统一取自注册表)
 │   ├── smoke.js      # 1. 冒烟测试 (1 VU, 15s, 全链路验证)
 │   ├── load.js       # 2. 常规负载测试 (20 VUs, ~2m, 聚焦高频读查)
 │   ├── stress.js     # 3. 极限压力测试 (150 VUs, ~3.5m, 探测连接池与缓存拐点)
@@ -120,5 +120,5 @@ k6 在执行过程中会自动校验预设的质量守门标准，未达标时�
 
 - **历史归档报告**：`storage/logs/k6-reports/<scenario>-<YYYYMMDD-HHmmss>.html`
 - **历史归档数据**：`storage/logs/k6-reports/<scenario>-<YYYYMMDD-HHmmss>.json`
-- **最新快捷入口**：`storage/logs/k6-reports/latest.html`（或 `storage/logs/k6-summary.html`）
+- **最新快捷入口**：`storage/logs/k6-reports/latest.html`
 - **最新 JSON 数据**：`storage/logs/k6-reports/latest.json`

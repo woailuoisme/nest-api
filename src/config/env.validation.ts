@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { APP_ENV_VALUES, PATHS } from '@/common/constants/app.constants';
+import { APP_ENV_VALUES, isTruthyEnv, PATHS } from '@/common/constants/app.constants';
 import { DEFAULT_TIMEZONE, isTimezoneValid } from '@/config/timezone';
 
 /** Laravel FILTER_VALIDATE_BOOLEAN 语义的布尔解析：'true'/'1'/'on'/'yes' → true，其余（含空串）→ false */
@@ -8,7 +8,7 @@ function envBoolean(defaultValue: boolean) {
     .preprocess((value) => {
       if (typeof value === 'boolean') return value;
       if (value === undefined) return defaultValue;
-      return ['true', '1', 'on', 'yes'].includes(String(value).toLowerCase());
+      return isTruthyEnv(value);
     }, z.boolean())
     .default(defaultValue);
 }
@@ -93,12 +93,18 @@ const envSchema = z
     MQTT_URL: z.string().optional(),
     // 是否启用工业设备模拟响应器（Simulated PLC Agent）。默认 false
     IOT_SIMULATED_DEVICE_ENABLED: envBoolean(false),
-    // 是否启用 OpenTelemetry 分布式链路追踪。默认 false
-    OTEL_ENABLED: envBoolean(false),
-    // OpenTelemetry 服务名称。默认 nest-forge
-    OTEL_SERVICE_NAME: z.string().default('nest-forge'),
-    // OpenTelemetry OTLP 导出端点 (HTTP)。默认 http://localhost:4318/v1/traces (对接 Tempo)
-    OTEL_EXPORTER_OTLP_ENDPOINT: z.string().default('http://localhost:4318/v1/traces'),
+    // 工业设备接入凭证表 (格式: deviceId:secret，多个以英文逗号分隔)。留空表示禁止设备换票
+    IOT_DEVICE_CREDENTIALS: z.string().default(''),
+    // 设备接入 JWT 独立签名密钥 (≥32 字符，必须与 BETTER_AUTH_SECRET 域分离)。未配置时拒绝签发设备凭据
+    IOT_JWT_SECRET: z.string().min(32).optional(),
+    // 设备密钥校验用 HMAC 加固盐值 (Pepper，≥16 字符)
+    IOT_DEVICE_PEPPER: z.string().min(16).default('nestforge-iot-device-pepper-v1'),
+    // 设备接入 JWT 有效期 (秒)，默认 30 天
+    IOT_TOKEN_TTL_SECONDS: z.coerce
+      .number()
+      .int()
+      .positive()
+      .default(30 * 24 * 3600),
   })
   .transform((data) => ({
     ...data,

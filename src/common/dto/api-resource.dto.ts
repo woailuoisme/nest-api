@@ -57,7 +57,7 @@ export class ApiPaginatedResponseResource<T = unknown> {
   items: T[];
 
   @ApiProperty({ type: PageMetaResource, description: 'Offset 分页元数据' })
-  pagination: PageMetaResource;
+  meta: PageMetaResource;
 }
 
 export class ApiCursorPaginatedResponseResource<T = unknown> {
@@ -65,5 +65,5 @@ export class ApiCursorPaginatedResponseResource<T = unknown> {
   items: T[];
 
   @ApiProperty({ type: CursorPageMetaResource, description: 'Cursor 游标分页元数据' })
-  pagination: CursorPageMetaResource;
+  meta: CursorPageMetaResource;
 }

@@ -135,3 +135,41 @@ export const soakThresholds = {
   checks: ['rate>0.99'],
   flow_success_rate: ['rate>0.99'],
 };
+
+/**
+ * 4. 场景注册表 (Scenario Registry)
+ * 总入口 (main.js -e SCENARIO=xxx) 与独立入口 (scenarios/*.js) 共用的唯一配置源，
+ * 避免「负载模型 / SLA 阈值 / 思考时间 / 写链路开关」在两侧各写一份而逐步漂移。
+ */
+export const scenarioRegistry = {
+  smoke: {
+    profile: scenarioProfiles.smoke,
+    thresholds: smokeThresholds,
+    thinkTime: 0.5,
+    enableRegister: true,
+  },
+  load: {
+    profile: scenarioProfiles.load,
+    thresholds: baseThresholds,
+    thinkTime: 0.2,
+    enableRegister: false,
+  },
+  stress: {
+    profile: scenarioProfiles.stress,
+    thresholds: stressThresholds,
+    thinkTime: 0.1,
+    enableRegister: false,
+  },
+  spike: {
+    profile: scenarioProfiles.spike,
+    thresholds: spikeThresholds,
+    thinkTime: 0.05,
+    enableRegister: false,
+  },
+  soak: {
+    profile: scenarioProfiles.soak,
+    thresholds: soakThresholds,
+    thinkTime: 0.3,
+    enableRegister: false,
+  },
+};

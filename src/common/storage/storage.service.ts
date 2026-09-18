@@ -109,6 +109,6 @@ export class StorageService implements StorageDriver {
       this.#defaultDisk === 's3'
         ? `endpoint=${s3Driver?.config.endpoint ?? '-'}, bucket=${s3Driver?.config.bucket ?? '-'}`
         : `root=${config.get<string>('STORAGE_LOCAL_ROOT', `./${PATHS.STORAGE_UPLOADS}`)}`;
-    this.logger.log(`Storage initialized: ${this.#defaultDisk} driver (${detail})`);
+    this.logger.debug(`Storage initialized: ${this.#defaultDisk} driver (${detail})`);
   }
 }

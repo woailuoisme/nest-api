@@ -1,81 +1,37 @@
-import { Injectable, Logger, Optional } from '@nestjs/common';
-import type { ConfigService } from '@nestjs/config';
-import type { EnvConfig } from '@/config/env.validation';
-import { RedisService } from '@/database/redis.service';
+import { Injectable, Optional } from '@nestjs/common';
 import { CentrifugoTransport } from '../transports/centrifugo.transport';
 import { DEFAULT_PRESENCE_TTL_SECONDS, type PresenceMember, type PresenceMemberInfo } from './presence.types';
 
-interface InMemoryLeaseItem<T = PresenceMemberInfo> {
-  member: PresenceMember<T>;
+interface InMemoryLeaseItem {
+  member: PresenceMember<unknown>;
   expiresAt: number;
 }
 
 /**
- * 分布式 Presence 状态感知服务
+ * 统一 Presence 在场状态感知服务
  *
- * 核心特性：
- * 1. 分布式租期保活：Redis Hash 存储频道全员元数据 + Redis String 附带 TTL 作为活跃租期；
- * 2. 幽灵成员自动剔除：读取/定时巡检时批量校对 Lease Key，自动回收异常断连的残留成员；
- * 3. 内存透明降级：Redis 未配置或单测环境下自动降级为全功能本地内存存储，保证 100% 稳定性与可测性；
- * 4. Centrifugo 多态委托：在 centrifugo 独立网关驱动下，自动透明委托其 HTTP API 查询集群实时在场。
+ * 核心架构特性：
+ * 1. Centrifugo 原生在场驱动：在生产环境中，全面委托 Centrifugo 独立长连接网关维护在场拓扑与心跳，
+ *    通过 CentrifugoTransport.getPresence HTTP API 直接获取集群真实在线成员；
+ * 2. 本地内存透明降级：在测试或未配置外部网关时，自动降级为轻量本地内存存储，保证单测与本地开发可用性；
+ * 3. 彻底解耦 Redis：消除 Redis Hash/TTL Lease 轮子与巡检开销，实现真正的高内聚与零网络冗余。
  */
 @Injectable()
 export class PresenceService {
-  private readonly logger = new Logger(PresenceService.name);
-
   /** 内存降级存储：channel -> userId -> { member, expiresAt } */
   private readonly memoryStore = new Map<string, Map<string, InMemoryLeaseItem>>();
 
-  constructor(
-    @Optional() private readonly redisService?: RedisService,
-    @Optional() private readonly configService?: ConfigService<EnvConfig, true>,
-    @Optional() private readonly centrifugoTransport?: CentrifugoTransport,
-  ) {}
-
-  private getPresenceKey(channel: string): string {
-    return `realtime:presence:${channel}`;
-  }
-
-  private getLeaseKey(channel: string, userId: string): string {
-    return `realtime:presence:lease:${channel}:${userId}`;
-  }
-
-  private getRedisClient() {
-    const client = this.redisService?.getClient();
-    return client && typeof client.pipeline === 'function' ? client : null;
-  }
+  constructor(@Optional() private readonly centrifugoTransport?: CentrifugoTransport) {}
 
   /**
-   * 成员加入 Presence 频道
+   * 成员加入 Presence 频道 (内存降级/本地测试模式)
+   * 在 Centrifugo 生产网关模式下，客户端订阅 presence 频道即由网关自动维护在场状态。
    */
   async join<T = PresenceMemberInfo>(
     channel: string,
     member: PresenceMember<T>,
     ttlSeconds: number = DEFAULT_PRESENCE_TTL_SECONDS,
   ): Promise<{ isNew: boolean; member: PresenceMember<T> }> {
-    const client = this.getRedisClient();
-
-    if (client) {
-      try {
-        const presenceKey = this.getPresenceKey(channel);
-        const leaseKey = this.getLeaseKey(channel, member.userId);
-
-        const existsInHash = await client.hexists(presenceKey, member.userId);
-        const isNew = existsInHash === 0;
-
-        const serialized = JSON.stringify(member);
-        const pipeline = client.pipeline();
-        pipeline.hset(presenceKey, member.userId, serialized);
-        pipeline.set(leaseKey, '1', 'EX', ttlSeconds);
-        await pipeline.exec();
-
-        return { isNew, member };
-      } catch (err) {
-        this.logger.warn(`Redis Presence join failed, falling back to memory: ${(err as Error).message}`);
-      }
-    }
-
-    // 内存模式降级
     let channelMap = this.memoryStore.get(channel);
     if (!channelMap) {
       channelMap = new Map();
@@ -87,7 +43,7 @@ export class PresenceService {
     const isNew = !existing || existing.expiresAt <= now;
 
     channelMap.set(member.userId, {
-      member: member as unknown as PresenceMember,
+      member,
       expiresAt: now + ttlSeconds * 1000,
     });
 
@@ -95,30 +51,10 @@ export class PresenceService {
   }
 
   /**
-   * 成员离开 Presence 频道
+   * 成员离开 Presence 频道 (内存降级/本地测试模式)
+   * 在 Centrifugo 生产网关模式下，客户端断开或取消订阅自动由网关触发 leave 事件。
    */
   async leave(channel: string, userId: string): Promise<boolean> {
-    const client = this.getRedisClient();
-
-    if (client) {
-      try {
-        const presenceKey = this.getPresenceKey(channel);
-        const leaseKey = this.getLeaseKey(channel, userId);
-
-        const pipeline = client.pipeline();
-        pipeline.hdel(presenceKey, userId);
-        pipeline.del(leaseKey);
-        const results = await pipeline.exec();
-
-        // results[0][1] 为 hdel 影响的字段数
-        const deletedCount = (results?.[0]?.[1] as number) ?? 0;
-        return deletedCount > 0;
-      } catch (err) {
-        this.logger.warn(`Redis Presence leave failed, falling back to memory: ${(err as Error).message}`);
-      }
-    }
-
-    // 内存模式降级
     const channelMap = this.memoryStore.get(channel);
     if (!channelMap) {
       return false;
@@ -132,41 +68,13 @@ export class PresenceService {
   }
 
   /**
-   * 刷新在场租期心跳
+   * 刷新在场租期心跳 (内存降级/本地测试模式)
    */
   async heartbeat(
     channel: string,
     userId: string,
     ttlSeconds: number = DEFAULT_PRESENCE_TTL_SECONDS,
   ): Promise<boolean> {
-    const client = this.getRedisClient();
-
-    if (client) {
-      try {
-        const presenceKey = this.getPresenceKey(channel);
-        const leaseKey = this.getLeaseKey(channel, userId);
-
-        const memberJson = await client.hget(presenceKey, userId);
-        if (!memberJson) {
-          return false;
-        }
-
-        // 刷新成员 updatedAt 时间戳并续约租期 Key
-        const member = JSON.parse(memberJson) as PresenceMember;
-        member.updatedAt = Date.now();
-
-        const pipeline = client.pipeline();
-        pipeline.hset(presenceKey, userId, JSON.stringify(member));
-        pipeline.set(leaseKey, '1', 'EX', ttlSeconds);
-        await pipeline.exec();
-
-        return true;
-      } catch (err) {
-        this.logger.warn(`Redis Presence heartbeat failed, falling back to memory: ${(err as Error).message}`);
-      }
-    }
-
-    // 内存模式降级
     const channelMap = this.memoryStore.get(channel);
     const item = channelMap?.get(userId);
     if (!item || item.expiresAt <= Date.now()) {
@@ -179,96 +87,31 @@ export class PresenceService {
   }
 
   /**
-   * 获取指定频道的所有在场有效成员（自动清理租期已过期的幽灵成员）
+   * 获取指定频道的所有在场有效成员
+   * 优先委托 CentrifugoTransport HTTP API 查询集群实时在线成员，未连接或测试时透明降级为本地内存存储。
    */
   async getMembers<T = PresenceMemberInfo>(channel: string): Promise<PresenceMember<T>[]> {
-    if (this.configService?.get('BROADCAST_DRIVER') === 'centrifugo' && this.centrifugoTransport) {
+    if (this.centrifugoTransport) {
       const remoteMembers = await this.centrifugoTransport.getPresence<T>(channel);
-      return remoteMembers.map((m) => ({
-        userId: m.userId,
-        clientId: m.clientId,
-        userInfo: m.info,
-        joinedAt: Date.now(),
-        updatedAt: Date.now(),
-      }));
-    }
-
-    const client = this.getRedisClient();
-
-    if (client) {
-      try {
-        const presenceKey = this.getPresenceKey(channel);
-        const allMembersRaw = await client.hgetall(presenceKey);
-
-        const userIds = Object.keys(allMembersRaw);
-        if (userIds.length === 0) {
-          return [];
-        }
-
-        // 批量检测对应的租期 Key 是否依然存活
-        const pipeline = client.pipeline();
-        for (const uid of userIds) {
-          pipeline.exists(this.getLeaseKey(channel, uid));
-        }
-        const existsResults = await pipeline.exec();
-
-        const activeMembers: PresenceMember<T>[] = [];
-        const expiredUserIds: string[] = [];
-
-        userIds.forEach((uid, index) => {
-          const isAlive = (existsResults?.[index]?.[1] as number) === 1;
-          if (isAlive) {
-            try {
-              activeMembers.push(JSON.parse(allMembersRaw[uid]) as PresenceMember<T>);
-            } catch {
-              expiredUserIds.push(uid);
-            }
-          } else {
-            expiredUserIds.push(uid);
-          }
-        });
-
-        // 异步批量剔除幽灵成员
-        if (expiredUserIds.length > 0) {
-          const cleanupPipeline = client.pipeline();
-          for (const expiredId of expiredUserIds) {
-            cleanupPipeline.hdel(presenceKey, expiredId);
-          }
-          cleanupPipeline.exec().catch(() => {});
-        }
-
-        return activeMembers;
-      } catch (err) {
-        this.logger.warn(`Redis Presence getMembers failed, falling back to memory: ${(err as Error).message}`);
+      if (remoteMembers.length > 0 || !this.memoryStore.has(channel)) {
+        return remoteMembers.map((m) => ({
+          userId: m.userId,
+          clientId: m.clientId,
+          userInfo: m.info as T,
+          joinedAt: Date.now(),
+          updatedAt: Date.now(),
+        }));
       }
     }
 
-    // 内存模式降级
+    // 内存模式降级：先剔除过期租期，再返回剩余有效成员
+    this.pruneExpired(channel);
     const channelMap = this.memoryStore.get(channel);
     if (!channelMap) {
       return [];
     }
 
-    const now = Date.now();
-    const activeMembers: PresenceMember<T>[] = [];
-    const expiredIds: string[] = [];
-
-    for (const [uid, item] of channelMap.entries()) {
-      if (item.expiresAt > now) {
-        activeMembers.push(item.member as unknown as PresenceMember<T>);
-      } else {
-        expiredIds.push(uid);
-      }
-    }
-
-    for (const expiredId of expiredIds) {
-      channelMap.delete(expiredId);
-    }
-    if (channelMap.size === 0) {
-      this.memoryStore.delete(channel);
-    }
-
-    return activeMembers;
+    return Array.from(channelMap.values(), (item) => item.member as PresenceMember<T>);
   }
 
   /**
@@ -280,50 +123,16 @@ export class PresenceService {
   }
 
   /**
-   * 清理过期租期成员，并返回被剔除的用户 ID 列表（供事件广播使用）
+   * 清理过期租期成员，并返回被剔除的用户 ID 列表（内存降级模式维护）
    */
   async cleanExpired(channel: string): Promise<string[]> {
-    const client = this.getRedisClient();
+    return this.pruneExpired(channel);
+  }
 
-    if (client) {
-      try {
-        const presenceKey = this.getPresenceKey(channel);
-        const allMembersRaw = await client.hgetall(presenceKey);
-        const userIds = Object.keys(allMembersRaw);
-
-        if (userIds.length === 0) {
-          return [];
-        }
-
-        const pipeline = client.pipeline();
-        for (const uid of userIds) {
-          pipeline.exists(this.getLeaseKey(channel, uid));
-        }
-        const existsResults = await pipeline.exec();
-        const expiredUserIds: string[] = [];
-
-        userIds.forEach((uid, index) => {
-          const isAlive = (existsResults?.[index]?.[1] as number) === 1;
-          if (!isAlive) {
-            expiredUserIds.push(uid);
-          }
-        });
-
-        if (expiredUserIds.length > 0) {
-          const cleanupPipeline = client.pipeline();
-          for (const expiredId of expiredUserIds) {
-            cleanupPipeline.hdel(presenceKey, expiredId);
-          }
-          await cleanupPipeline.exec();
-        }
-
-        return expiredUserIds;
-      } catch (err) {
-        this.logger.warn(`Redis Presence cleanExpired failed, falling back to memory: ${(err as Error).message}`);
-      }
-    }
-
-    // 内存模式降级
+  /**
+   * 内部方法：删除频道内已过期租期成员并返回其用户 ID；频道清空时顺手回收 Map 条目
+   */
+  private pruneExpired(channel: string): string[] {
     const channelMap = this.memoryStore.get(channel);
     if (!channelMap) {
       return [];
@@ -332,14 +141,14 @@ export class PresenceService {
     const now = Date.now();
     const expiredIds: string[] = [];
 
-    for (const [uid, item] of channelMap.entries()) {
+    for (const [userId, item] of channelMap.entries()) {
       if (item.expiresAt <= now) {
-        expiredIds.push(uid);
+        expiredIds.push(userId);
       }
     }
 
-    for (const expiredId of expiredIds) {
-      channelMap.delete(expiredId);
+    for (const userId of expiredIds) {
+      channelMap.delete(userId);
     }
     if (channelMap.size === 0) {
       this.memoryStore.delete(channel);

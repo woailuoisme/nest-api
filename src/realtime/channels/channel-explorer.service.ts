@@ -29,40 +29,39 @@ export class ChannelExplorerService implements OnApplicationBootstrap {
    * 扫描所有 Provider 中标记有 @ChannelAuth 的方法并注册进 ChannelManager
    */
   explore(): void {
-    const providers = this.discoveryService.getProviders();
+    for (const { instance } of this.discoveryService.getProviders()) {
+      if (instance && typeof instance === 'object') {
+        this.exploreInstance(instance as Record<string, unknown>);
+      }
+    }
+  }
 
-    for (const wrapper of providers) {
-      const { instance } = wrapper;
-      if (!instance || typeof instance !== 'object') {
+  /**
+   * 内部方法：注册单个 Provider 实例上全部标注了 @ChannelAuth 的方法
+   */
+  private exploreInstance(instance: Record<string, unknown>): void {
+    const prototype = Object.getPrototypeOf(instance);
+    if (!prototype) {
+      return;
+    }
+
+    for (const methodName of this.metadataScanner.getAllMethodNames(prototype)) {
+      const targetCallback = instance[methodName];
+      if (typeof targetCallback !== 'function') {
         continue;
       }
 
-      const prototype = Object.getPrototypeOf(instance);
-      if (!prototype) {
+      const pattern = this.reflector.get<ChannelAuthMetadata | undefined>(
+        CHANNEL_AUTH_METADATA,
+        targetCallback,
+      )?.pattern;
+      if (!pattern) {
         continue;
       }
 
-      const methodNames = this.metadataScanner.getAllMethodNames(prototype);
-
-      for (const methodName of methodNames) {
-        const targetCallback = (instance as Record<string, unknown>)[methodName];
-        if (typeof targetCallback !== 'function') {
-          continue;
-        }
-
-        const metadata = this.reflector.get<ChannelAuthMetadata | undefined>(CHANNEL_AUTH_METADATA, targetCallback);
-
-        if (!metadata?.pattern) {
-          continue;
-        }
-
-        const authorizer: ChannelAuthorizer = (user, params) => {
-          return targetCallback.call(instance, user, params);
-        };
-
-        this.channelManager.register(metadata.pattern, authorizer);
-        this.logger.log(`发现实时频道授权规则: [${metadata.pattern}] -> ${instance.constructor.name}.${methodName}()`);
-      }
+      const authorizer: ChannelAuthorizer = (user, params) => targetCallback.call(instance, user, params);
+      this.channelManager.register(pattern, authorizer);
+      this.logger.debug(`发现实时频道授权规则: [${pattern}] -> ${instance.constructor.name}.${methodName}()`);
     }
   }
 }

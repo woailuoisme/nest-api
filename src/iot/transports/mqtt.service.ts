@@ -8,6 +8,7 @@ import {
   Optional,
   RequestTimeoutException,
 } from '@nestjs/common';
+import { isNotNil, pickBy } from 'es-toolkit';
 import type { IClientPublishOptions, IPublishPacket, MqttClient } from 'mqtt';
 import {
   MQTT_CLIENT_TOKEN,
@@ -17,12 +18,21 @@ import {
   type MqttRequestOptions,
   type MqttSubscribeOptions,
 } from './interfaces/mqtt.interface';
+import { resolveMqttBrokerUrl } from './utils/dsn.parser';
 import { toMqttTopic } from './utils/topic-matcher';
 
 interface PendingRpcRequest {
   resolve: (value: unknown) => void;
   reject: (reason: unknown) => void;
   timer: NodeJS.Timeout;
+}
+
+/** 将 correlationData 归一化为 Buffer（MQTT 5.0 协议字段要求二进制，空值视为未声明） */
+function toCorrelationData(value?: Buffer | string): Buffer | undefined {
+  if (!value) {
+    return undefined;
+  }
+  return Buffer.isBuffer(value) ? value : Buffer.from(value);
 }
 
 @Injectable()
@@ -51,7 +61,7 @@ export class MqttService implements OnApplicationBootstrap, OnApplicationShutdow
 
   async onApplicationBootstrap(): Promise<void> {
     if (!this.client) {
-      this.logger.log('MQTT 服务未配置 MQTT_URL，客户端处于未激活 (Inactive) 状态');
+      this.logger.debug('MQTT 服务未配置 MQTT_URL，客户端处于未激活 (Inactive) 状态');
       return;
     }
 
@@ -105,10 +115,18 @@ export class MqttService implements OnApplicationBootstrap, OnApplicationShutdow
   }
 
   /**
+   * 获取当前生效的 MQTT Broker 终端地址
+   */
+  getBrokerUrl(): string {
+    return resolveMqttBrokerUrl(this.options);
+  }
+
+  /**
    * 发布消息到指定主题（支持 MQTT 5.0 用户属性与请求-响应元数据）
    */
   async publish(topic: string, message: string | Buffer | object, options: MqttPublishOptions = {}): Promise<void> {
-    if (!this.client) {
+    const { client } = this;
+    if (!client) {
       this.logger.warn(`MQTT 客户端未激活，跳过向 [${topic}] 发布消息`);
       return;
     }
@@ -128,32 +146,24 @@ export class MqttService implements OnApplicationBootstrap, OnApplicationShutdow
       dup: options.dup ?? false,
     };
 
-    // 构建 MQTT 5.0 协议属性
-    const properties: Record<string, unknown> = {};
-    if (options.userProperties) {
-      properties.userProperties = options.userProperties;
-    }
-    if (options.responseTopic) {
-      properties.responseTopic = options.responseTopic;
-    }
-    if (options.correlationData) {
-      properties.correlationData = Buffer.isBuffer(options.correlationData)
-        ? options.correlationData
-        : Buffer.from(options.correlationData);
-    }
-    if (options.messageExpiryInterval !== undefined) {
-      properties.messageExpiryInterval = options.messageExpiryInterval;
-    }
-    if (options.topicAlias !== undefined) {
-      properties.topicAlias = options.topicAlias;
-    }
+    // 构建 MQTT 5.0 协议属性，自动剔除未声明的字段
+    const properties = pickBy(
+      {
+        userProperties: options.userProperties,
+        responseTopic: options.responseTopic,
+        correlationData: toCorrelationData(options.correlationData),
+        messageExpiryInterval: options.messageExpiryInterval,
+        topicAlias: options.topicAlias,
+      },
+      isNotNil,
+    );
 
     if (Object.keys(properties).length > 0) {
       publishOptions.properties = properties;
     }
 
     return new Promise((resolve, reject) => {
-      this.client?.publish(topic, payload, publishOptions, (error) => {
+      client.publish(topic, payload, publishOptions, (error) => {
         if (error) {
           this.logger.error(`向主题 [${topic}] 发送消息失败: ${error.message}`);
           reject(error);
@@ -214,14 +224,15 @@ export class MqttService implements OnApplicationBootstrap, OnApplicationShutdow
    * 订阅指定主题（支持 MQTT 5.0 共享订阅 $share/{group}/{topic}）
    */
   async subscribe(pattern: string, options: MqttSubscribeOptions = {}): Promise<void> {
-    if (!this.client) {
+    const { client } = this;
+    if (!client) {
       return;
     }
 
     const effectiveTopic = toMqttTopic(pattern, options.sharedGroup);
 
     return new Promise((resolve, reject) => {
-      this.client?.subscribe(
+      client.subscribe(
         effectiveTopic,
         {
           qos: options.qos ?? 0,
@@ -246,14 +257,15 @@ export class MqttService implements OnApplicationBootstrap, OnApplicationShutdow
    * 取消订阅指定主题
    */
   async unsubscribe(pattern: string, sharedGroup?: string): Promise<void> {
-    if (!this.client) {
+    const { client } = this;
+    if (!client) {
       return;
     }
 
     const effectiveTopic = toMqttTopic(pattern, sharedGroup);
 
     return new Promise((resolve, reject) => {
-      this.client?.unsubscribe(effectiveTopic, {}, (error) => {
+      client.unsubscribe(effectiveTopic, {}, (error) => {
         if (error) {
           this.logger.error(`取消订阅主题 [${effectiveTopic}] 失败: ${error.message}`);
           reject(error);
@@ -269,9 +281,10 @@ export class MqttService implements OnApplicationBootstrap, OnApplicationShutdow
    * 内部方法：监听客户端生命周期事件
    */
   private setupClientEvents(): void {
-    if (!this.client) return;
+    const { client } = this;
+    if (!client) return;
 
-    this.client.on('connect', () => {
+    client.on('connect', () => {
       this.isClientConnected = true;
       this.reconnectAttempts = 0;
       this.logger.log(
@@ -279,22 +292,22 @@ export class MqttService implements OnApplicationBootstrap, OnApplicationShutdow
       );
     });
 
-    this.client.on('reconnect', () => {
+    client.on('reconnect', () => {
       this.reconnectAttempts++;
       this.logger.warn(`MQTT 客户端正在尝试重连 Broker (第 ${this.reconnectAttempts} 次)...`);
     });
 
-    this.client.on('close', () => {
+    client.on('close', () => {
       this.isClientConnected = false;
       this.logger.warn('MQTT 客户端与 Broker 的连接已断开');
     });
 
-    this.client.on('error', (error) => {
+    client.on('error', (error) => {
       this.logger.error(`MQTT 客户端异常: ${error.message}`, error.stack);
     });
 
     // 监听所有流入的消息，优先拦截当前 Pod 的专属 RPC 回复
-    this.client.on('message', (topic: string, payload: Buffer, packet: IPublishPacket) => {
+    client.on('message', (topic: string, payload: Buffer, packet: IPublishPacket) => {
       if (topic === this.replyTopic) {
         this.handleRpcReplyMessage(payload, packet);
       }
@@ -305,10 +318,11 @@ export class MqttService implements OnApplicationBootstrap, OnApplicationShutdow
    * 内部方法：订阅当前 Pod 专属响应主题
    */
   private async subscribeToReplyTopic(): Promise<void> {
-    if (!this.client) return;
+    const { client } = this;
+    if (!client) return;
 
     await new Promise<void>((resolve) => {
-      this.client?.subscribe(this.replyTopic, { qos: 1 }, (err) => {
+      client.subscribe(this.replyTopic, { qos: 1 }, (err) => {
         if (err) {
           this.logger.error(`订阅专属 RPC 回复主题 [${this.replyTopic}] 失败: ${err.message}`);
         } else {

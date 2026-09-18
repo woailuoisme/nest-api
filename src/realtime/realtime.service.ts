@@ -92,6 +92,13 @@ export class RealtimeService {
   }
 
   /**
+   * 校验用户是否有权订阅目标频道 (委托给 ChannelManager 模式匹配)
+   */
+  async canSubscribe(user: CurrentUserPayload, channel: string) {
+    return this.channelManager.canSubscribe(user, channel);
+  }
+
+  /**
    * 向指定用户精准定向推送实时事件
    * @param userId 目标用户 ID
    * @param event 事件名

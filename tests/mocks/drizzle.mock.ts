@@ -70,11 +70,3 @@ export function createMockDrizzleDb() {
 
   return mockDb;
 }
-
-export function createMockDrizzleService() {
-  const db = createMockDrizzleDb();
-  return {
-    db,
-    _stubs: db._stubs,
-  };
-}

@@ -1,17 +1,13 @@
 import type { BaseCommand, BaseCommandOptions } from '../commands/index.js';
 import type { Strategy } from '../strategies/index.js';
 
-export type TypedHandlerDecorator = <F>(
-  target: object,
-  propertyKey: string | symbol,
-  descriptor: TypedPropertyDescriptor<F>,
-) => TypedPropertyDescriptor<F>;
-
 export type TypedHandlerDescriptor<_T = unknown> = <F>(
   target: object,
   propertyKey: string | symbol,
   descriptor: TypedPropertyDescriptor<F>,
 ) => TypedPropertyDescriptor<F>;
+
+export type TypedHandlerDecorator = TypedHandlerDescriptor;
 
 type CommandConstructor = new (
   strategies: Strategy[],

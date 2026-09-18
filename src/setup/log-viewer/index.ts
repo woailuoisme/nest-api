@@ -74,6 +74,25 @@ export async function setupLogViewer(
       return handler(req, reply);
     };
 
+  /** 生产环境禁用破坏性日志操作（清空 / 删除），统一 403 响应 */
+  const rejectDestructiveOp = (reply: FastifyReply): FastifyReply =>
+    reply
+      .code(403)
+      .send({ error: { code: 'FORBIDDEN', message: 'Destructive log operations are disabled in production' } });
+
+  /**
+   * 解析并校验待操作日志文件路径：路径越界由 getSafeLogFilePath 抛错（调用方转为 400），
+   * 文件不存在时写出 404 并返回 null。必须在 try 块内调用。
+   */
+  const resolveExistingLogFile = (rawName: string, reply: FastifyReply): string | null => {
+    const filePath = getSafeLogFilePath(rawName);
+    if (!existsSync(filePath)) {
+      void reply.code(404).send({ error: { message: 'File not found', statusCode: 404 } });
+      return null;
+    }
+    return filePath;
+  };
+
   // 1. Web UI 主入口页面
   fastify.get(
     LOG_VIEWER_PATH,
@@ -162,10 +181,8 @@ export async function setupLogViewer(
       }
 
       try {
-        const filePath = getSafeLogFilePath(query.file);
-        if (!existsSync(filePath)) {
-          return reply.code(404).send({ error: { message: 'File not found', statusCode: 404 } });
-        }
+        const filePath = resolveExistingLogFile(query.file, reply);
+        if (!filePath) return reply;
 
         const stream = createReadStream(filePath);
         return reply
@@ -182,11 +199,7 @@ export async function setupLogViewer(
   fastify.post(
     `${LOG_VIEWER_PATH}/api/clear`,
     withAuth(async (req, reply) => {
-      if (isProductionEnv()) {
-        return reply
-          .code(403)
-          .send({ error: { code: 'FORBIDDEN', message: 'Destructive log operations are disabled in production' } });
-      }
+      if (isProductionEnv()) return rejectDestructiveOp(reply);
 
       const query = req.query as { file?: string };
       if (!query.file) {
@@ -194,10 +207,8 @@ export async function setupLogViewer(
       }
 
       try {
-        const filePath = getSafeLogFilePath(query.file);
-        if (!existsSync(filePath)) {
-          return reply.code(404).send({ error: { message: 'File not found', statusCode: 404 } });
-        }
+        const filePath = resolveExistingLogFile(query.file, reply);
+        if (!filePath) return reply;
 
         await clearLogFile(filePath);
         return reply.send({ success: true, message: `Log file ${basename(filePath)} cleared` });
@@ -211,11 +222,7 @@ export async function setupLogViewer(
   fastify.delete(
     `${LOG_VIEWER_PATH}/api/files/:filename`,
     withAuth(async (req, reply) => {
-      if (isProductionEnv()) {
-        return reply
-          .code(403)
-          .send({ error: { code: 'FORBIDDEN', message: 'Destructive log operations are disabled in production' } });
-      }
+      if (isProductionEnv()) return rejectDestructiveOp(reply);
 
       const params = req.params as { filename?: string };
       if (!params.filename) {
@@ -223,10 +230,8 @@ export async function setupLogViewer(
       }
 
       try {
-        const filePath = getSafeLogFilePath(params.filename);
-        if (!existsSync(filePath)) {
-          return reply.code(404).send({ error: { message: 'File not found', statusCode: 404 } });
-        }
+        const filePath = resolveExistingLogFile(params.filename, reply);
+        if (!filePath) return reply;
 
         await deleteLogFile(filePath);
         return reply.send({ success: true, message: `Log file ${basename(filePath)} deleted` });

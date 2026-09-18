@@ -33,7 +33,7 @@ describe('TransformInterceptor', () => {
     expect(result).toEqual({ id: 1, name: 'Test' });
   });
 
-  it('should unwrap paginated responses into root-level { items, pagination } format', async () => {
+  it('should unwrap paginated responses into root-level { items, meta } format', async () => {
     const reflector = new Reflector();
     vi.spyOn(reflector, 'getAllAndOverride').mockImplementation((key: any) => {
       if (key === BYPASS_TRANSFORM_KEY) return false;
@@ -64,7 +64,7 @@ describe('TransformInterceptor', () => {
 
     expect(result).toEqual({
       items: [{ id: 1, name: 'Test' }],
-      pagination: { page: 1, pageSize: 20, total: 1, totalPages: 1 },
+      meta: { page: 1, pageSize: 20, total: 1, totalPages: 1 },
     });
   });
 

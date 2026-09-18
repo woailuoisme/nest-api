@@ -32,12 +32,9 @@ export function parseMeilisearchDsn(dsn: string): ParsedMeilisearchConfig {
   const rawKey = url.password || url.username || url.searchParams.get('apiKey') || undefined;
   const apiKey = rawKey ? decodeURIComponent(rawKey) : undefined;
 
-  // 构建标准 host
-  const protocol = isCustomScheme
-    ? url.searchParams.get('tls') === 'true'
-      ? 'https'
-      : 'http'
-    : url.protocol.replace(':', '');
+  // 构建标准 host：自定义 scheme 下由 ?tls=true 决定，标准 http(s) DSN 直接沿用其协议
+  const tlsEnabled = url.searchParams.get('tls') === 'true';
+  const protocol = isCustomScheme ? (tlsEnabled ? 'https' : 'http') : url.protocol.replace(':', '');
   const host = `${protocol}://${url.hostname}${url.port ? `:${url.port}` : ''}${url.pathname !== '/' ? url.pathname.replace(/\/$/, '') : ''}`;
 
   return {

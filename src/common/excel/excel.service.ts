@@ -1,5 +1,6 @@
 import { createWriteStream } from 'node:fs';
 import { PassThrough, Readable, Writable } from 'node:stream';
+import { buffer as collectStreamBuffer } from 'node:stream/consumers';
 import { Injectable } from '@nestjs/common';
 import * as ExcelJS from 'exceljs';
 import type { FastifyReply } from 'fastify';
@@ -51,21 +52,15 @@ const BATCH_SIZE = 1000;
 export class ExcelService {
   /** 导出为内存 Buffer — 小数据量场景 */
   async toBuffer<T>(exportable: ExcelExportable<T>): Promise<Buffer> {
-    const chunks: Buffer[] = [];
     const passThrough = new PassThrough();
 
-    passThrough.on('data', (chunk: Buffer) => chunks.push(chunk));
+    // 收集端与写入端并发执行，避免大文件时 PassThrough 缓冲回压阻塞写入
+    const [buffer] = await Promise.all([
+      collectStreamBuffer(passThrough),
+      this.#writeToStream(exportable, passThrough),
+    ]);
 
-    const writePromise = this.#writeToStream(exportable, passThrough);
-    const endPromise = new Promise<void>((resolve, reject) => {
-      passThrough.on('end', resolve);
-      passThrough.on('error', reject);
-    });
-
-    await writePromise;
-    await endPromise;
-
-    return Buffer.concat(chunks);
+    return buffer;
   }
 
   /** 导出并触发浏览器下载 — 流式 pipe，零中间 Buffer */

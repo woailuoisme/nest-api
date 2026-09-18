@@ -1,7 +1,6 @@
 import type { IncomingMessage } from 'node:http';
 import { join } from 'node:path';
 import { Writable } from 'node:stream';
-import { isSpanContextValid, trace } from '@opentelemetry/api';
 import pino from 'pino';
 import pretty from 'pino-pretty';
 import pinoRoll from 'pino-roll';
@@ -40,9 +39,11 @@ export interface HttpAccessLog {
   ip: string;
 }
 
-/** 提取客户端真实 IP */
+/** 提取客户端真实 IP（空/纯空白头值回退至 socket，避免写入空串污染日志） */
 export function extractIp(req: IncomingMessage): string {
-  return (req.headers['x-forwarded-for'] as string) ?? req.socket?.remoteAddress ?? '-';
+  const forwarded = req.headers['x-forwarded-for'];
+  const value = Array.isArray(forwarded) ? forwarded.join(', ') : forwarded;
+  return value?.trim() || req.socket?.remoteAddress || '-';
 }
 
 /** 请求 ID 生成所需的请求结构（IncomingMessage 与 Http2ServerRequest 均满足） */
@@ -68,25 +69,6 @@ export function redactUrl(url?: string): string {
 }
 
 /**
- * OpenTelemetry Trace-to-Log 混入：
- * 若当前执行上下文存在合法有效的活跃 Span，则自动将 trace_id 和 span_id 混入日志对象，实现 Tempo / Loki 联动。
- */
-export function traceMixin(): Record<string, string> {
-  const span = trace.getActiveSpan();
-  if (!span) {
-    return {};
-  }
-  const spanContext = span.spanContext();
-  if (!isSpanContextValid(spanContext)) {
-    return {};
-  }
-  return {
-    trace_id: spanContext.traceId,
-    span_id: spanContext.spanId,
-  };
-}
-
-/**
  * 包装目标写入流，过滤掉日常健康的 HTTP 访问日志（2xx/3xx），
  * 自动保留 4xx/5xx 异常访问日志与所有应用层业务/系统日志写入按日滚动文件。
  */
@@ -95,20 +77,23 @@ export function createFileFilterStream(destination: Writable): Writable {
     write(chunk, encoding, callback) {
       try {
         const line = typeof chunk === 'string' ? chunk : chunk.toString('utf8');
-        const obj = JSON.parse(line);
-        if (obj && typeof obj === 'object') {
-          // 过滤 2xx/3xx 访问日志，4xx (WARN) 与 5xx (ERROR) 放行落盘
-          const isHttpLog =
-            (obj.context === 'HTTP' || (typeof obj.method === 'string' && typeof obj.ip === 'string')) &&
-            typeof obj.statusCode === 'number';
-          if (isHttpLog && obj.statusCode < 400) {
-            callback();
-            return;
-          }
-          // 兼容旧格式 req/res 序列化访问日志
-          if (obj.req && obj.res && typeof obj.responseTime === 'number') {
-            callback();
-            return;
+        // 快速通道：不含访问日志特征字段（statusCode / responseTime）时直接透传，跳过 JSON 解析开销
+        if (line.includes('"statusCode"') || line.includes('"responseTime"')) {
+          const obj = JSON.parse(line);
+          if (obj && typeof obj === 'object') {
+            // 过滤 2xx/3xx 访问日志，4xx (WARN) 与 5xx (ERROR) 放行落盘
+            const isHttpLog =
+              (obj.context === 'HTTP' || (typeof obj.method === 'string' && typeof obj.ip === 'string')) &&
+              typeof obj.statusCode === 'number';
+            if (isHttpLog && obj.statusCode < 400) {
+              callback();
+              return;
+            }
+            // 兼容旧格式 req/res 序列化访问日志
+            if (obj.req && obj.res && typeof obj.responseTime === 'number') {
+              callback();
+              return;
+            }
           }
         }
       } catch {
@@ -136,7 +121,6 @@ export async function createPinoLogger(customDestination?: Writable): Promise<pi
       {
         level: 'debug',
         redact: { paths: REDACT_PATHS, censor: '[redacted]' },
-        mixin: traceMixin,
       },
       customDestination,
     );
@@ -177,7 +161,6 @@ export async function createPinoLogger(customDestination?: Writable): Promise<pi
         paths: REDACT_PATHS,
         censor: '[redacted]',
       },
-      mixin: traceMixin,
     },
     pino.multistream(streams),
   );

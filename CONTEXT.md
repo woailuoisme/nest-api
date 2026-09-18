@@ -73,7 +73,7 @@ This document establishes the ubiquitous language and domain glossary for NestFo
 ### Performance Testing & Load Simulation
 
 - **Workflow**: Sequential deterministic user behavior pipeline executing health probe check (`/health`), authenticated profile query (`/users/me`), and data pagination (`/users?page=...`).
-- **ScenarioRunner**: Standardized scenario factory mapping k6 execution profiles and SLA thresholds to workflow execution with automated HTML/JSON report generation.
+- **createScenarioRunner()**: Standardized scenario factory mapping k6 execution profiles and SLA thresholds (single source: `scenarioRegistry`) to workflow execution with automated HTML/JSON report generation.
 
 ### Request Lifecycle & Resilience
 

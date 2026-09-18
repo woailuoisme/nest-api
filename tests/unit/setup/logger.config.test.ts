@@ -1,8 +1,7 @@
 import type { IncomingMessage } from 'node:http';
 import { Writable } from 'node:stream';
-import { trace } from '@opentelemetry/api';
-import { describe, expect, it, vi } from 'vitest';
-import { createPinoLogger, createRequestId, extractIp, REDACT_PATHS, redactUrl, traceMixin } from '@/setup/logger';
+import { describe, expect, it } from 'vitest';
+import { createPinoLogger, createRequestId, extractIp, REDACT_PATHS, redactUrl } from '@/setup/logger';
 
 describe('logger.config', () => {
   describe('redactUrl', () => {
@@ -97,67 +96,6 @@ describe('logger.config', () => {
       const logger = await createPinoLogger();
       expect(logger).toBeDefined();
       expect(typeof logger.info).toBe('function');
-    });
-
-    it('无活跃 Span 时 traceMixin 返回空对象且日志不含 trace_id', async () => {
-      const logs: string[] = [];
-      const customStream = new Writable({
-        write(chunk, _encoding, callback) {
-          logs.push(chunk.toString());
-          callback();
-        },
-      });
-
-      const logger = await createPinoLogger(customStream);
-      logger.info('standard log');
-
-      const parsed = JSON.parse(logs[0]);
-      expect(parsed.trace_id).toBeUndefined();
-      expect(parsed.span_id).toBeUndefined();
-    });
-  });
-
-  describe('traceMixin', () => {
-    it('无 Span 上下文时返回空对象', () => {
-      expect(traceMixin()).toEqual({});
-    });
-
-    it('SpanContext 无效（如 NoopSpan 全零 ID）时返回空对象', () => {
-      const spy = vi.spyOn(trace, 'getActiveSpan').mockReturnValue({
-        spanContext: () => ({
-          traceId: '00000000000000000000000000000000',
-          spanId: '0000000000000000',
-          traceFlags: 0,
-        }),
-      } as unknown as ReturnType<typeof trace.getActiveSpan>);
-
-      try {
-        expect(traceMixin()).toEqual({});
-      } finally {
-        spy.mockRestore();
-      }
-    });
-
-    it('存在合法活跃 Span 时 traceMixin 正确提取 trace_id 与 span_id', () => {
-      const validTraceId = '4bf92f3577b34da6a3ce929d0e0e4736';
-      const validSpanId = '00f067aa0ba902b7';
-
-      const spy = vi.spyOn(trace, 'getActiveSpan').mockReturnValue({
-        spanContext: () => ({
-          traceId: validTraceId,
-          spanId: validSpanId,
-          traceFlags: 1,
-        }),
-      } as unknown as ReturnType<typeof trace.getActiveSpan>);
-
-      try {
-        expect(traceMixin()).toEqual({
-          trace_id: validTraceId,
-          span_id: validSpanId,
-        });
-      } finally {
-        spy.mockRestore();
-      }
     });
   });
 });

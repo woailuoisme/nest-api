@@ -52,14 +52,14 @@ function getReportTimestamp() {
 function generateHtmlReport(data, title) {
   const metrics = data.metrics || {};
 
-  // 基础核心指标
-  const httpReqs = metrics.http_reqs ? metrics.http_reqs.values.count : 0;
-  const httpReqRate = metrics.http_reqs ? metrics.http_reqs.values.rate : 0;
-  const httpFailedRate = metrics.http_req_failed ? metrics.http_req_failed.values.rate * 100 : 0;
-  const httpDuration = metrics.http_req_duration ? metrics.http_req_duration.values : {};
-  const vusMax = metrics.vus_max ? metrics.vus_max.values.max : metrics.vus ? metrics.vus.values.value : 0;
-  const dataReceived = metrics.data_received ? metrics.data_received.values.count : 0;
-  const dataSent = metrics.data_sent ? metrics.data_sent.values.count : 0;
+  // 基础核心指标（指标缺失统一按 0 / 空对象兜底）
+  const httpReqs = metrics.http_reqs?.values.count ?? 0;
+  const httpReqRate = metrics.http_reqs?.values.rate ?? 0;
+  const httpFailedRate = (metrics.http_req_failed?.values.rate ?? 0) * 100;
+  const httpDuration = metrics.http_req_duration?.values ?? {};
+  const vusMax = metrics.vus_max?.values.max ?? metrics.vus?.values.value ?? 0;
+  const dataReceived = metrics.data_received?.values.count ?? 0;
+  const dataSent = metrics.data_sent?.values.count ?? 0;
 
   // 阈值解析
   const thresholdsList = [];
@@ -79,10 +79,10 @@ function generateHtmlReport(data, title) {
     }
   }
 
-  // 检查项 (Checks)
+  // 检查项 (Checks)：无 checks 指标时通过率视为 100%
   const checksRate = metrics.checks ? metrics.checks.values.rate * 100 : 100;
-  const checksPassed = metrics.checks ? metrics.checks.values.passes : 0;
-  const checksFailed = metrics.checks ? metrics.checks.values.fails : 0;
+  const checksPassed = metrics.checks?.values.passes ?? 0;
+  const checksFailed = metrics.checks?.values.fails ?? 0;
 
   function extractDurationItem(values, name) {
     if (!values) return null;
@@ -383,7 +383,7 @@ export function handleSummaryGenerator(data, options = {}) {
   try {
     consoleSummary = textSummary(data, { indent: ' ', enableColors: true });
   } catch {
-    consoleSummary = `\n--- k6 Test Summary ---\nRequests: ${data.metrics.http_reqs ? data.metrics.http_reqs.values.count : 0}\n`;
+    consoleSummary = `\n--- k6 Test Summary ---\nRequests: ${data.metrics?.http_reqs?.values.count ?? 0}\n`;
   }
 
   // 1. 独立历史归档文件：storage/logs/k6-reports/<scenario>-<timestamp>.[html|json]

@@ -48,6 +48,10 @@ storage/tmp/*
 storage/uploads/*
 !storage/uploads/.gitignore
 
+# MQTT Broker 运行期凭据 (deploy/mosquitto/config/credentials)
+deploy/mosquitto/config/credentials/*
+!deploy/mosquitto/config/credentials/.gitkeep
+
 # System / OS Files
 .DS_Store
 .DS_Store?
@@ -83,3 +87,4 @@ ehthumbs.db
 skills-lock.json
 .codebuddy/
 .scratch/
+docs/adr

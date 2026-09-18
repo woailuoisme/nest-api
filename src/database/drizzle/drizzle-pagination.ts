@@ -3,6 +3,7 @@ import type { PgColumn, PgTable } from 'drizzle-orm/pg-core';
 import type { PostgresJsDatabase } from 'drizzle-orm/postgres-js';
 import { clamp, isEmptyObject } from 'es-toolkit';
 import { PAGINATION } from '@/common/constants/app.constants';
+import { buildSpatieConditions, type ParsedSpatieQuery, type SpatieMappingOptions } from '@/common/query/spatie-query';
 
 export interface PaginateQueryOptions<TColumns = undefined> {
   page?: number;
@@ -80,11 +81,10 @@ export async function paginateSpatieQuery<
 >(
   db: PostgresJsDatabase<TSchema>,
   table: TTable,
-  parsedQuery: import('@/common/query/spatie-query').ParsedSpatieQuery,
-  mappingOptions: import('@/common/query/spatie-query').SpatieMappingOptions<TTable>,
+  parsedQuery: ParsedSpatieQuery,
+  mappingOptions: SpatieMappingOptions<TTable>,
   columns?: TColumns,
 ): Promise<PaginatedRows<TSelect>> {
-  const { buildSpatieConditions } = await import('@/common/query/spatie-query');
   const { where, orderBy } = buildSpatieConditions(table, parsedQuery, mappingOptions);
 
   return paginateQuery(db, table, {

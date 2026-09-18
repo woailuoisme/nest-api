@@ -32,6 +32,7 @@ const metricsRegistryProvider = {
   exports: [
     eventBusProvider,
     metricsRegistryProvider,
+    ResilienceStatesManager,
     ResilienceFactory,
     ResilienceService,
     SystemLoadSampler,

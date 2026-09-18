@@ -195,29 +195,12 @@ export async function setupApiDocumentation(app: NestFastifyApplication, appUrl:
   } as const;
 
   // ─── 5. 预渲染 Scalar HTML (零延迟、零前缀污染) ──────────────────────────
-  const clientScalarHtml = renderApiReference({
-    config: {
-      ...SCALAR_UNIFIED_CONFIG,
-      spec: { content: clientDocument },
-    },
-    pageTitle: 'NestForge Client API Reference',
-  });
+  const renderScalarPage = (doc: OpenAPIObject | typeof authDocument, pageTitle: string) =>
+    renderApiReference({ config: { ...SCALAR_UNIFIED_CONFIG, spec: { content: doc } }, pageTitle });
 
-  const adminScalarHtml = renderApiReference({
-    config: {
-      ...SCALAR_UNIFIED_CONFIG,
-      spec: { content: adminDocument },
-    },
-    pageTitle: 'NestForge Admin API Reference',
-  });
-
-  const authScalarHtml = renderApiReference({
-    config: {
-      ...SCALAR_UNIFIED_CONFIG,
-      spec: { content: authDocument },
-    },
-    pageTitle: 'NestForge Better Auth API Reference',
-  });
+  const clientScalarHtml = renderScalarPage(clientDocument, 'NestForge Client API Reference');
+  const adminScalarHtml = renderScalarPage(adminDocument, 'NestForge Admin API Reference');
+  const authScalarHtml = renderScalarPage(authDocument, 'NestForge Better Auth API Reference');
 
   const httpAdapter = app.getHttpAdapter();
   const fastifyInstance = httpAdapter.getInstance();

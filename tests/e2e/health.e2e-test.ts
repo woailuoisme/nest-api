@@ -12,6 +12,24 @@ import { SearchHealthIndicator } from '@/features/system/health/indicators/searc
 import { StorageHealthIndicator } from '@/features/system/health/indicators/storage-health.indicator';
 import { setAppShuttingDown } from '@/setup/lifecycle';
 
+/** 探针桩：以固定的 up 结果替换真实探针，避免 e2e 依赖数据库 / Redis / MQTT 等外部组件 */
+const stubIndicator = (health: Record<string, unknown>) => ({
+  isHealthy: vi.fn().mockResolvedValue(health),
+});
+
+/** /health 与 /health/readiness 聚合结果中必须出现的全部探针键 */
+const AGGREGATED_INDICATORS = [
+  'database',
+  'redis',
+  'storage',
+  'circuit_breakers',
+  'centrifugo',
+  'search',
+  'imgproxy',
+  'mqtt',
+  'shutdown',
+] as const;
+
 describe('HealthController (e2e)', () => {
   let app: NestFastifyApplication;
 
@@ -20,37 +38,24 @@ describe('HealthController (e2e)', () => {
       imports: [HealthModule],
     })
       .overrideProvider(DatabaseHealthIndicator)
-      .useValue({
-        isHealthy: vi.fn().mockResolvedValue({ database: { status: 'up' } }),
-      })
+      .useValue(stubIndicator({ database: { status: 'up' } }))
       .overrideProvider(RedisHealthIndicator)
-      .useValue({
-        isHealthy: vi.fn().mockResolvedValue({ redis: { status: 'up' } }),
-      })
+      .useValue(stubIndicator({ redis: { status: 'up' } }))
       .overrideProvider(StorageHealthIndicator)
-      .useValue({
-        isHealthy: vi.fn().mockResolvedValue({ storage: { status: 'up', driver: 'local' } }),
-      })
+      .useValue(stubIndicator({ storage: { status: 'up', driver: 'local' } }))
+      // CircuitBreakerHealthIndicator 为同步实现，保持 mockReturnValue 语义
       .overrideProvider(CircuitBreakerHealthIndicator)
       .useValue({
         isHealthy: vi.fn().mockReturnValue({ circuit_breakers: { status: 'up', totalCount: 0, breakers: [] } }),
       })
       .overrideProvider(CentrifugoHealthIndicator)
-      .useValue({
-        isHealthy: vi.fn().mockResolvedValue({ centrifugo: { status: 'up', driver: 'centrifugo' } }),
-      })
+      .useValue(stubIndicator({ centrifugo: { status: 'up', driver: 'centrifugo' } }))
       .overrideProvider(SearchHealthIndicator)
-      .useValue({
-        isHealthy: vi.fn().mockResolvedValue({ search: { status: 'up', driver: 'noop' } }),
-      })
+      .useValue(stubIndicator({ search: { status: 'up', driver: 'noop' } }))
       .overrideProvider(ImgproxyHealthIndicator)
-      .useValue({
-        isHealthy: vi.fn().mockResolvedValue({ imgproxy: { status: 'up', driver: 'imgproxy' } }),
-      })
+      .useValue(stubIndicator({ imgproxy: { status: 'up', driver: 'imgproxy' } }))
       .overrideProvider(MqttHealthIndicator)
-      .useValue({
-        isHealthy: vi.fn().mockResolvedValue({ mqtt: { status: 'up', connection: 'inactive' } }),
-      })
+      .useValue(stubIndicator({ mqtt: { status: 'up', connection: 'inactive' } }))
       .compile();
 
     app = moduleFixture.createNestApplication<NestFastifyApplication>(new FastifyAdapter());
@@ -64,75 +69,53 @@ describe('HealthController (e2e)', () => {
     }
   });
 
+  /** 发起内联 GET 请求并解析 JSON 响应体 */
+  async function getJson(url: string) {
+    const response = await app.inject({ method: 'GET', url });
+    return { statusCode: response.statusCode, body: JSON.parse(response.payload) };
+  }
+
+  /** 断言聚合结果包含全部探针键（/health 与 /health/readiness 契约一致） */
+  function expectAllIndicators(info: Record<string, unknown>): void {
+    for (const indicator of AGGREGATED_INDICATORS) {
+      expect(info).toHaveProperty(indicator);
+    }
+  }
+
   it('/health (GET)', async () => {
-    const response = await app.inject({
-      method: 'GET',
-      url: '/health',
-    });
-    expect(response.statusCode).toBe(200);
-    const body = JSON.parse(response.payload);
+    const { statusCode, body } = await getJson('/health');
+    expect(statusCode).toBe(200);
     expect(body.status).toBe('ok');
-    expect(body.info).toHaveProperty('database');
-    expect(body.info).toHaveProperty('redis');
-    expect(body.info).toHaveProperty('storage');
-    expect(body.info).toHaveProperty('circuit_breakers');
-    expect(body.info).toHaveProperty('centrifugo');
-    expect(body.info).toHaveProperty('search');
-    expect(body.info).toHaveProperty('imgproxy');
-    expect(body.info).toHaveProperty('mqtt');
-    expect(body.info).toHaveProperty('shutdown');
+    expectAllIndicators(body.info);
   });
 
   it('/health/liveness (GET)', async () => {
-    const response = await app.inject({
-      method: 'GET',
-      url: '/health/liveness',
-    });
-    expect(response.statusCode).toBe(200);
-    const body = JSON.parse(response.payload);
+    const { statusCode, body } = await getJson('/health/liveness');
+    expect(statusCode).toBe(200);
     expect(body.status).toBe('ok');
     expect(body.info).toHaveProperty('memory_heap');
     expect(body.info).toHaveProperty('memory_rss');
   });
 
   it('/health/readiness (GET)', async () => {
-    const response = await app.inject({
-      method: 'GET',
-      url: '/health/readiness',
-    });
-    expect(response.statusCode).toBe(200);
-    const body = JSON.parse(response.payload);
+    const { statusCode, body } = await getJson('/health/readiness');
+    expect(statusCode).toBe(200);
     expect(body.status).toBe('ok');
-    expect(body.info).toHaveProperty('database');
-    expect(body.info).toHaveProperty('redis');
-    expect(body.info).toHaveProperty('storage');
-    expect(body.info).toHaveProperty('circuit_breakers');
-    expect(body.info).toHaveProperty('centrifugo');
-    expect(body.info).toHaveProperty('search');
-    expect(body.info).toHaveProperty('imgproxy');
-    expect(body.info).toHaveProperty('mqtt');
-    expect(body.info).toHaveProperty('shutdown');
+    expectAllIndicators(body.info);
   });
 
   it('/health/readiness 在应用优雅停机期间应返回 503 Service Unavailable 并指示 shutdown down，而 liveness 保持 200', async () => {
     setAppShuttingDown(true);
     try {
-      const response = await app.inject({
-        method: 'GET',
-        url: '/health/readiness',
-      });
-      expect(response.statusCode).toBe(503);
-      const body = JSON.parse(response.payload);
+      const { statusCode, body } = await getJson('/health/readiness');
+      expect(statusCode).toBe(503);
       expect(body.status).toBe('error');
       expect(body.error).toHaveProperty('shutdown');
       expect(body.error.shutdown.status).toBe('down');
 
       // 验证在停机期间 Liveness 依然保持健康 (200 OK)，防止 K8s 强杀 Pod
-      const livenessResponse = await app.inject({
-        method: 'GET',
-        url: '/health/liveness',
-      });
-      expect(livenessResponse.statusCode).toBe(200);
+      const { statusCode: livenessStatus } = await getJson('/health/liveness');
+      expect(livenessStatus).toBe(200);
     } finally {
       setAppShuttingDown(false);
     }

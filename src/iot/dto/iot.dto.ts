@@ -38,6 +38,54 @@ export const MockTelemetrySchema = z.object({
 
 export class MockTelemetryDto extends createZodDto(MockTelemetrySchema) {}
 
+// ─── 设备安全凭证签发 Schema & DTO ──────────────────────────────────────────
+
+export const DeviceTokenRequestSchema = z.object({
+  deviceId: z.string().min(1).describe('设备唯一标识符 (UUID / 序列号)'),
+  deviceSecret: z.string().min(6).describe('设备预置通信密钥 (Pre-Shared Secret)'),
+  tenantId: z.string().default('default').optional().describe('所属租户 ID'),
+});
+
+export class DeviceTokenRequestDto extends createZodDto(DeviceTokenRequestSchema) {}
+
+export class DeviceTokenResponseDto {
+  @ApiProperty({ example: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...', description: 'Mosquitto 认证专用 JWT 凭证' })
+  token: string;
+
+  @ApiProperty({ example: 2592000, description: '凭据有效期 (秒，默认 30 天)' })
+  expiresIn: number;
+
+  @ApiProperty({ example: 'mqtt://localhost:1883', description: 'Mosquitto Broker 连接端点' })
+  brokerUrl: string;
+}
+
+// ─── 工业设备突发硬件告警事件 Schema & DTO ──────────────────────────────────────
+
+export const DeviceCriticalEventSchema = z.object({
+  tenantId: z.string().default('default').describe('租户 ID'),
+  deviceId: z.string().min(1).describe('设备序列号'),
+  level: z.enum(['warning', 'critical']).default('warning').describe('告警等级'),
+  metric: z.string().describe('告警测点或类型 (如 e_stop, over_temp, vibration_limit)'),
+  value: z.number().describe('触发时测点数值'),
+  threshold: z.number().describe('报警设定阈值'),
+  message: z.string().describe('报警详细描述'),
+  timestamp: z.number().optional().describe('事件发生时间戳 (毫秒)'),
+});
+
+export class DeviceCriticalEventDto extends createZodDto(DeviceCriticalEventSchema) {}
+
+// ─── 设备在线/遗嘱状态变更 Schema & DTO ────────────────────────────────────────
+
+export const DeviceStatusPayloadSchema = z.object({
+  status: z.enum(['online', 'offline']).describe('设备在线状态'),
+  reason: z.string().optional().describe('状态变更原因 (如 normal_boot, LWT_timeout)'),
+  timestamp: z.number().optional().describe('状态变更时间戳 (毫秒)'),
+});
+
+export type DeviceStatusPayload = z.infer<typeof DeviceStatusPayloadSchema>;
+
+export class DeviceStatusPayloadDto extends createZodDto(DeviceStatusPayloadSchema) {}
+
 // ─── 实体模型定义 ──────────────────────────────────────────────────────────
 
 export class DeviceShadowEntity {

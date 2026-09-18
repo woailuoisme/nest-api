@@ -48,11 +48,11 @@ export class DrizzleService implements OnApplicationShutdown {
       onnotice: () => {},
     });
     this.db = drizzle(this.client, { schema });
-    this.logger.log('Database client initialized');
+    this.logger.debug('Database client initialized');
   }
 
   async onApplicationShutdown() {
     await this.client.end();
-    this.logger.log('Database client disconnected');
+    this.logger.debug('Database client disconnected');
   }
 }

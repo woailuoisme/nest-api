@@ -19,6 +19,9 @@ type FastifyLike = {
 /** BullBoard 队列监控面板路径 */
 export const QUEUES_DASHBOARD_PATH = '/queues';
 
+/** 纳入队列看板的队列名（只读模式；当前不含 SEARCH_QUEUE） */
+const MONITORED_QUEUE_NAMES = [MAIL_QUEUE, TOKEN_CLEANUP_QUEUE, DEMO_QUEUE, MEDIA_QUEUE];
+
 /**
  * 挂载 BullBoard 队列监控面板。
  * 默认直接开放访问；若配置了 BULL_BOARD_USER / BULL_BOARD_PASSWORD 则启用 Basic Auth 鉴权。
@@ -39,12 +42,9 @@ export async function setupBullBoard(app: NestFastifyApplication, appUrl?: strin
   serverAdapter.setBasePath(QUEUES_DASHBOARD_PATH);
 
   createBullBoard({
-    queues: [
-      new BullMQAdapter(app.get<Queue>(getQueueToken(MAIL_QUEUE)), { readOnlyMode: true }),
-      new BullMQAdapter(app.get<Queue>(getQueueToken(TOKEN_CLEANUP_QUEUE)), { readOnlyMode: true }),
-      new BullMQAdapter(app.get<Queue>(getQueueToken(DEMO_QUEUE)), { readOnlyMode: true }),
-      new BullMQAdapter(app.get<Queue>(getQueueToken(MEDIA_QUEUE)), { readOnlyMode: true }),
-    ],
+    queues: MONITORED_QUEUE_NAMES.map(
+      (name) => new BullMQAdapter(app.get<Queue>(getQueueToken(name)), { readOnlyMode: true }),
+    ),
     serverAdapter,
   });
 

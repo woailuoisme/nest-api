@@ -2,7 +2,6 @@ import { Global, Module } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { Test, type TestingModule } from '@nestjs/testing';
 import { beforeEach, describe, expect, it } from 'vitest';
-import { RedisService } from '@/database/redis.service';
 import { ChannelExplorerService } from '@/realtime/channels/channel-explorer.service';
 import { ChannelManager } from '@/realtime/channels/channel-manager.service';
 import { PresenceService } from '@/realtime/channels/presence.service';
@@ -26,17 +25,10 @@ describe('RealtimeModule', () => {
     },
   };
 
-  const mockRedisService = {
-    getClient: () => null,
-  };
-
   @Global()
   @Module({
-    providers: [
-      { provide: ConfigService, useValue: mockConfigService },
-      { provide: RedisService, useValue: mockRedisService },
-    ],
-    exports: [ConfigService, RedisService],
+    providers: [{ provide: ConfigService, useValue: mockConfigService }],
+    exports: [ConfigService],
   })
   class MockGlobalModule {}
 

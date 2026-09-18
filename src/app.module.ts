@@ -5,6 +5,7 @@ import { APP_GUARD } from '@nestjs/core';
 import { EventEmitterModule } from '@nestjs/event-emitter';
 import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
 import { I18nModule } from 'nestjs-i18n';
+import { isTruthyEnv } from '@/common/constants/app.constants';
 import { AccessControlGuard } from '@/common/guards/access-control.guard';
 import { AdminPrefixGuard } from '@/common/guards/admin-prefix.guard';
 import { BetterAuthGuard } from '@/common/guards/better-auth.guard';
@@ -29,7 +30,8 @@ import { RealtimeModule } from './realtime/realtime.module';
 import { LoggerModule } from './setup/logger/logger.module';
 import { WorkerModule } from './workers/worker.module';
 
-const isWorkerEmbedded = ['true', '1', 'yes', 'on'].includes(String(process.env.WORKER_EMBEDDED).toLowerCase());
+// 模块装饰器求值阶段 ConfigService 尚不可用，直接读取 process.env 判定内嵌 Worker
+const isWorkerEmbedded = isTruthyEnv(process.env.WORKER_EMBEDDED);
 
 @Module({
   imports: [
@@ -38,6 +40,7 @@ const isWorkerEmbedded = ['true', '1', 'yes', 'on'].includes(String(process.env.
     I18nModule.forRoot(createI18nModuleConfig()),
     LoggerModule,
     ThrottlerModule.forRootAsync({
+      // ThrottlerAsyncOptions 要求显式声明 imports（即使为空）
       imports: [],
       inject: [ConfigService],
       useFactory: (config: ConfigService<EnvConfig, true>) => [

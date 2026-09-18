@@ -1,3 +1,4 @@
+import { createHmac, randomUUID } from 'node:crypto';
 import { Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import {
@@ -7,36 +8,94 @@ import {
   type IotTelemetryReceivedEvent,
 } from '@/common/events';
 import { MqttCtx, MqttParams, MqttPayload, MqttSubscribe } from '../decorators';
-import type { DeviceShadowEntity, DeviceTelemetryDto } from '../dto/iot.dto';
+import type {
+  DeviceCriticalEventDto,
+  DeviceShadowEntity,
+  DeviceStatusPayload,
+  DeviceTelemetryDto,
+  DeviceTokenRequestDto,
+  DeviceTokenResponseDto,
+} from '../dto/iot.dto';
 import type { MqttMessageContext } from '../transports/interfaces/mqtt.interface';
 import { MqttService } from '../transports/mqtt.service';
+import { IotDeviceCredentialService } from './iot-device-credential.service';
 
-export interface DeviceStatusPayload {
-  status: 'online' | 'offline';
-  reason?: string;
-  timestamp?: number;
+function toBase64Url(input: string | Buffer): string {
+  const buf = typeof input === 'string' ? Buffer.from(input, 'utf8') : input;
+  return buf.toString('base64url');
+}
+
+function signHs256Jwt(payload: Record<string, unknown>, secret: string): string {
+  const header = { alg: 'HS256', typ: 'JWT' };
+  const headerB64 = toBase64Url(JSON.stringify(header));
+  const payloadB64 = toBase64Url(JSON.stringify(payload));
+  const signatureInput = `${headerB64}.${payloadB64}`;
+
+  const hmac = createHmac('sha256', secret);
+  hmac.update(signatureInput);
+  const signatureB64 = toBase64Url(hmac.digest());
+
+  return `${signatureInput}.${signatureB64}`;
 }
 
 /**
- * 工业设备遥测与状态影子管理服务
+ * 工业设备遥测、状态与控制安全服务 (IotTelemetryService)
  *
- * 核心职责：
- * 1. 利用 MQTT 5.0 共享订阅 `$share/telemetry-workers/...` 实现 Pod 集群间遥测流量无锁负载均衡。
- * 2. 模式匹配动态提取 `:tenantId` 与 `:deviceId`，维护工业设备实时数字影子 (Device Shadow)。
- * 3. 监听设备遗嘱消息 (LWT)，实现设备非正常断网的毫秒级离线感知。
- * 4. 接入领域事件机制 (@nestjs/event-emitter)，驱动实时流（WebSocket/SSE）与跨领域协同。
+ * 核心设计（数据面与控制面分离架构）：
+ * 1. 数据面分流：在生产环境中，海量高频传感器遥测推荐由 Telegraf (mqtt_consumer) 旁路直写 TimescaleDB，
+ *    彻底释放 NestJS 进程事件循环；
+ * 2. 控制面聚焦：NestJS 核心掌控设备安全凭证签发 (JWT)、在线/遗嘱状态感知 (LWT)、突发硬件告警捕获与实时大屏联动；
+ * 3. 仿真支持：保留本地开发测试用的遥测模拟器与内存数字影子 (Device Shadow)。
  */
 @Injectable()
 export class IotTelemetryService {
   private readonly logger = new Logger(IotTelemetryService.name);
 
-  /** 设备影子状态内存缓存 (生产可接入 Redis 或时序数据库 TimescaleDB/ClickHouse) */
+  /** 设备影子状态内存缓存 (热态最新在线状态与快照) */
   private readonly deviceShadows = new Map<string, DeviceShadowEntity>();
 
   constructor(
     private readonly eventEmitter: EventEmitter2,
     private readonly mqttService: MqttService,
+    private readonly deviceCredentials: IotDeviceCredentialService,
   ) {}
+
+  /**
+   * 签发设备接入 Mosquitto 所需的 JWT 凭据 (一机一密换票)
+   *
+   * 先恒定时间校验设备预置密钥（失败即 401，且不泄露设备注册状态），
+   * 再使用与业务鉴权隔离的 IOT_JWT_SECRET 签名，凭证由 Mosquitto 端 mosquitto-go-auth 本地验签。
+   */
+  issueDeviceToken(dto: DeviceTokenRequestDto): DeviceTokenResponseDto {
+    this.deviceCredentials.verifyCredential(dto.deviceId, dto.deviceSecret);
+
+    const secret = this.deviceCredentials.requireJwtSecret();
+    const expiresIn = this.deviceCredentials.getTokenTtlSeconds();
+    const nowSec = Math.floor(Date.now() / 1000);
+
+    const token = signHs256Jwt(
+      {
+        sub: dto.deviceId,
+        tenantId: dto.tenantId || 'default',
+        role: 'device',
+        // jti 用于支持凭据吊销（黑名单 / 轮换后即时失效）
+        jti: randomUUID(),
+        iat: nowSec,
+        exp: nowSec + expiresIn,
+      },
+      secret,
+    );
+
+    const brokerUrl = this.mqttService.getBrokerUrl();
+
+    this.logger.log(`成功为工业设备 [${dto.deviceId}] 签发 Mosquitto JWT 凭据 (有效期: ${expiresIn}s)`);
+
+    return {
+      token,
+      expiresIn,
+      brokerUrl,
+    };
+  }
 
   /**
    * 监听工业设备遥测上报 (共享订阅：telemetry-workers)
@@ -112,20 +171,52 @@ export class IotTelemetryService {
     };
     this.eventEmitter.emit(IOT_EVENTS.STATUS_CHANGED, statusEvent);
 
-    const nowIso = new Date().toISOString();
     const existing = this.deviceShadows.get(deviceId);
-    if (existing) {
-      existing.online = isOnline;
-      existing.lastSeenAt = nowIso;
-    } else {
-      this.deviceShadows.set(deviceId, {
-        deviceId,
-        tenantId,
-        online: isOnline,
-        lastSeenAt: nowIso,
-        telemetry: null,
-      });
-    }
+    this.deviceShadows.set(deviceId, {
+      deviceId,
+      // 保留既有租户绑定与遥测快照，仅在首次建档时采用主题中的租户
+      tenantId: existing?.tenantId ?? tenantId,
+      online: isOnline,
+      lastSeenAt: new Date().toISOString(),
+      telemetry: existing?.telemetry ?? null,
+    });
+  }
+
+  /**
+   * 监听工业设备突发关键事件与硬件告警 (QoS 1 保证触达)
+   */
+  @MqttSubscribe('devices/:tenantId/:deviceId/events', { qos: 1 })
+  handleDeviceEvent(
+    @MqttPayload() payload: DeviceCriticalEventDto,
+    @MqttParams('tenantId') tenantId: string,
+    @MqttParams('deviceId') deviceId: string,
+  ): void {
+    this.logger.warn(
+      `[Device Critical Event] 设备 [${deviceId}] 发生突发告警: [${payload.metric}] ${payload.message} (等级: ${payload.level ?? 'warning'})`,
+    );
+
+    const alarmEvent: IotAlarmTriggeredEvent = {
+      tenantId: payload.tenantId || tenantId,
+      deviceId: payload.deviceId || deviceId,
+      level: payload.level || 'warning',
+      metric: payload.metric,
+      value: payload.value,
+      threshold: payload.threshold,
+      message: payload.message,
+      timestamp: payload.timestamp ?? Date.now(),
+    };
+
+    this.eventEmitter.emit(IOT_EVENTS.ALARM_TRIGGERED, alarmEvent);
+  }
+
+  /**
+   * 模拟设备突发告警上报 (测试与仿真联调)
+   */
+  async simulateEvent(dto: DeviceCriticalEventDto): Promise<void> {
+    const tenantId = dto.tenantId || 'default';
+    const deviceId = dto.deviceId;
+    await this.publishIfConnected(`devices/${tenantId}/${deviceId}/events`, dto);
+    this.handleDeviceEvent(dto, tenantId, deviceId);
   }
 
   /**
@@ -151,10 +242,18 @@ export class IotTelemetryService {
     deviceId: string,
     telemetry: DeviceTelemetryDto,
   ): Promise<DeviceShadowEntity> {
-    if (this.mqttService.isConnected()) {
-      await this.mqttService.publish(`devices/${tenantId}/${deviceId}/telemetry`, telemetry, { qos: 1 });
-    }
+    await this.publishIfConnected(`devices/${tenantId}/${deviceId}/telemetry`, telemetry);
     return this.recordTelemetry(tenantId, deviceId, telemetry);
+  }
+
+  /**
+   * 内部方法：Broker 就绪时以 QoS 1 上报消息，未连接时静默降级为仅本地更新
+   */
+  private async publishIfConnected(topic: string, payload: object): Promise<void> {
+    if (!this.mqttService.isConnected()) {
+      return;
+    }
+    await this.mqttService.publish(topic, payload, { qos: 1 });
   }
 
   /**

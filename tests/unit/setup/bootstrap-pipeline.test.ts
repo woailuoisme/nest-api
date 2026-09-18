@@ -45,7 +45,7 @@ describe('Bootstrap Pipeline & Lifecycle Helpers', () => {
     processOnceSpy.mockRestore();
   });
 
-  it('PinoLoggerService.logStartupSummary 应正确格式化并输出启动摘要', () => {
+  it('PinoLoggerService.logStartupSummary 应正确格式化并输出紧凑启动摘要', () => {
     const service = new PinoLoggerService();
     const logSpy = vi.spyOn(service, 'log').mockImplementation(() => {});
 
@@ -59,9 +59,11 @@ describe('Bootstrap Pipeline & Lifecycle Helpers', () => {
       ],
     });
 
-    expect(logSpy).toHaveBeenCalledWith('[App] Server is running: http://localhost:3000 (timezone=UTC)');
-    expect(logSpy).toHaveBeenCalledWith('[Worker] Embedded worker active (processing queues & schedules)');
-    expect(logSpy).toHaveBeenCalledWith('[App] Swagger API Docs: http://localhost:3000/docs');
-    expect(logSpy).toHaveBeenCalledWith('[App] BullBoard Queues: http://localhost:3000/admin/queues');
+    expect(logSpy).toHaveBeenCalledWith(
+      '[App] Server is running: http://localhost:3000 (timezone=UTC) [Worker: active]',
+    );
+    expect(logSpy).toHaveBeenCalledWith(
+      '[App] Swagger API Docs: http://localhost:3000/docs | BullBoard Queues: http://localhost:3000/admin/queues',
+    );
   });
 });

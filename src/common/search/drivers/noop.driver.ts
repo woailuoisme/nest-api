@@ -20,7 +20,7 @@ export class NoopSearchDriver implements SearchDriver {
   private readonly logger = new Logger(NoopSearchDriver.name);
 
   constructor() {
-    this.logger.log('Initialized NoopSearchDriver (Search is running in fallback/noop mode)');
+    this.logger.debug('Initialized NoopSearchDriver (Search is running in fallback/noop mode)');
   }
 
   async createOrUpdateIndex(_indexName: string, _primaryKey?: string): Promise<void> {

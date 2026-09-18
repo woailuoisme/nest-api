@@ -2,9 +2,12 @@ import { Body, Controller, Get, HttpCode, HttpStatus, Post, Query, Req } from '@
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import type { FastifyRequest } from 'fastify';
 import { CurrentUser, type CurrentUserPayload } from '@/common/decorators/current-user.decorator';
+import { Public } from '@/common/decorators/public.decorator';
 import { ApiSuccessResponse } from '@/common/decorators/swagger-response.decorator';
 import { RealtimeChannelsService } from './channels/realtime-channels.service';
 import {
+  CentrifugoProxyResponseDto,
+  CentrifugoProxySubscribeDto,
   RealtimeChannelInfoDto,
   RealtimeSubscribeDto,
   RealtimeSubscribeResponseDto,
@@ -59,6 +62,15 @@ export class RealtimeController {
     @Body() dto: RealtimeSubscribeDto,
   ): Promise<RealtimeSubscribeResponseDto> {
     return this.eventsService.subscribeChannel(user, dto.channel, dto.client);
+  }
+
+  @Public()
+  @Post('proxy/subscribe')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Centrifugo Proxy Webhook 频道订阅鉴权' })
+  @ApiSuccessResponse(CentrifugoProxyResponseDto, { description: 'Centrifugo 订阅反向代理鉴权响应' })
+  async proxySubscribe(@Body() dto: CentrifugoProxySubscribeDto): Promise<CentrifugoProxyResponseDto> {
+    return this.eventsService.handleProxySubscribe(dto);
   }
 
   @Get('channels')

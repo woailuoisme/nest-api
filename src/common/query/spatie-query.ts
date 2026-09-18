@@ -3,6 +3,14 @@ import type { PgColumn, PgTable } from 'drizzle-orm/pg-core';
 import { clamp } from 'es-toolkit';
 import { PAGINATION } from '@/common/constants/app.constants';
 
+/** 区间过滤后缀 → Drizzle 比较算子（filter[createdAtAfter]/[createdAtMin] → gte；[Before]/[Max] → lte） */
+const RANGE_FILTER_OPERATORS: Record<string, (column: PgColumn, value: string) => SQL> = {
+  After: gte,
+  Min: gte,
+  Before: lte,
+  Max: lte,
+};
+
 /** 解析后的标准 Spatie 查询结构 */
 export interface ParsedSpatieQuery {
   page: number;
@@ -114,22 +122,12 @@ export function buildSpatieConditions<TTable extends PgTable>(
         continue;
       }
 
-      // 检查区间过滤 (After / Min -> gte)
-      if (filterKey.endsWith('After') || filterKey.endsWith('Min')) {
-        const baseKey = filterKey.replace(/(After|Min)$/, '');
-        const col = options.filterableColumns[baseKey];
+      // 检查区间过滤 (After / Min / Before / Max)
+      const rangeSuffix = Object.keys(RANGE_FILTER_OPERATORS).find((suffix) => filterKey.endsWith(suffix));
+      if (rangeSuffix) {
+        const col = options.filterableColumns[filterKey.slice(0, -rangeSuffix.length)];
         if (col) {
-          conditions.push(gte(col, filterValue));
-        }
-        continue;
-      }
-
-      // 检查区间过滤 (Before / Max -> lte)
-      if (filterKey.endsWith('Before') || filterKey.endsWith('Max')) {
-        const baseKey = filterKey.replace(/(Before|Max)$/, '');
-        const col = options.filterableColumns[baseKey];
-        if (col) {
-          conditions.push(lte(col, filterValue));
+          conditions.push(RANGE_FILTER_OPERATORS[rangeSuffix](col, filterValue));
         }
       }
     }
@@ -139,10 +137,9 @@ export function buildSpatieConditions<TTable extends PgTable>(
   if (parsed.search && options.searchableColumns && options.searchableColumns.length > 0) {
     const searchPattern = `%${parsed.search}%`;
     const searchConditions = options.searchableColumns.map((col) => ilike(col, searchPattern));
-    if (searchConditions.length === 1) {
-      conditions.push(searchConditions[0]);
-    } else if (searchConditions.length > 1) {
-      conditions.push(or(...searchConditions) as SQL);
+    const searchCondition = searchConditions.length === 1 ? searchConditions[0] : or(...searchConditions);
+    if (searchCondition) {
+      conditions.push(searchCondition);
     }
   }
 

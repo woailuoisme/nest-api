@@ -3,17 +3,14 @@ export interface TopicMatchResult {
   params: Record<string, string>;
 }
 
+/** MQTT 5.0 共享订阅前缀：$share/{group}/{topic} */
+const SHARED_PREFIX_REGEX = /^\$share\/[^/]*\//;
+
 /**
- * 剥离 MQTT 5.0 共享订阅前缀 ($share/{group}/...)
+ * 剥离 MQTT 5.0 共享订阅前缀 ($share/{group}/...)，无前缀时原样返回
  */
 export function stripSharedPrefix(pattern: string): string {
-  if (pattern.startsWith('$share/')) {
-    const parts = pattern.split('/');
-    if (parts.length >= 3) {
-      return parts.slice(2).join('/');
-    }
-  }
-  return pattern;
+  return pattern.replace(SHARED_PREFIX_REGEX, '');
 }
 
 /**

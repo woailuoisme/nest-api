@@ -71,3 +71,13 @@ export function parseMqttDsn(dsn: string): MqttOptions {
 
   return options;
 }
+
+/**
+ * 推导 Broker 连接地址：优先复用 DSN 原串，其次由协议/主机/端口拼装
+ */
+export function resolveMqttBrokerUrl(options?: MqttOptions | null): string {
+  if (!options) {
+    return 'mqtt://localhost:1883';
+  }
+  return options.url || `${options.protocol}://${options.host}:${options.port}`;
+}

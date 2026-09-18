@@ -97,7 +97,7 @@ export function runWorkflow(setupData, options = {}) {
   flowSuccessRate.add(workflowOk);
 
   // 5. 模拟用户思考时间 (Think Time)
-  const thinkTime = options.thinkTime !== undefined ? options.thinkTime : 0.2;
+  const thinkTime = options.thinkTime ?? 0.2;
   if (thinkTime > 0) {
     sleep(thinkTime);
   }
@@ -105,19 +105,19 @@ export function runWorkflow(setupData, options = {}) {
 
 /**
  * 场景执行器工厂 (Scenario Runner Factory - Ubiquitous Language)
+ * 把「报告标题 / 场景名 / 思考时间 / 写链路开关」收敛为 k6 入口所需的 setup + run + handleSummary 三件套，
+ * 入口脚本只需声明自身差异即可直接导出，无需重复装配。
  */
-export const ScenarioRunner = {
-  create(config = {}) {
-    const {
-      title = 'NestForge Performance Test Report',
-      scenario = 'summary',
-      thinkTime = 0.2,
-      enableRegister = false,
-    } = config;
-    return {
-      setup: () => setupAuth(),
-      run: (setupData) => runWorkflow(setupData, { thinkTime, enableRegister }),
-      handleSummary: (data) => handleSummaryGenerator(data, { title, scenario }),
-    };
-  },
-};
+export function createScenarioRunner(config = {}) {
+  const {
+    title = 'NestForge Performance Test Report',
+    scenario = 'summary',
+    thinkTime = 0.2,
+    enableRegister = false,
+  } = config;
+  return {
+    setup: () => setupAuth(),
+    run: (setupData) => runWorkflow(setupData, { thinkTime, enableRegister }),
+    handleSummary: (data) => handleSummaryGenerator(data, { title, scenario }),
+  };
+}

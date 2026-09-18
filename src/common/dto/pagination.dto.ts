@@ -52,16 +52,16 @@ export class PaginatedResultResource<T> {
   readonly items: T[];
 
   @ApiProperty({ type: PageMetaResource, description: 'Offset 分页元数据' })
-  readonly pagination: PageMetaResource;
+  readonly meta: PageMetaResource;
 
   /** 向后兼容别名 */
-  get meta(): PageMetaResource {
-    return this.pagination;
+  get pagination(): PageMetaResource {
+    return this.meta;
   }
 
   constructor(items: T[], pagination: PageMetaResource) {
     this.items = Array.isArray(items) ? items : [];
-    this.pagination = pagination;
+    this.meta = pagination;
   }
 }
 
@@ -106,15 +106,15 @@ export class CursorPaginatedResultResource<T> {
   readonly items: T[];
 
   @ApiProperty({ type: CursorPageMetaResource, description: 'Cursor 游标分页元数据' })
-  readonly pagination: CursorPageMetaResource;
+  readonly meta: CursorPageMetaResource;
 
   /** 向后兼容别名 */
-  get meta(): CursorPageMetaResource {
-    return this.pagination;
+  get pagination(): CursorPageMetaResource {
+    return this.meta;
   }
 
   constructor(items: T[], pagination: CursorPageMetaResource) {
     this.items = Array.isArray(items) ? items : [];
-    this.pagination = pagination;
+    this.meta = pagination;
   }
 }

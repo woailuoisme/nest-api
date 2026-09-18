@@ -127,9 +127,9 @@ describe('UsersService (Admin)', () => {
       const result = await usersService.findAll({});
 
       expect(result.items).toHaveLength(20);
-      expect(result.pagination.total).toBe(50);
-      expect(result.pagination.page).toBe(1);
-      expect(result.pagination.pageSize).toBe(20);
+      expect(result.meta.total).toBe(50);
+      expect(result.meta.page).toBe(1);
+      expect(result.meta.pageSize).toBe(20);
     });
 
     it('自定义分页参数应正确透传', async () => {
@@ -148,8 +148,8 @@ describe('UsersService (Admin)', () => {
       const result = await usersService.findAll({});
 
       expect(result.items).toHaveLength(0);
-      expect(result.pagination.total).toBe(0);
-      expect(result.pagination.totalPages).toBe(1);
+      expect(result.meta.total).toBe(0);
+      expect(result.meta.totalPages).toBe(1);
     });
 
     it('返回的列表元素经 UserEntity 序列化后应安全剥离 passwordHash', async () => {
