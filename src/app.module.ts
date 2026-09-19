@@ -19,6 +19,8 @@ import { MediaModule } from './common/media/media.module';
 import { LoadSheddingGuard, ResilienceModule } from './common/resilience';
 import { SearchModule } from './common/search/search.module';
 import { StorageModule } from './common/storage/storage.module';
+import { MiniprogramModule } from './common/wechat/miniprogram';
+import { WepayModule } from './common/wechat/pay';
 import { type EnvConfig, validateEnv } from './config/env.validation';
 import { createBullModuleConfig } from './database/bull.config';
 import { DatabaseModule } from './database/drizzle/drizzle.module';
@@ -60,6 +62,8 @@ const isWorkerEmbedded = isTruthyEnv(process.env.WORKER_EMBEDDED);
     StorageModule,
     MailModule,
     MediaModule,
+    WepayModule,
+    MiniprogramModule,
     SearchModule,
     ExcelModule,
     IotModule,

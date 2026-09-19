@@ -13,6 +13,29 @@ function envBoolean(defaultValue: boolean) {
     .default(defaultValue);
 }
 
+/** 微信支付凭证是否齐全：决定 WEPAY_DRIVER 的自动推导结果（对齐 SEARCH_DRIVER 范式） */
+function hasWepayCredentials(data: {
+  WEPAY_APPID?: string;
+  WEPAY_MCHID?: string;
+  WEPAY_SERIAL_NO?: string;
+  WEPAY_APIV3_KEY?: string;
+  WEPAY_PRIVATE_KEY?: string;
+  WEPAY_PRIVATE_KEY_PATH?: string;
+}): boolean {
+  return Boolean(
+    data.WEPAY_APPID &&
+      data.WEPAY_MCHID &&
+      data.WEPAY_SERIAL_NO &&
+      data.WEPAY_APIV3_KEY &&
+      (data.WEPAY_PRIVATE_KEY || data.WEPAY_PRIVATE_KEY_PATH),
+  );
+}
+
+/** 微信小程序凭证是否齐全：决定 MINIPROGRAM_DRIVER 的自动推导结果（对齐 SEARCH_DRIVER 范式） */
+function hasMiniprogramCredentials(data: { MINIPROGRAM_APPID?: string; MINIPROGRAM_APPSECRET?: string }): boolean {
+  return Boolean(data.MINIPROGRAM_APPID && data.MINIPROGRAM_APPSECRET);
+}
+
 const envSchema = z
   .object({
     // Laravel 风格：local/testing/production（生产必须为 production）
@@ -105,11 +128,53 @@ const envSchema = z
       .int()
       .positive()
       .default(30 * 24 * 3600),
+
+    // ── 微信支付 v3（直连商户）────────────────────────────────────────
+    // 驱动模式：real (真实交易) 或 mock (本地确定性假数据)。留空时按凭证齐全度自动推导
+    WEPAY_DRIVER: z.enum(['real', 'mock']).optional(),
+    // 直连商户申请的公众号或移动应用 appid
+    WEPAY_APPID: z.string().optional(),
+    // 直连商户号
+    WEPAY_MCHID: z.string().optional(),
+    // 商户 API 证书序列号
+    WEPAY_SERIAL_NO: z.string().optional(),
+    // 商户 API 私钥（内联 PEM，支持 \n 转义）；优先级高于 WEPAY_PRIVATE_KEY_PATH
+    WEPAY_PRIVATE_KEY: z.string().optional(),
+    // 商户 API 私钥文件路径（相对项目根目录）
+    WEPAY_PRIVATE_KEY_PATH: z.string().optional(),
+    // APIv3 密钥（32 字节），用于回调与平台证书解密
+    WEPAY_APIV3_KEY: z.string().optional(),
+    // 微信支付公钥与公钥 ID（配置后走公钥模式，无需下载平台证书）
+    WEPAY_PUBLIC_KEY: z.string().optional(),
+    WEPAY_PUBLIC_KEY_ID: z.string().optional(),
+    // 默认回调地址，单次下单可覆盖
+    WEPAY_NOTIFY_URL: z.string().optional(),
+    // 微信支付 API 基址
+    WEPAY_API_BASE: z.string().default('https://api.mch.weixin.qq.com'),
+    // 微信支付接口请求超时（毫秒）
+    WEPAY_TIMEOUT_MS: z.coerce.number().int().positive().default(15_000),
+
+    // ── 微信小程序服务端 API ──────────────────────────────────────────
+    // 驱动模式：real (真实接口) 或 mock (本地确定性假数据)。留空时按凭证齐全度自动推导
+    MINIPROGRAM_DRIVER: z.enum(['real', 'mock']).optional(),
+    // 小程序 AppID
+    MINIPROGRAM_APPID: z.string().optional(),
+    // 小程序 AppSecret（服务端专用，严禁下发到前端）
+    MINIPROGRAM_APPSECRET: z.string().optional(),
+    // 小程序 API 基址
+    MINIPROGRAM_API_BASE: z.string().default('https://api.weixin.qq.com'),
+    // 小程序接口请求超时（毫秒）。同步轻请求，默认较支付接口更短
+    MINIPROGRAM_TIMEOUT_MS: z.coerce.number().int().positive().default(10_000),
+    // access_token 提前续期窗口（秒）：官方普通模式下亦提前 5 分钟更新，默认与之对齐
+    MINIPROGRAM_ACCESS_TOKEN_SAFETY_WINDOW_SECONDS: z.coerce.number().int().nonnegative().default(300),
   })
   .transform((data) => ({
     ...data,
     STORAGE_DRIVER: data.STORAGE_DRIVER ?? (data.STORAGE_S3_URL ? ('s3' as const) : ('local' as const)),
     SEARCH_DRIVER: data.SEARCH_DRIVER ?? (data.SEARCH_URL ? ('meilisearch' as const) : ('noop' as const)),
+    WEPAY_DRIVER: data.WEPAY_DRIVER ?? (hasWepayCredentials(data) ? ('real' as const) : ('mock' as const)),
+    MINIPROGRAM_DRIVER:
+      data.MINIPROGRAM_DRIVER ?? (hasMiniprogramCredentials(data) ? ('real' as const) : ('mock' as const)),
     BETTER_AUTH_URL: data.BETTER_AUTH_URL || data.APP_URL,
   }));
 

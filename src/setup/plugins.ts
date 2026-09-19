@@ -28,7 +28,20 @@ type FastifyLike = {
     hook: (request: FastifyRequest, reply: FastifyReply, payload: unknown) => Promise<unknown> | unknown,
   ): void;
   get: (url: string, handler: (request: FastifyRequest, reply: FastifyReply) => void | Promise<void>) => void;
+  addContentTypeParser(
+    contentType: string,
+    options: { parseAs: 'string' },
+    parser: (request: FastifyRequest, body: string, done: (error: Error | null, result?: unknown) => void) => void,
+  ): void;
 };
+
+/**
+ * 携带原始请求报文的 Fastify 请求
+ *
+ * `rawBody` 由 {@link registerFastifyPlugins} 注册的全局 JSON content-type parser 挂载，
+ * 供需以原始报文验签的第三方回调（如微信支付）使用。
+ */
+export type RawBodyFastifyRequest = FastifyRequest & { rawBody?: string };
 
 /** /uploads/ 下无需鉴权的公开子目录（如产品图、公开头像） */
 const PUBLIC_UPLOAD_PREFIX = '/uploads/public/';
@@ -103,7 +116,23 @@ export async function registerFastifyPlugins(app: NestFastifyApplication): Promi
     return payload;
   });
 
-  // 4. 原生 204 No Content 拦截 /favicon.ico，彻底消除 404 告警与磁盘 I/O，24 小时浏览器缓存
+  // 4. 全局 JSON content-type parser：保留原始报文至 request.rawBody
+  //    第三方回调（微信支付等）必须以**原始 body** 验签，重新序列化的 JSON 会导致验签失败；
+  //    parser 同时返回解析后的对象，保证既有 controller 的 body 语义零破坏。
+  fastify.addContentTypeParser('application/json', { parseAs: 'string' }, (request, body, done) => {
+    (request as RawBodyFastifyRequest).rawBody = body;
+    if (!body) {
+      done(null, {});
+      return;
+    }
+    try {
+      done(null, JSON.parse(body));
+    } catch (error) {
+      done(error instanceof Error ? error : new Error(String(error)));
+    }
+  });
+
+  // 5. 原生 204 No Content 拦截 /favicon.ico，彻底消除 404 告警与磁盘 I/O，24 小时浏览器缓存
   fastify.get('/favicon.ico', (_request, reply) => {
     reply.header('Cache-Control', 'public, max-age=86400, immutable');
     reply.code(204).send();

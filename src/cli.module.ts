@@ -8,6 +8,8 @@ import { MediaModule } from './common/media/media.module';
 import { ResilienceModule } from './common/resilience';
 import { SearchModule } from './common/search/search.module';
 import { StorageModule } from './common/storage/storage.module';
+import { MiniprogramModule } from './common/wechat/miniprogram';
+import { WepayModule } from './common/wechat/pay';
 import { validateEnv } from './config/env.validation';
 import { createBullModuleConfig } from './database/bull.config';
 import { DatabaseModule } from './database/drizzle/drizzle.module';
@@ -28,6 +30,8 @@ import { RealtimeModule } from './realtime/realtime.module';
     RedisModule,
     StorageModule,
     MediaModule,
+    WepayModule,
+    MiniprogramModule,
     SearchModule,
     IotModule,
     ResilienceModule,

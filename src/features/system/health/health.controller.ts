@@ -7,11 +7,13 @@ import { CentrifugoHealthIndicator } from './indicators/centrifugo-health.indica
 import { CircuitBreakerHealthIndicator } from './indicators/circuit-breaker-health.indicator';
 import { DatabaseHealthIndicator } from './indicators/database-health.indicator';
 import { ImgproxyHealthIndicator } from './indicators/imgproxy-health.indicator';
+import { MiniprogramHealthIndicator } from './indicators/miniprogram-health.indicator';
 import { MqttHealthIndicator } from './indicators/mqtt-health.indicator';
 import { RedisHealthIndicator } from './indicators/redis-health.indicator';
 import { SearchHealthIndicator } from './indicators/search-health.indicator';
 import { ShutdownHealthIndicator } from './indicators/shutdown-health.indicator';
 import { StorageHealthIndicator } from './indicators/storage-health.indicator';
+import { WepayHealthIndicator } from './indicators/wepay-health.indicator';
 
 /** V8 堆内存上限 (500MB)：监控 JavaScript 堆对象分配，防范 JS 层面内存泄漏 */
 const MEMORY_HEAP_THRESHOLD_BYTES = 500 * 1024 * 1024;
@@ -37,6 +39,8 @@ export class HealthController {
     private readonly searchIndicator: SearchHealthIndicator,
     private readonly imgproxyIndicator: ImgproxyHealthIndicator,
     private readonly mqttIndicator: MqttHealthIndicator,
+    private readonly wepayIndicator: WepayHealthIndicator,
+    private readonly miniprogramIndicator: MiniprogramHealthIndicator,
     private readonly shutdownIndicator: ShutdownHealthIndicator,
     private readonly memory: MemoryHealthIndicator,
     private readonly disk: DiskHealthIndicator,
@@ -52,6 +56,8 @@ export class HealthController {
       () => this.searchIndicator.isHealthy('search'),
       () => this.imgproxyIndicator.isHealthy('imgproxy'),
       () => this.mqttIndicator.isHealthy('mqtt'),
+      () => this.wepayIndicator.isHealthy('wepay'),
+      () => this.miniprogramIndicator.isHealthy('miniprogram'),
       () => this.shutdownIndicator.isHealthy('shutdown'),
     ];
   }

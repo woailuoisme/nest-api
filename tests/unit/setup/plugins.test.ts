@@ -22,6 +22,13 @@ describe('registerFastifyPlugins', () => {
 
     const routes: Record<string, (req: unknown, reply: unknown) => Promise<void> | void> = {};
 
+    type ContentTypeParser = (
+      req: Record<string, unknown>,
+      body: string,
+      done: (error: Error | null, result?: unknown) => void,
+    ) => void;
+    const contentParsers: Record<string, ContentTypeParser> = {};
+
     const mockFastify = {
       addHook: vi.fn((event: string, hook: (req: unknown, reply: unknown) => Promise<void> | void) => {
         if (hooks[event]) {
@@ -30,6 +37,9 @@ describe('registerFastifyPlugins', () => {
       }),
       get: vi.fn((url: string, handler: (req: unknown, reply: unknown) => Promise<void> | void) => {
         routes[url] = handler;
+      }),
+      addContentTypeParser: vi.fn((contentType: string, _options: unknown, parser: ContentTypeParser) => {
+        contentParsers[contentType] = parser;
       }),
     };
 
@@ -61,6 +71,35 @@ describe('registerFastifyPlugins', () => {
     expect(mockFastify.addHook).toHaveBeenCalledWith('onRequest', expect.any(Function));
     expect(mockFastify.addHook).toHaveBeenCalledWith('onResponse', expect.any(Function));
     expect(mockFastify.get).toHaveBeenCalledWith('/favicon.ico', expect.any(Function));
+    expect(mockFastify.addContentTypeParser).toHaveBeenCalledWith(
+      'application/json',
+      { parseAs: 'string' },
+      expect.any(Function),
+    );
+
+    // 0. 验证全局 JSON parser 在返回解析对象的同时挂载原始报文（微信支付等回调需以原始 body 验签）
+    const jsonParser = contentParsers['application/json'];
+    const rawRequest: Record<string, unknown> = { url: '/v1/payments/wepay/notify' };
+    let parsedBody: unknown;
+    jsonParser(rawRequest, '{"a":1}', (_error, result) => {
+      parsedBody = result;
+    });
+    expect(rawRequest.rawBody).toBe('{"a":1}');
+    expect(parsedBody).toEqual({ a: 1 });
+
+    // 空请求体应解析为空对象而非报错
+    const emptyRequest: Record<string, unknown> = { url: '/v1/payments/wepay/notify' };
+    let emptyBody: unknown;
+    jsonParser(emptyRequest, '', (_error, result) => {
+      emptyBody = result;
+    });
+    expect(emptyRequest.rawBody).toBe('');
+    expect(emptyBody).toEqual({});
+
+    // 非法 JSON 应回报错误而非抛出
+    const malformedError = vi.fn();
+    jsonParser({ url: '/x' }, '{invalid', malformedError);
+    expect(malformedError).toHaveBeenCalledWith(expect.any(Error));
 
     // 1. 验证 onRequest Hook 透传 x-request-id
     const onRequestHook = hooks.onRequest[0];

@@ -52,6 +52,9 @@ storage/uploads/*
 deploy/mosquitto/config/credentials/*
 !deploy/mosquitto/config/credentials/.gitkeep
 
+# 微信支付商户 API 私钥与证书 (WEPAY_PRIVATE_KEY_PATH 建议指向此处，严禁入库)
+certs/
+
 # System / OS Files
 .DS_Store
 .DS_Store?
