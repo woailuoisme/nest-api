@@ -124,7 +124,7 @@ export async function registerFastifyPlugins(app: NestFastifyApplication): Promi
   // 5. 响应压缩（@fastify/compress）
   //    必须早于 fastifyStatic 注册：插件 README 明确要求「启用 global 钩子的 @fastify/compress 先于 @fastify/static」，
   //    否则静态资源不参与压缩协商。以下排除规则由插件内置行为保证，无需自定义类型白名单：
-  //    - SSE：默认可压缩类型正则形如 `^text\/(?!event-stream)|…`，event-stream 被显式排除；日志查看器直写 reply.raw 亦绕过 onSend；
+  //    - SSE：默认可压缩类型正则形如 `^text\/(?!event-stream)|…`，event-stream 被排除，实时流不会被缓冲；
   //    - 已压缩二进制：webp/jpeg/png/mp4 与 xlsx 均不匹配默认可压缩类型；
   //    - 分片响应（206 / Content-Range）与已带 Content-Encoding 的响应直接跳过；
   //    - 客户端可用 x-no-compression 请求头临时关闭压缩（插件内置逃生阀）；

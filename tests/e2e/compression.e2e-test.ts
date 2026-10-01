@@ -8,8 +8,8 @@
  * 4. 已压缩二进制（webp）不参与压缩 —— 与同体积文本对照，排除「因体积小而未压缩」的误判；
  * 5. `x-no-compression` 请求头为插件内置逃生阀。
  *
- * SSE（`text/event-stream`）未纳入用例：唯一生产者（日志查看器）直写 `reply.raw`，不经过 onSend 压缩路径；
- * 且插件默认可压缩类型正则已显式排除 event-stream（`^text\/(?!event-stream)|…`）。两者叠加使 SSE 不存在被压缩的代码路径。
+ * SSE（`text/event-stream`）未纳入用例：项目当前无 SSE 生产者（实时推送走 Centrifugo WebSocket），
+ * 且插件默认可压缩类型正则已显式排除 event-stream（`^text\/(?!event-stream)|…`），SSE 不存在被压缩的代码路径。
  */
 import { randomBytes } from 'node:crypto';
 import { mkdir, rm, rmdir, writeFile } from 'node:fs/promises';
