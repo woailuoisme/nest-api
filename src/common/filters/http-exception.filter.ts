@@ -25,6 +25,36 @@ function applyResponseHeader(response: HttpResponse, name: string, value: string
   }
 }
 
+/** 兼容 FastifyReply.code/status 与原生 ServerResponse 的 JSON 写回 */
+function sendJsonResponse(response: HttpResponse, status: number, body: unknown): void {
+  if (typeof response.code === 'function') {
+    response.code(status).send?.(body);
+  } else if (typeof response.status === 'function') {
+    response.status(status).send?.(body);
+  } else {
+    response.statusCode = status;
+    response.setHeader?.('Content-Type', 'application/json');
+    response.end?.(JSON.stringify(body));
+  }
+}
+
+/**
+ * 判定响应体是否为 Terminus 健康报告（`{ status, info?, error? }`）。
+ *
+ * 探针报告本身就是运维消费契约：`info` / `error` 携带逐探针明细，K8s 探针与运维面板据此定位
+ * 「哪个探针 down」。统一错误信封会把这些明细全部丢弃，故此类载荷原样透出（HTTP 状态码语义不变）。
+ */
+export function isHealthReportBody(body: unknown): body is Record<string, unknown> {
+  if (typeof body !== 'object' || body === null) {
+    return false;
+  }
+  const candidate = body as Record<string, unknown>;
+  const hasProbeBucket =
+    (typeof candidate.info === 'object' && candidate.info !== null) ||
+    (typeof candidate.error === 'object' && candidate.error !== null);
+  return typeof candidate.status === 'string' && hasProbeBucket;
+}
+
 /** PostgreSQL 常见约束错误码转译映射表 */
 const PG_ERROR_MAP: Record<string, { status: HttpStatus; message: string; i18nKey: I18nPath }> = {
   '23505': {
@@ -86,11 +116,17 @@ export function resolveErrorEnvelope(exception: unknown, debug = false): Resolve
   if (exception instanceof HttpException) {
     const res = exception.getResponse();
 
+    // 机器可读错误码优先级：HttpExceptionOptions.errorCode > 响应体 code > HTTP 状态枚举名
+    const explicitErrorCode = typeof exception.errorCode === 'string' ? exception.errorCode : undefined;
+    if (explicitErrorCode) {
+      code = explicitErrorCode;
+    }
+
     if (typeof res === 'string') {
       message = res;
     } else if (typeof res === 'object' && res !== null) {
       const resObj = res as Record<string, unknown>;
-      if (typeof resObj.code === 'string') {
+      if (!explicitErrorCode && typeof resObj.code === 'string') {
         code = resObj.code;
       }
       if (typeof resObj.i18nKey === 'string') {
@@ -224,6 +260,15 @@ export class HttpExceptionFilter implements ExceptionFilter {
     const response = ctx.getResponse<FastifyReply | ServerResponse>() as unknown as HttpResponse;
     const request = ctx.getRequest<FastifyRequest>();
 
+    // 健康探针报告直接透出：统一信封会丢弃 info/error 中的逐探针明细，使 503 失去可定位性（详见 isHealthReportBody）
+    if (exception instanceof HttpException) {
+      const rawResponse = exception.getResponse();
+      if (isHealthReportBody(rawResponse)) {
+        sendJsonResponse(response, exception.getStatus(), rawResponse);
+        return;
+      }
+    }
+
     const { status, body, log, i18nKey } = resolveErrorEnvelope(exception, this.debug);
 
     const i18n = I18nContext.current(host);
@@ -257,14 +302,6 @@ export class HttpExceptionFilter implements ExceptionFilter {
       applyResponseHeader(response, 'X-Load-Shed-Priority', exception.priority);
     }
 
-    if (typeof response.code === 'function') {
-      response.code(status).send?.(body);
-    } else if (typeof response.status === 'function') {
-      response.status(status).send?.(body);
-    } else {
-      response.statusCode = status;
-      response.setHeader?.('Content-Type', 'application/json');
-      response.end?.(JSON.stringify(body));
-    }
+    sendJsonResponse(response, status, body);
   }
 }

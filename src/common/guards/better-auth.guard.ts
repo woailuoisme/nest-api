@@ -1,5 +1,13 @@
-import { type CanActivate, type ExecutionContext, Injectable, UnauthorizedException } from '@nestjs/common';
+import {
+  type CanActivate,
+  type ExecutionContext,
+  Injectable,
+  Logger,
+  ServiceUnavailableException,
+  UnauthorizedException,
+} from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
+import { isAPIError } from 'better-auth/api';
 import { fromNodeHeaders } from 'better-auth/node';
 import type { FastifyRequest } from 'fastify';
 import { auth } from '@/common/auth/better-auth';
@@ -24,6 +32,8 @@ type AuthenticatedRequest = FastifyRequest & {
  */
 @Injectable()
 export class BetterAuthGuard implements CanActivate {
+  #logger = new Logger(BetterAuthGuard.name);
+
   constructor(private readonly reflector: Reflector) {}
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
@@ -78,7 +88,22 @@ export class BetterAuthGuard implements CanActivate {
       if (err instanceof UnauthorizedException) {
         throw err;
       }
-      throw new UnauthorizedException('Invalid or expired session');
+
+      // Better Auth 的 APIError 自带语义化 status（UNAUTHORIZED=401 / FORBIDDEN=403 / INTERNAL_SERVER_ERROR=500），
+      // 4xx 属「凭证/会话」问题（如会话刷新期间被并发删除），必须保持 4xx 语义：
+      // 压成 503 会让客户端把「会话失效」当 5xx 重试，也会让告警把用户态问题误报为系统故障
+      if (isAPIError(err) && err.statusCode < 500) {
+        this.#logger.warn(`会话校验被拒（认证后端返回 ${err.statusCode}）: ${err.message}`);
+        throw new UnauthorizedException(err.message || 'Invalid or expired session');
+      }
+
+      // 仅真正的会话后端故障（网络超时 / Better Auth 5xx / 未知异常）降级为 503：
+      // 统一压成 401 会把系统故障伪装成登录过期，掩盖真实原因 → 记录后以 503 上抛，交由调用方与告警区分处理
+      this.#logger.error(
+        `会话校验失败（认证后端异常）: ${err instanceof Error ? err.message : String(err)}`,
+        err instanceof Error ? err.stack : undefined,
+      );
+      throw new ServiceUnavailableException('Authentication backend unavailable');
     }
   }
 }

@@ -1,4 +1,9 @@
-import { type ArgumentsHost, BadRequestException, UnprocessableEntityException } from '@nestjs/common';
+import {
+  type ArgumentsHost,
+  BadRequestException,
+  ServiceUnavailableException,
+  UnprocessableEntityException,
+} from '@nestjs/common';
 import { describe, expect, it } from 'vitest';
 import { HttpExceptionFilter, resolveErrorEnvelope } from '@/common/filters/http-exception.filter';
 
@@ -121,6 +126,38 @@ describe('HttpExceptionFilter 集成', () => {
       error: {
         code: 'BAD_REQUEST',
         message: 'Invalid request parameters',
+      },
+    });
+  });
+
+  it('健康探针报告（Terminus 载荷）应原样透出，不被统一信封丢弃逐探针明细', () => {
+    const filter = new HttpExceptionFilter(false);
+    const { host, state } = createMockHost('/health/readiness');
+
+    const healthReport = {
+      status: 'error',
+      info: { database: { status: 'up' } },
+      error: { shutdown: { status: 'down' } },
+      details: { shutdown: { status: 'down' } },
+    };
+
+    filter.catch(new ServiceUnavailableException(healthReport), host);
+
+    expect(state.statusCode).toBe(503);
+    expect(state.responseBody).toEqual(healthReport);
+  });
+
+  it('常规 503 异常仍走统一信封（`error` 为字符串时不误判为健康报告）', () => {
+    const filter = new HttpExceptionFilter(false);
+    const { host, state } = createMockHost('/v1/orders');
+
+    filter.catch(new ServiceUnavailableException('依赖服务不可用'), host);
+
+    expect(state.statusCode).toBe(503);
+    expect(state.responseBody).toEqual({
+      error: {
+        code: 'SERVICE_UNAVAILABLE',
+        message: '依赖服务不可用',
       },
     });
   });
