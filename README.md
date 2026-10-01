@@ -12,12 +12,12 @@ NestForge 是一个现代、开箱即用的 NestJS 12 + Fastify 5 企业级后�
 - 📡 **统一实时通信中枢**：基于 Centrifugo 纯粹无状态实时发布中枢（对齐 Laravel Broadcasting 理念），支持 WebSocket 与 SSE 双协议长连接、模式匹配频道授权 (`@ChannelAuth`) 与 Presence 在线状态感知，业务领域与传输协议彻底解耦。
 - 🔍 **Laravel Scout 风格全文搜索**：抽象化搜索驱动（Meilisearch / Noop 空驱动），提供模型 `Searchable` 契约定义，支持 BullMQ 队列异步索引同步与条件高亮检索。
 - ⚡ **工业物联网 (MQTT 5.0) 总线**：支持 Mosquitto / EMQX 客户端，提供声明式 `@MqttSubscribe()` 模式匹配路由、RPC 远程指令下发与遥测指标采集，内置虚拟 PLC 设备仿真。
-- 🛡️ **高可用弹性治理与安全防护**：自适应系统过载保护 (`LoadShedding`)、`CircuitBreaker` 熔断降级、平滑滑动窗口限流、请求超时拦截、Helmet、CORS 与 Zod 强类型数据校验。
+- 🛡️ **高可用弹性治理与安全防护**：自适应系统过载保护 (`LoadShedding`)、`CircuitBreaker` 熔断降级、**跨副本共享限流计数**（`@nestjs/throttler` + Redis 原子 Lua，故障自动降级为进程内）、请求超时拦截、框架内置安全响应头（默认与 helmet 8 等价）、**响应压缩**（`@fastify/compress`，br/gzip，SSE 与已压缩二进制自动豁免）、CORS 与 Zod 强类型数据校验。
 - 🖼️ **动态媒体处理与事务存储**：集成 imgproxy 实时动态图像渲染与 HMAC-SHA256 安全签名，纯 JS 元数据探测、矢量二维码生成，支持 Local 与 S3 双驱动及事务性存储补偿机制 (`storeWithCompensation`)。
 - 🗄️ **持久化与缓存队列**：Drizzle ORM 0.45 + PostgreSQL（多文件 Schema 与独立 DDL 审计）、Redis 分布式排他锁与穿透缓存、BullMQ 异步队列与 Bull Board 可视化看板。
 - 📄 **三合一 Scalar API 交互文档**：客户端 API (`/docs`)、管理后台 API (`/docs/admin`) 与 Better Auth 专有参考 (`/docs/auth`) 物理隔离，提供现代化、可在线调试的接口体验。
 - 🪵 **企业级极速可观测性**：原生 Pino 极速双通道流日志（控制台彩色高亮 + 文件按日滚动剥离 HTTP 噪音）、Terminus 健康检查 (`/health` 覆盖 7 大子系统探针)、Prometheus 监控指标。
-- 🛠️ **卓越开发者体验**：纯 ESM 规范、Bun ≥ 1.2 + Node ≥ 24 运行时、SWC 极速编译、Vitest 5 单元/集成测试、k6 负载压测套件、Biome 代码检查与 Just 任务自动化。
+- 🛠️ **卓越开发者体验**：纯 ESM 规范、Bun 1.4.2（`packageManager` 字段固定，安装可复现）+ Node ≥ 24 运行时、SWC 极速编译、Vitest 5 单元/集成测试、k6 负载压测套件、Biome 代码检查与 Just 任务自动化。
 
 ---
 
@@ -83,7 +83,7 @@ NestForge 是一个现代、开箱即用的 NestJS 12 + Fastify 5 企业级后�
 
 ### 前置要求
 
-- **运行时**：[Node.js](https://nodejs.org/) ≥ 24 与 [Bun](https://bun.sh/) ≥ 1.2
+- **运行时**：[Node.js](https://nodejs.org/) ≥ 24 与 [Bun](https://bun.sh/) 1.4.2（版本由 `package.json` 的 `packageManager` 字段固定，安装结果可复现）
 - **容器环境**：Docker 与 Docker Compose
 - **自动化工具**：[Just](https://github.com/casey/just) 命令行任务运行器（推荐，`brew install just`）
 

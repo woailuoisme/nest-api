@@ -81,7 +81,7 @@ src/
 │   ├── constants/  # PATHS、NETWORK、Role、Permission 等常量
 │   ├── decorators/ # @Roles() @Permissions() @CurrentUser() 等
 │   ├── excel/      # ExcelJS 封装
-│   ├── mail/       # 统一邮件服务 (@nestjs-modules/mailer + HandlebarsAdapter + MJML 模板)
+│   ├── mail/       # 统一邮件服务 (直连 nodemailer + 自持 Handlebars 渲染器 + MJML 模板)
 │   ├── media/      # 媒体处理服务 (imgproxy JIT动态实时渲染/纯JS元数据/矢量二维码/命名策略)
 │   ├── resilience/ # 熔断 (CircuitBreaker) / 优雅限流 / 过载保护 (LoadShedding) / 超时拦截
 │   ├── search/     # Laravel Scout 风格搜索引擎抽象 (Meilisearch / Noop / 队列异步同步)
@@ -160,8 +160,8 @@ tests/
 - **多写原子事务 (Transaction)**：涉及多表关联写入（如创建用户并绑定 OAuth 账户）或多步更新时，使用显式原生闭包 `await this.db.transaction(async (tx) => { ... })` 保证强一致性与自动回滚。
 - **全文搜索模型解耦 (Laravel Scout 模式)**：数据表/实体如需支持全文检索，统一在 `src/database/search/` 目录下实现 `Searchable` 契约（如 `user.searchable.ts`）并注册入全局索引映射；业务数据增删改时通过 `SearchSyncService` 发布队列异步同步任务，严禁在业务 Service 中直接硬编码调用底层搜索引擎 SDK（如 Meilisearch 客户端），保障驱动可插拔性（Meilisearch / Noop 空驱动降级）。
 - **工业物联网总线解耦 (Decoupled MQTT & Telemetry)**：物联网设备指令交互与遥测采集集中收敛于顶级目录 `src/iot/`。传输层与业务服务一体化内聚，监听统一使用声明式 `@MqttSubscribe(topic, options)` 装饰器；向物理/仿真设备下发控制指令统一调用 `IotCommandService` 或 `MqttService.publish()` / RPC，禁止外部业务逻辑直连外部 MQTT Broker 客户端。
-- **上传链路单一实现 (Single Multipart Pipeline)**：文件上传仅有一条链路 —— 参数装饰器 `@UploadedFile/@UploadedFiles`（`src/common/decorators/uploaded.decorator.ts`）写入 metadata → 全局 `MultipartInterceptor` 收集与校验 → `UploadedFile` 载荷 → `StorageService` / `MediaService.save()` 落盘（流式模式消费即删）。**禁止再引入并行的 multipart 解析实现**（如 multer / `@dollarsign/nestjs-multipart` 风格的按路由 `FileInterceptor` 移植），历史上曾存在一份未接线的 `src/common/upload/` 移植实现，因与全局拦截器争抢同一条 busboy 流已于本次清理删除；如确需按路由细粒度控制，请扩展 `UploadOptions` 而非新增第二套解析器。
-- 全局基础设施 (Storage/Excel/Mail/Drizzle/Redis) 放 `src/common/` 或 `src/database/`，用 `@Global()` 导出。
+- **上传链路 (Native Multipart Pipeline)**：文件上传统一使用平台原生能力 —— 路由级 `FileInterceptor` / `FilesInterceptor` / `FileStreamInterceptor`（`@nestjs/platform-fastify/multipart`）+ `@nestjs/common` 的 `@UploadedFile/@UploadedFiles` 参数装饰器。大小上限由拦截器 `limits.fileSize` 在流式写入过程中强制（超限即 413）；MIME / 扩展名白名单由 `createUploadFileFilter()` 注入 `fileFilter`（违规 400）。载荷类型 `UploadedFile = MemoryUpload | MultipartFileStream`（`src/common/storage/interfaces/upload.interface.ts`）交由 `MediaService.save()` 落盘。**表单字段名（如头像的 `file`）属对外契约的一部分**（原生拦截器按字段名精确匹配）；**禁止再引入自研的全局 multipart 收集拦截器或第二套解析实现**（历史自研实现因争抢同一条 busboy 流、需自管三层临时文件清理，已在 Nest 12 对齐中删除）。
+- **模块可见性 (@Global 政策)**：仅**叶基础设施**（Storage / Excel / Mail / Search / Cache / Logger / Redis / Drizzle / Idempotency / Jobs / Wechat）使用 `@Global()`；**领域模块一律显式 import**（`MediaModule` / `IotModule` / `RealtimeModule` / `ResilienceModule`），保证依赖关系可追溯。新增领域模块时请在使用方 `imports` 中显式声明，不要依赖全局可见性。
 
 ### 环境变量
 
@@ -175,10 +175,12 @@ tests/
   - **Search (Meilisearch)**: `SEARCH_URL="meilisearch://masterKey@localhost:7700"`（未配置时默认使用 `noop` 空驱动降级，配置后推导为 `SEARCH_DRIVER=meilisearch`）
   - **Imgproxy**: `IMGPROXY_URL="imgproxy://key:salt@host:port?publicUrl=..."`（支持 HMAC-SHA256 安全签名与多驱动映射）
   - **MQTT (Mosquitto/EMQX)**: `MQTT_URL="mqtt://admin:password@localhost:1883?clientId=nest-forge"`（工业物联网通信与遥测总线）
+- **安全相关 env**：
+  - `COOKIE_SECRET`（≥32 字符，可选）：配置后启用框架内置 Cookie（`setCookie(..., { signed: true })` / `@SignedCookies()`）；未配置则不启用，不预置弱默认密钥。由主进程在引导期直接读取 `process.env`（早于 ConfigModule 生效）。
+  - `TRUSTED_ORIGINS`（逗号分隔，可选）：内置 CSRF 额外信任的浏览器来源（`scheme://host[:port]`）。同源请求与 http(s) 服务端调用无需配置；独立域名前端需显式列出，`APP_URL` / `BETTER_AUTH_URL` / `PASSKEY_ORIGIN` 会自动纳入信任列表。
 - 新增 env 必须**同步更新** validation schema 与 `.env.example`。
 - `.env` 由 `dotenv/config` 在 `drizzle.config.ts` 与 CLI 入口加载。
-- 新增 env 必须**同步更新** validation schema 与 `.env.example`。
-- `.env` 由 `dotenv/config` 在 `drizzle.config.ts` 与 CLI 入口加载。
+- 校验通道：`ConfigModule.forRoot({ validationSchema: envSchema })`（Nest 12 原生 Standard Schema），Zod schema 即契约，失败信息按 `字段: 文案` 逐行输出。
 
 ### Drizzle 多文件 Schema
 
@@ -194,6 +196,21 @@ tests/
 - 角色: `SUPER_ADMIN / ADMIN / OPERATOR / USER`（`src/common/constants/roles.ts`），统一用户主表 `user`（UUID `uuidv7()`），前台用户与后台管理员聚合于同一张表。
 - 细粒度权限: `@Roles(Role.ADMIN)` 角色级 + `@Permissions(Permission.UserCreate)` 声明式，配合 `BetterAuthGuard` / `AccessControlGuard` 兜底。
 
+### 安全基线 (Nest 12 内置能力)
+
+- **安全响应头**: `app.useSecurityHeaders({ contentSecurityPolicy: false })` —— 默认值与 helmet 8 等价（CSP 保持关闭以兼容 Scalar / Bull Board / 日志面板的内联脚本），已移除 `@fastify/helmet` 依赖。
+- **跨站请求防护 (CSRF)**: `app.enableCsrfProtection()` 基于 Fetch Metadata（`Sec-Fetch-Site` + Origin/Host 回退），**非令牌方案** —— 无 `Origin` / `Sec-Fetch-Site` 的服务端调用天然放行；跨域浏览器写请求需在 `TRUSTED_ORIGINS` 声明来源，第三方回调（微信支付 `*/payments/wepay/notify`）已在 `exclude` 中豁免。CORS 仍保持开放（`enableCors()`），由 CSRF 承担写请求的跨站防护。
+- **内置 Cookie**: 仅在配置 `COOKIE_SECRET` 时启用（`setCookie` / `@SignedCookies()`）。
+- **路由冲突诊断**: `routeConflictPolicy: { duplicate: 'error', shadow: 'warn' }` 在适配器注册前拦截重复路由（`method+path+version` 完全一致）；Fastify 为顺序不敏感适配器，框架只在该类适配器上应用 `duplicate` 策略，故 `shadow` 与 `routeResolutionStrategy` 对 Fastify 不生效（radix 路由天然静态段优先）。
+
+### HTTP 边界能力（压缩与限流）
+
+- **响应压缩**: `@fastify/compress` 在 `registerFastifyPlugins` 中注册，**必须先于 `@fastify/static`**（插件 README 硬性要求，否则静态资源不参与协商）。不显式传 `encodings`：默认即为服务端支持全集（br / gzip / deflate，Node 支持 zstd 时含 zstd），显式列表只会收窄协商范围。阈值由 `COMPRESSION_THRESHOLD_BYTES` 控制（默认 1024 字节，流式响应对该阈值不适用）。以下一律不压缩：`text/event-stream`（插件默认可压缩类型正则已排除 event-stream；日志查看器直写 `reply.raw` 亦绕过 onSend）、分片响应（206 / `Content-Range`）、已带 `Content-Encoding` 的响应、已压缩二进制（webp / png / jpeg / mp4 / xlsx）。**已知取舍**：`application/octet-stream`（未知扩展名文件）在插件默认正则与 mime-db 中均被标为可压缩，且 `customTypes` 只能放宽不能收紧（mime-db 为兜底判定会重新放行），按路由 `compress: false` 对 `@fastify/static` 亦不可用 —— 故接受此项（仅 CPU 浪费，无正确性问题），如需收紧请在网关侧统一压缩策略。客户端可用 `x-no-compression` 请求头临时关闭；`COMPRESSION_ENABLED=false` 时整段跳过注册。
+- **限流计数跨副本一致**: `ThrottlerModule` 必须以**对象形态**配置（数组形态会强制回落到进程内存储，多副本下限流额度被放大 N 倍）。`THROTTLE_STORAGE=redis`（默认）时由 `RedisThrottlerStorage`（`src/common/throttler/`）以单条 Lua 在 Redis 侧原子完成计数与封禁判定，键空间 `throttle:{throttlerName}:{key}`（`key` 为 @nestjs/throttler 默认 generateKey 的 SHA-256 摘要：class + handler + 名称 + 客户端标识，无明文个人信息；仍不在日志中输出）。本地无 Redis 时设 `THROTTLE_STORAGE=memory`（仅进程内计数）。
+- **限流降级的两层要求（缺一不可）**: ① 语义层 —— Redis 不可用时回退进程内计数并限频告警，限流基础设施抖动不得演化为 5xx；② 时间层 —— 客户端 `status` 非 `ready`（`'wait'` 除外，那是 `lazyConnect` 冷启动，必须放行否则永不建连）时立即降级，就绪时对单次调用加 `THROTTLE_REDIS_TIMEOUT_MS`（100ms）时间上界。**守卫阶段不受 `HTTP_TIMEOUT_MS` 约束**（Nest 生命周期为 middleware → guards → interceptors），故请求热路径上的依赖调用必须自带上界：ioredis 默认 `enableOfflineQueue: true`，断连期间的命令会排进离线队列等完整个重连周期（实测单次 >7s、连续请求可达 20s）。
+- **Redis Lua 脚本唯一事实源**: 全部脚本集中在 `src/database/lua-scripts.ts`，**禁止在调用处内联复制脚本文本**（历史上解锁脚本曾被复制两份）。加载策略按调用频率区分：请求热路径用 `defineCommand`（EVALSHA 优先 + NOSCRIPT 回落，避免重传脚本体），低频临界区脚本直接 `eval`。
+- **邮件栈自持**: 已移除 `@nestjs-modules/mailer`（其 `MailerOptions.defaults` 类型与 nodemailer 10 不同步，且带来 `@css-inline/css-inline` 原生二进制等传递依赖）。传输层由 `mailTransporterProvider` 以 nodemailer 原生两参形态创建（`createTransport(MAIL_URL, { from })`），模板渲染由 `MailTemplateRenderer` 以 Handlebars `strict: true` 完成并按文件名缓存，应用关闭时 `MailTransporterLifecycle` 调用 `transporter.close()` 释放连接池。仅依赖 `ConfigModule` + 文件系统，可在无 HTTP 运行期的 Worker 进程中直接导入。
+
 ### CLI 模块 (`src/cli.module.ts`)
 
 独立于 `AppModule` 且免除 HTTP 守卫与 Worker 额外开销。所有带 Controller 的业务模块统一在 `src/features/index.ts` 中的 `FEATURE_MODULES` 集中声明，`AppModule` 与 `CliModule` 统一展开引入，彻底消除路由发现缺失与模块漂移。
@@ -204,10 +221,18 @@ BullMQ 队列由 `AuthModule → MailJobs` 依赖，CLI 模块也需 `BullModule
 - **格式**: Biome 强制 single quote / semicolon / 2-space / 120 列 / LF / es5 trailing comma。
 - **import 排序**: `assist.actions.source.organizeImports: on`，`just fix` 会自动整理，提交前必须跑。
 - **装饰器**: `experimentalDecorators` + `emitDecoratorMetadata` 已启用。
+- **校验与输出契约 (Nest 12 原生 Standard Schema)**：
+  - 请求校验走框架原生通道：路由参数装饰器携带 `schema`（`@Body({ schema: CreateUserSchema })` / `@Query({ schema: FindUsersSchema })` / `@Param(name, { schema })`），由全局 `StandardSchemaValidationPipe` 执行；失败统一 422 + `{ code: 'VALIDATION_FAILED', message, fields, errors }` 信封（`createApiValidationPipe()`，`src/setup/middleware.ts`）。
+  - DTO 一律「`XxxSchema` 常量 + `export type XxxRequest = z.infer<typeof XxxSchema>`」形式；**不再使用 `nestjs-zod` / `createZodDto`**（依赖已移除）。
+  - 响应输出用 `@SerializeOptions({ schema })` + 全局 `StandardSchemaSerializerInterceptor`，按 schema 做**白名单裁剪**（资源 schema 同时是 OpenAPI 响应文档的单一事实源）；分页信封用 `paginatedEnvelopeSchema(itemSchema)` / `cursorPaginatedEnvelopeSchema(itemSchema)` 工厂。
+  - OpenAPI 转换由 `standardSchemaConverter`（`src/setup/swagger/standard-schema-converter.ts`）接管 Zod schema，`z.date()` 等不可表达类型统一映射为 `string/date-time`。
+  - `@ApiSuccessResponse` / `@ApiPageResponse` / `@ApiCursorPageResponse` 同时接受**实体类**与 **Zod schema** 两种模型。
+  - 路径参数：非 schema 场景沿用内置管道（`ParseUUIDPipe` 等）；领域标识用显式 schema（如 IoT 的 `DeviceIdSchema`），不要假设 UUID。
 - **日志**: 业务服务、控制器与基础设施使用注入的 `Logger` (Pino)，严禁在业务逻辑中使用 `console.log`（CLI / Seeder 终端输出除外）。
   - **原生极速架构**: 彻底消除 `nestjs-pino` / `pino-http` 额外包装层，基于原生 `@Global()` `LoggerModule` 与 `PinoLoggerService` 实现。
   - **双通道流分离**: 终端控制台通过 `pino-pretty` 彩色高亮；磁盘文件由 `pino-roll` 按日切割并经过 `createFileFilterStream` 剥离冗余 HTTP 访问流，只持久化纯业务/异常日志。
   - **框架噪音过滤**: `SILENT_BOOTSTRAP_CONTEXTS` 自动静默 `InstanceLoader`、`RoutesResolver`、`RouterExplorer` 和 `NestApplication` 的 `INFO` 级别日常输出，WARN / ERROR 异常无损放行。
+  - **APM 选型**: 未接入 `@nestjs/observe`（供应商型 APM agent，需外部凭证与 SaaS 采集端），既有自托管链路（`x-request-id` + Pino + ResilienceMetrics + Terminus）保持不变。理由与按需 opt-in 方式见 `docs/adr/0001-observability-keep-native-pino.md`。
 - **分层异常处理 (Tiered Exception Handling)**:
   - **Controller 层**: 严禁写任何 `try-catch`，所有错误 100% 冒泡交由全局过滤器。
   - **Service 层 (常规)**: 默认不写 `try-catch` 包裹正常业务，业务校验失败直接直抛标准异常 (`NotFoundException` / `BadRequestException` 等)。
@@ -215,7 +240,8 @@ BullMQ 队列由 `AuthModule → MailJobs` 依赖，CLI 模块也需 `BullModule
     1. **资源补偿与回滚**: 如写盘成功但落库失败时，推荐使用 `MediaService.storeWithCompensation` 自动安全接管。
     2. **弱依赖旁路降级**: 如删除旧头像、非核心日志记录，catch 后记录 warn，不阻断主流程。
     3. **领域错误转译**: 捕获专有驱动异常并转译为语义明确的业务异常。
-  - **全局过滤器 (`HttpExceptionFilter`)**: 统一响应格式、生产环境 SQL/堆栈脱敏，并自动识别 Postgres 错误码（如 `23505` 唯一键冲突 → 409 Conflict、`23503` 外键无效 → 400 Bad Request）。
+  - **守卫层**: 仅「凭证无效 / 账号封禁」映射 401；认证后端自身故障（网络超时、Better Auth 内部异常）必须记 error 日志并以 **503** 上抛，严禁把系统故障伪装成「会话过期」（见 `BetterAuthGuard`）。
+  - **全局过滤器 (`HttpExceptionFilter`)**: 统一响应格式、生产环境 SQL/堆栈脱敏，自动识别 Postgres 错误码（如 `23505` 唯一键冲突 → 409 Conflict、`23503` 外键无效 → 400 Bad Request），并优先采用 `HttpExceptionOptions.errorCode` 作为机器可读错误码（其次响应体 `code`，最后状态枚举名）。
 - **Swagger / OpenAPI 规范**:
   - **中文极简命名**: 所有 Controller 的 `@ApiTags`（如 `@ApiTags('用户管理')`、`@ApiTags('认证')`）与 `@ApiOperation({ summary })`（如 `@ApiOperation({ summary: '创建用户' })`、`@ApiOperation({ summary: '登录' })`）统一采用纯粹、简明的中文表达，严禁中英混杂或冗长套话。
   - **禁写 `@ApiErrorResponse`**: 全局统一异常过滤器 (`HttpExceptionFilter`) 已经 100% 接管所有错误状态码与统一错误响应信封结构，Controller 层**严禁/无需声明任何 `@ApiErrorResponse`**，以保持控制器注解精简清爽。
