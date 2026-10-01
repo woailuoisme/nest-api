@@ -12,6 +12,15 @@ services:
       - ../.env
     networks:
       - backend
+    # 日志留存与轮转：应用不再写文件日志（仅 stdout JSON），由 Docker 日志驱动承担保留与切割；
+    # max-size 10m × max-file 3 即约 30MB 上限，替代原先 pino-roll 的 14 天保留。
+    # 注意：本服务默认 WORKER_EMBEDDED=true（单容器）。若改用分离拓扑（justfile `start-worker` /
+    # `start-all` 起独立 worker 进程），worker 容器必须复用同一 logging 块，否则其日志无上限。
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
 
 networks:
   backend:

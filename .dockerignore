@@ -106,6 +106,7 @@ bun.report-*
 # Storage (keep dirs via .gitignore, ignore runtime files)
 storage/cache/*
 !storage/cache/.gitignore
+# 同上：应用日志不落盘，但该目录承载 k6 报告归档，构建上下文仍应排除
 storage/logs/*
 !storage/logs/.gitignore
 storage/tmp/*

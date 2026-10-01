@@ -1,11 +1,10 @@
 import type { IncomingMessage } from 'node:http';
-import { join } from 'node:path';
+import { hostname } from 'node:os';
+import { basename } from 'node:path';
 import { Writable } from 'node:stream';
 import pino from 'pino';
-import pretty from 'pino-pretty';
-import pinoRoll from 'pino-roll';
 import { v7 as uuidv7 } from 'uuid';
-import { isProductionEnv, PATHS } from '@/common/constants/app.constants';
+import { isProductionEnv } from '@/common/constants/app.constants';
 import { captureLog } from '@/setup/sentry';
 
 /** Pino level 数值：50 = error，60 = fatal */
@@ -88,53 +87,25 @@ export function redactUrl(url?: string): string {
 }
 
 /**
- * 包装目标写入流，过滤掉日常健康的 HTTP 访问日志（2xx/3xx），
- * 自动保留 4xx/5xx 异常访问日志与所有应用层业务/系统日志写入按日滚动文件。
+ * 进程角色标识（api / worker）。
+ *
+ * 生产 JSON 日志是唯一留存通道，且 api 与独立 worker 进程产出完全同构的 JSON；
+ * 采集端需要 `service` 字段区分来源。独立 worker 的入口是 `dist/workers/worker.main.js`（见 justfile `start-worker`）。
  */
-export function createFileFilterStream(destination: Writable): Writable {
-  return new Writable({
-    write(chunk, encoding, callback) {
-      try {
-        const line = typeof chunk === 'string' ? chunk : chunk.toString('utf8');
-        // 快速通道：不含访问日志特征字段（statusCode / responseTime）时直接透传，跳过 JSON 解析开销
-        if (line.includes('"statusCode"') || line.includes('"responseTime"')) {
-          const obj = JSON.parse(line);
-          if (obj && typeof obj === 'object') {
-            // 过滤 2xx/3xx 访问日志，4xx (WARN) 与 5xx (ERROR) 放行落盘
-            const isHttpLog =
-              (obj.context === 'HTTP' || (typeof obj.method === 'string' && typeof obj.ip === 'string')) &&
-              typeof obj.statusCode === 'number';
-            if (isHttpLog && obj.statusCode < 400) {
-              callback();
-              return;
-            }
-            // 兼容旧格式 req/res 序列化访问日志
-            if (obj.req && obj.res && typeof obj.responseTime === 'number') {
-              callback();
-              return;
-            }
-          }
-        }
-      } catch {
-        // 非 JSON 格式直接放行
-      }
-      destination.write(chunk, encoding, callback);
-    },
-    final(callback) {
-      destination.end(callback);
-    },
-  });
+function resolveServiceName(): string {
+  return basename(process.argv[1] ?? '').startsWith('worker.main') ? 'worker' : 'api';
 }
 
 /**
- * 创建进程内 Pino 实例：
- * 1. 控制台：pino-pretty 彩色美化
- * 2. 存储盘：pino-roll 按日滚动切割文件（过滤掉 HTTP 访问日志，仅留应用业务日志）
+ * 创建进程内 Pino 实例（单通道 stdout）：
+ * - 生产：pino 默认即为「单行 JSON 写 stdout」，零包装、零额外开销，便于容器日志驱动 / Loki 采集；
+ *   同时固定 `service`/`hostname` 与 ISO 时间，便于多进程、多副本日志归集（不再依赖易变的 pid）。
+ * - 开发 / 测试：pino-pretty 彩色单行，保留终端可读性。
+ *
+ * 不再落盘：日志留存由容器日志驱动承担（见 deploy/app/docker-compose.yml 的 json-file 上限），
+ * 异常另由 sentryHooks 上报 Sentry / GlitchTip，磁盘不再是第三出口。
  */
 export async function createPinoLogger(customDestination?: Writable): Promise<pino.Logger> {
-  const isProduction = isProductionEnv();
-  const isTesting = process.env.APP_ENV === 'testing';
-
   if (customDestination) {
     return pino(
       {
@@ -146,43 +117,35 @@ export async function createPinoLogger(customDestination?: Writable): Promise<pi
     );
   }
 
-  const prettyFactory =
-    typeof pretty === 'function' ? pretty : (pretty as unknown as { default: typeof pretty }).default;
-  const prettyStream = prettyFactory({
-    colorize: true,
-    singleLine: true,
-    translateTime: 'yyyy-mm-dd HH:MM:ss.l',
-    ignore: 'pid,hostname,method,url,statusCode,duration,ip',
-  });
+  const isProduction = isProductionEnv();
+  const options: pino.LoggerOptions = {
+    level: isProduction ? 'info' : 'debug',
+    redact: { paths: REDACT_PATHS, censor: '[redacted]' },
+    hooks: sentryHooks,
+    // 开发/测试走 pretty，无需 JSON 基字段（pretty 本就忽略 pid/hostname），故只喂给生产通道
+    ...(isProduction
+      ? {
+          base: { service: resolveServiceName(), hostname: hostname() },
+          timestamp: pino.stdTimeFunctions.isoTime,
+        }
+      : {}),
+  };
 
-  const streams: Array<{ stream: Writable | pino.DestinationStream }> = [{ stream: prettyStream }];
-
-  if (!isTesting) {
-    const rollFactory =
-      typeof pinoRoll === 'function' ? pinoRoll : (pinoRoll as unknown as { default: typeof pinoRoll }).default;
-    const rollDestination = await rollFactory({
-      file: join(process.cwd(), PATHS.STORAGE_LOGS, 'app'),
-      frequency: 'daily',
-      mkdir: true,
-      dateFormat: 'yyyy-MM-dd',
-      extension: '.log',
-      limit: {
-        count: 14,
-        removeOtherLogFiles: true,
-      },
-    });
-    streams.push({ stream: createFileFilterStream(rollDestination) });
+  if (isProduction) {
+    return pino(options);
   }
 
+  // pino-pretty 属 devDependencies（生产镜像 `bun install --production` 不含它）：
+  // 必须动态导入，静态 import 会让生产进程在 bootstrap 阶段因找不到模块而直接退出
+  const { default: pretty } = await import('pino-pretty');
+
   return pino(
-    {
-      level: isProduction ? 'info' : 'debug',
-      redact: {
-        paths: REDACT_PATHS,
-        censor: '[redacted]',
-      },
-      hooks: sentryHooks,
-    },
-    pino.multistream(streams),
+    options,
+    pretty({
+      colorize: true,
+      singleLine: true,
+      translateTime: 'yyyy-mm-dd HH:MM:ss.l',
+      ignore: 'pid,hostname,method,url,statusCode,duration,ip',
+    }),
   );
 }

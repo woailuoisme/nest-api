@@ -32,7 +32,7 @@ COPY --from=build --chown=1000:1000 /app/dist ./dist
 COPY --from=build --chown=1000:1000 /app/package.json ./package.json
 
 # 运行时存储目录（仅对 storage 设置权限，避免全盘 chown 导致 overlay2 镜像层膨胀）
-RUN mkdir -p storage/cache storage/logs storage/tmp storage/uploads \
+RUN mkdir -p storage/cache storage/tmp storage/uploads \
     && chown -R 1000:1000 storage
 
 USER 1000

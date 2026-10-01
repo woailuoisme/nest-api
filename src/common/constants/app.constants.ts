@@ -28,7 +28,6 @@ export function isTruthyEnv(value: unknown): boolean {
 export const PATHS = {
   STORAGE_ROOT: 'storage',
   STORAGE_UPLOADS: 'storage/uploads',
-  STORAGE_LOGS: 'storage/logs',
   STORAGE_TMP: 'storage/tmp',
   STORAGE_CACHE: 'storage/cache',
   API_MD_FILE: 'docs/api.md',

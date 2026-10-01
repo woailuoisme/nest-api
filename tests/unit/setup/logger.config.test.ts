@@ -1,9 +1,26 @@
+import { existsSync, readdirSync } from 'node:fs';
 import type { IncomingMessage } from 'node:http';
+import { join } from 'node:path';
 import { Writable } from 'node:stream';
-import { describe, expect, it } from 'vitest';
+import pino from 'pino';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { createPinoLogger, createRequestId, extractIp, REDACT_PATHS, redactUrl } from '@/setup/logger';
 
+/**
+ * pino 把落点流与基字段挂在内部 symbol 上，官方 d.ts 未暴露索引签名，故测试内做最小透传访问。
+ */
+const getStreamFd = (logger: pino.Logger): number | undefined =>
+  (logger as unknown as Record<symbol, { fd?: number }>)[pino.symbols.streamSym]?.fd;
+
+const getChindings = (logger: pino.Logger): string =>
+  String((logger as unknown as Record<symbol, unknown>)[pino.symbols.chindingsSym]);
+
 describe('logger.config', () => {
+  // 兜底：任一用例断言失败时也不会把 stub 的 APP_ENV 泄漏给同文件后续用例
+  afterEach(() => {
+    vi.unstubAllEnvs();
+  });
+
   describe('redactUrl', () => {
     it('脱敏 token query，防止 JWT 落入访问日志', () => {
       const url = '/uploads/avatar.png?token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.secret';
@@ -92,10 +109,76 @@ describe('logger.config', () => {
       expect(parsed.context).toBe('TestContext');
     });
 
-    it('默认配置创建 logger 包含 pretty 格式化', async () => {
+    it('默认配置（开发/测试）创建 logger 使用 pretty 格式化', async () => {
       const logger = await createPinoLogger();
       expect(logger).toBeDefined();
       expect(typeof logger.info).toBe('function');
+    });
+
+    it('生产环境：level 收敛为 info 且不再落盘（日志只走 stdout）', async () => {
+      vi.stubEnv('APP_ENV', 'production');
+      const logsDir = join(process.cwd(), 'storage', 'logs');
+      const before = existsSync(logsDir) ? readdirSync(logsDir) : [];
+
+      const logger = await createPinoLogger();
+      logger.error('production smoke');
+
+      expect(logger.level).toBe('info');
+      // 反向断言：文件日志已移除，写日志不应产生任何新的日志文件（与运行前快照一致）
+      expect(existsSync(logsDir) ? readdirSync(logsDir) : []).toEqual(before);
+
+      vi.unstubAllEnvs();
+    });
+
+    it('生产环境：输出落在 stdout JSON 通道，且带 service 基字段（守住形态不被改回 pretty）', async () => {
+      vi.stubEnv('APP_ENV', 'production');
+
+      const logger = await createPinoLogger();
+
+      // 生产通道必须是直写 stdout 的流（fd 1）；pretty 通道是 Transform，无 fd → 改回 pretty 会在此失败
+      expect(getStreamFd(logger)).toBe(1);
+      // service 基字段用于区分 api / worker 进程（多进程 JSON 日志归集依赖它）
+      expect(getChindings(logger)).toContain('"service"');
+
+      vi.unstubAllEnvs();
+    });
+
+    it('开发/测试通道：仍由 pino-pretty 承载（非 JSON 流）', async () => {
+      const logger = await createPinoLogger();
+
+      expect(getStreamFd(logger)).toBeUndefined();
+    });
+
+    it('worker 入口应标记为 service=worker（守住 argv → service 的映射）', async () => {
+      vi.stubEnv('APP_ENV', 'production');
+      const originalEntry = process.argv[1];
+      process.argv[1] = '/app/dist/workers/worker.main.js';
+
+      try {
+        const logger = await createPinoLogger();
+
+        expect(getChindings(logger)).toContain('"service":"worker"');
+      } finally {
+        process.argv[1] = originalEntry;
+      }
+    });
+
+    it('生产启动不依赖 pino-pretty：模块缺失时仍能创建 logger（守住「不得静态导入 devDependency」）', async () => {
+      vi.resetModules();
+      // 模拟生产镜像（`bun install --production` 不含 devDeps）：只有静态导入才会在此炸掉
+      vi.doMock('pino-pretty', () => {
+        throw new Error("Cannot find module 'pino-pretty'");
+      });
+      vi.stubEnv('APP_ENV', 'production');
+
+      const { createPinoLogger: createProductionLogger } = await import('@/setup/logger/logger.config');
+      const logger = await createProductionLogger();
+
+      expect(logger.level).toBe('info');
+
+      vi.doUnmock('pino-pretty');
+      vi.unstubAllEnvs();
+      vi.resetModules();
     });
   });
 });
