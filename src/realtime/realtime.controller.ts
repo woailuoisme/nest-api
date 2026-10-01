@@ -7,11 +7,14 @@ import { ApiSuccessResponse } from '@/common/decorators/swagger-response.decorat
 import { RealtimeChannelsService } from './channels/realtime-channels.service';
 import {
   CentrifugoProxyResponseDto,
-  CentrifugoProxySubscribeDto,
+  type CentrifugoProxySubscribeDto,
+  CentrifugoProxySubscribeSchema,
   RealtimeChannelInfoDto,
-  RealtimeSubscribeDto,
+  type RealtimeSubscribeDto,
   RealtimeSubscribeResponseDto,
-  RealtimeTokenQueryDto,
+  RealtimeSubscribeSchema,
+  type RealtimeTokenQueryDto,
+  RealtimeTokenQuerySchema,
   RealtimeTokenResponseDto,
 } from './dto/realtime.dto';
 import { RealtimeEventsService } from './realtime-events.service';
@@ -35,7 +38,7 @@ export class RealtimeController {
   @ApiSuccessResponse(RealtimeTokenResponseDto, { description: '成功签发实时长连接凭据' })
   createConnectionToken(
     @CurrentUser() user: CurrentUserPayload,
-    @Query() query: RealtimeTokenQueryDto,
+    @Query({ schema: RealtimeTokenQuerySchema }) query: RealtimeTokenQueryDto,
     @Req() req?: FastifyRequest,
   ): RealtimeTokenResponseDto {
     const protocol = this.resolveProtocol(query.protocol, req?.url);
@@ -59,7 +62,7 @@ export class RealtimeController {
   @ApiSuccessResponse(RealtimeSubscribeResponseDto, { description: '订阅鉴权成功，签发订阅 Token' })
   async subscribe(
     @CurrentUser() user: CurrentUserPayload,
-    @Body() dto: RealtimeSubscribeDto,
+    @Body({ schema: RealtimeSubscribeSchema }) dto: RealtimeSubscribeDto,
   ): Promise<RealtimeSubscribeResponseDto> {
     return this.eventsService.subscribeChannel(user, dto.channel, dto.client);
   }
@@ -69,7 +72,9 @@ export class RealtimeController {
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Centrifugo Proxy Webhook 频道订阅鉴权' })
   @ApiSuccessResponse(CentrifugoProxyResponseDto, { description: 'Centrifugo 订阅反向代理鉴权响应' })
-  async proxySubscribe(@Body() dto: CentrifugoProxySubscribeDto): Promise<CentrifugoProxyResponseDto> {
+  async proxySubscribe(
+    @Body({ schema: CentrifugoProxySubscribeSchema }) dto: CentrifugoProxySubscribeDto,
+  ): Promise<CentrifugoProxyResponseDto> {
     return this.eventsService.handleProxySubscribe(dto);
   }
 

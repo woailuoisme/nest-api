@@ -1,63 +1,79 @@
-/**
- * 上传文件统一结构 — 由 MultipartInterceptor 从 Fastify multipart 流收集而来，
- * 作为 controller / service 层流转的标准载荷。
- *
- * 可辨识联合，两种模式（二选一）：
- * - 内存模式（默认）：整个文件读入 buffer，size 精确可用，可做 maxSize 校验
- * - 流式模式（streamToDisk）：边收边写入 PATHS.STORAGE_TMP/<uuid>，载荷携带 tmpPath，
- *   MediaService.save 再流式搬到最终路径，O(1) 内存避免大文件 OOM
- */
-export type UploadedFile =
-  | {
-      /** 载荷模式：内存模式 */
-      type: 'memory';
-      /** 表单字段名 */
-      fieldname: string;
-      /** 原始文件名（client 提供，未校验） */
-      filename: string;
-      /** MIME 类型（client 提供，未校验） */
-      mimetype: string;
-      /** 文件内容（整体驻留内存） */
-      buffer: Buffer;
-      /** 文件大小（字节）— 精确可用 */
-      size: number;
-    }
-  | {
-      /** 载荷模式：流式模式 */
-      type: 'stream';
-      /** 表单字段名 */
-      fieldname: string;
-      /** 原始文件名（client 提供，未校验） */
-      filename: string;
-      /** MIME 类型（client 提供，未校验） */
-      mimetype: string;
-      /** 已落盘的临时文件路径（PATHS.STORAGE_TMP/<uuid>），消费完毕后应删除 */
-      tmpPath: string;
-      /** 全局 limits 截断标记 — 写盘完成后由消费方据此判定超限 */
-      truncated?: boolean;
-    };
+import { extname } from 'node:path';
+import type { Readable } from 'node:stream';
+import { BadRequestException } from '@nestjs/common';
+import type {
+  IncomingMultipartFile,
+  MultipartFileStream,
+  UploadedMultipartFile,
+} from '@nestjs/platform-fastify/multipart';
 
 /**
- * 装饰器 / 拦截器层可选校验选项。
- * 不传时工具只透传不校验；传则在 MultipartInterceptor 中按项校验，违规抛 BadRequestException。
+ * 上传文件统一载荷 — 由 `@nestjs/platform-fastify/multipart` 的原生拦截器产出
+ * （`FileInterceptor` / `FilesInterceptor` / `AnyFilesInterceptor` / `FileStreamInterceptor`）。
+ *
+ * 两种模式（可辨识联合）：
+ * - 内存模式（默认，`buffer` 存在）：整文件驻留内存，`size` 精确可用；
+ * - 流式模式（`FileStreamInterceptor`）：边读边处理，O(1) 内存，超出 `limits.fileSize` 时
+ *   原生实现会以 `PayloadTooLargeException` 中断流（413），无需调用方判截断标记。
  */
-export interface UploadOptions {
-  /** 单文件大小上限（字节）— 仅内存模式精确生效；流式模式由全局 limits 截断（413）兜底 */
-  maxSize?: number;
-  /** 允许的 MIME 类型白名单（比对时统一小写，大小写不敏感） */
+export type UploadedFile = MemoryUpload | MultipartFileStream;
+
+/** 内存模式载荷（`buffer` 必然存在，`size` 精确可用） */
+export type MemoryUpload = UploadedMultipartFile & { buffer: Buffer };
+
+/** 是否为内存模式载荷（携带完整 `buffer` 与精确 `size`） */
+export function isMemoryUpload(file: UploadedFile): file is MemoryUpload {
+  return 'buffer' in file && Buffer.isBuffer(file.buffer);
+}
+
+/** 是否为流式载荷（`stream` 可用，且只能消费一次） */
+export function isStreamUpload(file: UploadedFile): file is MultipartFileStream {
+  return 'stream' in file;
+}
+
+/** 取载荷内容：内存模式为 Buffer，流式模式为可读流（调用方须自行消费/落盘） */
+export function getUploadContent(file: UploadedFile): Buffer | Readable {
+  return isStreamUpload(file) ? file.stream : file.buffer;
+}
+
+/** 单次上传的可选校验规则（由拦截器 fileFilter 消费） */
+export interface UploadValidationOptions {
+  /** 允许的 MIME 类型白名单（比对统一小写，大小写不敏感） */
   allowedMime?: readonly string[];
   /** 允许的扩展名白名单（含点号，如 ['.png', '.jpg']） */
   allowedExt?: readonly string[];
-  /**
-   * 流式直存模式 — 拦截器把流边收边写入 PATHS.STORAGE_TMP/<uuid>，载荷携带 tmpPath，
-   * 由 MediaService 流式搬到最终路径，避免大文件 OOM。代价：size 未知，
-   * maxSize 依赖全局 limits 截断（413）兜底。
-   */
-  streamToDisk?: boolean;
 }
 
-/** Reflector metadata key — 由 @UploadedFile / @UploadedFiles 写入，MultipartInterceptor 读取 */
-export const UPLOAD_OPTIONS_KEY = 'upload_options';
+/**
+ * 构造原生 multipart `fileFilter`：按 MIME / 扩展名白名单校验，违规以 `BadRequestException` 中断请求。
+ *
+ * 大小上限不在此处校验 — 交由拦截器 `limits.fileSize` 在流式写入过程中强制（超限即 413），
+ * 避免把超大文件先读入内存再判断。
+ */
+export function createUploadFileFilter(options: UploadValidationOptions) {
+  return (
+    _req: unknown,
+    file: IncomingMultipartFile,
+    callback: (error: Error | null, acceptFile: boolean) => void,
+  ): void => {
+    const { allowedMime, allowedExt } = options;
 
-/** request 上挂载已收集文件的字段名，供参数装饰器取用 */
-export const UPLOADED_FILES_KEY = '__uploadedFiles';
+    if (allowedMime?.length && !allowedMime.some((m) => m.toLowerCase() === file.mimetype.toLowerCase())) {
+      callback(
+        new BadRequestException(`不支持的 MIME 类型: ${file.mimetype} (允许: ${allowedMime.join(', ')})`),
+        false,
+      );
+      return;
+    }
+
+    if (allowedExt?.length) {
+      const ext = extname(file.originalname).toLowerCase();
+      if (!allowedExt.includes(ext)) {
+        callback(new BadRequestException(`不支持的扩展名: ${ext} (允许: ${allowedExt.join(', ')})`), false);
+        return;
+      }
+    }
+
+    callback(null, true);
+  };
+}

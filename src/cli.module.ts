@@ -10,7 +10,7 @@ import { SearchModule } from './common/search/search.module';
 import { StorageModule } from './common/storage/storage.module';
 import { MiniprogramModule } from './common/wechat/miniprogram';
 import { WepayModule } from './common/wechat/pay';
-import { validateEnv } from './config/env.validation';
+import { envSchema } from './config/env.validation';
 import { createBullModuleConfig } from './database/bull.config';
 import { DatabaseModule } from './database/drizzle/drizzle.module';
 import { RedisModule } from './database/redis.module';
@@ -20,7 +20,7 @@ import { RealtimeModule } from './realtime/realtime.module';
 
 @Module({
   imports: [
-    ConfigModule.forRoot({ isGlobal: true, validate: validateEnv }),
+    ConfigModule.forRoot({ isGlobal: true, validationSchema: envSchema }),
     EventEmitterModule.forRoot({ wildcard: true }),
     BullModule.forRootAsync({
       inject: [ConfigService],

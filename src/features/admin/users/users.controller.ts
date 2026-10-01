@@ -10,6 +10,7 @@ import {
   Patch,
   Post,
   Query,
+  SerializeOptions,
 } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { Permission } from '@/common/constants/permissions';
@@ -22,12 +23,19 @@ import {
 import type { PaginatedResultResource } from '@/common/dto/pagination.dto';
 import { Idempotent } from '@/common/idempotency';
 import {
-  ChangeRoleRequest,
-  CreateUserRequest,
-  FindUsersRequest,
-  SearchUsersRequest,
-  UpdateUserRequest,
+  type ChangeRoleRequest,
+  ChangeRoleSchema,
+  type CreateUserRequest,
+  CreateUserSchema,
+  type FindUsersRequest,
+  FindUsersSchema,
+  type SearchUsersRequest,
+  SearchUsersSchema,
+  type UpdateUserRequest,
+  UpdateUserSchema,
   UserEntity,
+  UserPageResourceSchema,
+  UserResourceSchema,
 } from './users.dto';
 import { UsersService } from './users.service';
 
@@ -49,8 +57,9 @@ export class AdminUsersController {
   @Idempotent()
   @Permissions(Permission.UserCreate)
   @ApiOperation({ summary: '创建用户' })
-  @ApiSuccessResponse(UserEntity, { status: 201, description: '用户创建成功' })
-  create(@Body() dto: CreateUserRequest): Promise<UserEntity> {
+  @ApiSuccessResponse(UserResourceSchema, { status: 201, description: '用户创建成功' })
+  @SerializeOptions({ schema: UserResourceSchema })
+  create(@Body({ schema: CreateUserSchema }) dto: CreateUserRequest): Promise<UserEntity> {
     return this.usersService.create(dto);
   }
 
@@ -58,8 +67,11 @@ export class AdminUsersController {
   @Get('search')
   @Permissions(Permission.UserRead)
   @ApiOperation({ summary: '搜索用户' })
-  @ApiPageResponse(UserEntity, { description: '搜索命中用户列表' })
-  search(@Query() query: SearchUsersRequest): Promise<PaginatedResultResource<UserEntity>> {
+  @ApiPageResponse(UserResourceSchema, { description: '搜索命中用户列表' })
+  @SerializeOptions({ schema: UserPageResourceSchema })
+  search(
+    @Query({ schema: SearchUsersSchema }) query: SearchUsersRequest,
+  ): Promise<PaginatedResultResource<UserEntity>> {
     return this.usersService.search(query);
   }
 
@@ -67,8 +79,9 @@ export class AdminUsersController {
   @Get()
   @Permissions(Permission.UserRead)
   @ApiOperation({ summary: '用户列表' })
-  @ApiPageResponse(UserEntity, { description: '分页用户列表' })
-  findAll(@Query() query: FindUsersRequest): Promise<PaginatedResultResource<UserEntity>> {
+  @ApiPageResponse(UserResourceSchema, { description: '分页用户列表' })
+  @SerializeOptions({ schema: UserPageResourceSchema })
+  findAll(@Query({ schema: FindUsersSchema }) query: FindUsersRequest): Promise<PaginatedResultResource<UserEntity>> {
     return this.usersService.findAll(query);
   }
 
@@ -76,16 +89,24 @@ export class AdminUsersController {
   @Patch(':id')
   @Permissions(Permission.UserUpdate)
   @ApiOperation({ summary: '更新用户' })
-  @ApiSuccessResponse(UserEntity, { description: '用户信息更新成功' })
-  update(@Param('id', ParseUUIDPipe) id: string, @Body() dto: UpdateUserRequest): Promise<UserEntity> {
+  @ApiSuccessResponse(UserResourceSchema, { description: '用户信息更新成功' })
+  @SerializeOptions({ schema: UserResourceSchema })
+  update(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body({ schema: UpdateUserSchema }) dto: UpdateUserRequest,
+  ): Promise<UserEntity> {
     return this.usersService.update(id, dto);
   }
 
   /** 变更指定用户的系统角色 */
   @Patch(':id/role')
   @ApiOperation({ summary: '变更角色' })
-  @ApiSuccessResponse(UserEntity, { description: '用户角色更新成功' })
-  changeRole(@Param('id', ParseUUIDPipe) id: string, @Body() dto: ChangeRoleRequest): Promise<UserEntity> {
+  @ApiSuccessResponse(UserResourceSchema, { description: '用户角色更新成功' })
+  @SerializeOptions({ schema: UserResourceSchema })
+  changeRole(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body({ schema: ChangeRoleSchema }) dto: ChangeRoleRequest,
+  ): Promise<UserEntity> {
     return this.usersService.changeRole(id, dto.role);
   }
 

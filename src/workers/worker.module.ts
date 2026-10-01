@@ -6,7 +6,7 @@ import { MailModule } from '@/common/mail';
 import { MediaModule } from '@/common/media/media.module';
 import { SearchModule } from '@/common/search/search.module';
 import { StorageModule } from '@/common/storage/storage.module';
-import { validateEnv } from '@/config/env.validation';
+import { envSchema } from '@/config/env.validation';
 import { createBullModuleConfig } from '@/database/bull.config';
 import { DatabaseModule } from '@/database/drizzle/drizzle.module';
 import { DemoProcessor } from '@/jobs/demo/demo.processor';
@@ -23,7 +23,7 @@ import { LoggerModule } from '@/setup/logger/logger.module';
  */
 @Module({
   imports: [
-    ConfigModule.forRoot({ isGlobal: true, validate: validateEnv }),
+    ConfigModule.forRoot({ isGlobal: true, validationSchema: envSchema }),
     LoggerModule,
     BullModule.forRootAsync({
       inject: [ConfigService],

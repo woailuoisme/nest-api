@@ -91,3 +91,4 @@ skills-lock.json
 .codebuddy/
 .scratch/
 docs/adr
+dist-verify

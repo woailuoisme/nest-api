@@ -1,4 +1,4 @@
-import { Global, Module } from '@nestjs/common';
+import { Module } from '@nestjs/common';
 import { LoadSheddingGuard } from './guards/index.js';
 import { ResilienceEventBus } from './resilience.event-bus.js';
 import { ResilienceFactory } from './resilience.factory.js';
@@ -18,7 +18,6 @@ const metricsRegistryProvider = {
   useValue: ResilienceMetricsRegistry.getInstance(),
 };
 
-@Global()
 @Module({
   providers: [
     eventBusProvider,

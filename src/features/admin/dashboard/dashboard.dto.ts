@@ -1,20 +1,3 @@
-import { createZodDto } from 'nestjs-zod';
-import { z } from 'zod';
-
-export const MetricChannelSchema = z.enum(['system', 'business', 'alerts']);
-export type MetricChannel = z.infer<typeof MetricChannelSchema>;
-
-/** 客户端订阅/退订频道统一请求 DTO */
-export const ChannelSubscriptionSchema = z.object({
-  channel: MetricChannelSchema.describe('监控频道：system | business | alerts'),
-});
-
-export class ChannelSubscriptionDto extends createZodDto(ChannelSubscriptionSchema) {}
-export const SubscribeChannelSchema = ChannelSubscriptionSchema;
-export const UnsubscribeChannelSchema = ChannelSubscriptionSchema;
-export class SubscribeChannelDto extends ChannelSubscriptionDto {}
-export class UnsubscribeChannelDto extends ChannelSubscriptionDto {}
-
 /** 系统指标快照 */
 export interface SystemMetricPayload {
   channel: 'system';

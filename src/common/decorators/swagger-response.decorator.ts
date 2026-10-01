@@ -1,12 +1,31 @@
 import { applyDecorators, Type } from '@nestjs/common';
 import { ApiExtraModels, ApiResponse, getSchemaPath } from '@nestjs/swagger';
+import type { z } from 'zod';
 import {
   ApiCursorPaginatedResponseResource,
   ApiErrorDetailsResource,
   ApiErrorResponseResource,
   ApiPaginatedResponseResource,
 } from '@/common/dto/api-resource.dto';
-import { CursorPageMetaResource, PageMetaResource } from '@/common/dto/pagination.dto';
+import {
+  CursorPageMetaResource,
+  cursorPaginatedEnvelopeSchema,
+  PageMetaResource,
+  paginatedEnvelopeSchema,
+} from '@/common/dto/pagination.dto';
+
+/**
+ * 响应模型：类（由 `@ApiProperty` 驱动文档）或 Standard Schema（Zod，Nest 12 原生通道）。
+ *
+ * 传 schema 时文档与运行时序列化（`@SerializeOptions({ schema })`）共用同一份契约；
+ * 注意数组响应请显式传 `z.array(...)`，`isArray` 仅对类模型生效。
+ */
+export type ResponseModel = Type<unknown> | z.ZodType;
+
+/** 判定是否为 Standard Schema（Zod 等库均实现 `~standard` 协议） */
+export function isStandardSchema(model: ResponseModel): model is z.ZodType {
+  return typeof model === 'object' && model !== null && '~standard' in model;
+}
 
 export interface ApiSuccessResponseOptions {
   message?: string;
@@ -62,13 +81,10 @@ function buildPaginatedResponse<TModel extends Type<unknown>>(
 /**
  * Swagger 成功响应装饰器：自动生成符合系统统一 JSON 结构的 OpenAPI 成功响应文档。
  *
- * @param model 响应数据 DTO / Entity 类（可选）
+ * @param model 响应数据模型：Entity 类或 Standard Schema（可选）
  * @param options 可选配置（HTTP 状态码、文档描述、数组形式）
  */
-export function ApiSuccessResponse<TModel extends Type<unknown>>(
-  model?: TModel,
-  options: ApiSuccessResponseOptions = {},
-) {
+export function ApiSuccessResponse(model?: ResponseModel, options: ApiSuccessResponseOptions = {}) {
   const status = options.status ?? 200;
   const description = resolveDescription(options, 'Operation successful');
 
@@ -92,6 +108,17 @@ export function ApiSuccessResponse<TModel extends Type<unknown>>(
           nullable: true,
           example: {},
         },
+      }),
+    );
+  }
+
+  // Standard Schema 通道：直接由 schema 转换出响应体文档
+  if (isStandardSchema(model)) {
+    return applyDecorators(
+      ApiResponse({
+        status,
+        description,
+        standardSchema: model,
       }),
     );
   }
@@ -130,7 +157,17 @@ export function ApiNoContentResponse(options: ApiSuccessResponseOptions = {}) {
  * @param model 列表项 DTO / Entity 类
  * @param options 可选配置（HTTP 状态码、文档描述）
  */
-export function ApiPageResponse<TModel extends Type<unknown>>(model: TModel, options: ApiSuccessResponseOptions = {}) {
+export function ApiPageResponse(model: ResponseModel, options: ApiSuccessResponseOptions = {}) {
+  if (isStandardSchema(model)) {
+    return applyDecorators(
+      ApiResponse({
+        status: options.status ?? 200,
+        description: resolveDescription(options, 'Paginated list retrieved successfully'),
+        standardSchema: paginatedEnvelopeSchema(model),
+      }),
+    );
+  }
+
   return buildPaginatedResponse(model, options, {
     metaModel: PageMetaResource,
     metaWrapperModel: ApiPaginatedResponseResource,
@@ -144,10 +181,17 @@ export function ApiPageResponse<TModel extends Type<unknown>>(model: TModel, opt
  * @param model 列表项 DTO / Entity 类
  * @param options 可选配置（HTTP 状态码、文档描述）
  */
-export function ApiCursorPageResponse<TModel extends Type<unknown>>(
-  model: TModel,
-  options: ApiSuccessResponseOptions = {},
-) {
+export function ApiCursorPageResponse(model: ResponseModel, options: ApiSuccessResponseOptions = {}) {
+  if (isStandardSchema(model)) {
+    return applyDecorators(
+      ApiResponse({
+        status: options.status ?? 200,
+        description: resolveDescription(options, 'Cursor paginated list retrieved successfully'),
+        standardSchema: cursorPaginatedEnvelopeSchema(model),
+      }),
+    );
+  }
+
   return buildPaginatedResponse(model, options, {
     metaModel: CursorPageMetaResource,
     metaWrapperModel: ApiCursorPaginatedResponseResource,

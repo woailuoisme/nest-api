@@ -1,5 +1,4 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { createZodDto } from 'nestjs-zod';
 import { z } from 'zod';
 
 /**
@@ -20,14 +19,7 @@ export const RealtimeTokenQuerySchema = z.object({
   protocol: z.enum(['websocket', 'sse']).default('websocket').optional(),
 });
 
-export class RealtimeTokenQueryDto extends createZodDto(RealtimeTokenQuerySchema) {
-  @ApiPropertyOptional({
-    description: '连接传输协议类型 (websocket 或 sse)，默认 websocket',
-    enum: ['websocket', 'sse'],
-    default: 'websocket',
-  })
-  protocol?: 'websocket' | 'sse' = 'websocket';
-}
+export type RealtimeTokenQueryDto = z.infer<typeof RealtimeTokenQuerySchema>;
 
 /**
  * 长连接 Token 响应 DTO
@@ -66,13 +58,7 @@ export const RealtimeSubscribeSchema = z.object({
   client: z.string().optional(),
 });
 
-export class RealtimeSubscribeDto extends createZodDto(RealtimeSubscribeSchema) {
-  @ApiProperty({ description: '待订阅的频道全名', example: 'private:notifications.user_123' })
-  channel!: string;
-
-  @ApiPropertyOptional({ description: '客户端全局唯一 Client ID', example: 'client_xyz789' })
-  client?: string;
-}
+export type RealtimeSubscribeDto = z.infer<typeof RealtimeSubscribeSchema>;
 
 /**
  * 频道订阅响应 DTO
@@ -119,31 +105,7 @@ export const CentrifugoProxySubscribeSchema = z.object({
   bidi: z.boolean().optional(),
 });
 
-export class CentrifugoProxySubscribeDto extends createZodDto(CentrifugoProxySubscribeSchema) {
-  @ApiPropertyOptional({ description: '客户端连接唯一 Client ID', example: 'client_xyz789' })
-  client?: string;
-
-  @ApiPropertyOptional({ description: '客户端传输协议类型', example: 'websocket' })
-  transport?: string;
-
-  @ApiPropertyOptional({ description: '传输层协议', example: 'json' })
-  protocol?: string;
-
-  @ApiPropertyOptional({ description: '数据编码格式', example: 'json' })
-  encoding?: string;
-
-  @ApiProperty({ description: '已鉴权用户唯一 ID', example: 'usr_abc123' })
-  user!: string;
-
-  @ApiProperty({ description: '待订阅的频道全名', example: 'private:notifications.usr_abc123' })
-  channel!: string;
-
-  @ApiPropertyOptional({ description: '客户端随订阅附带的自定义载荷' })
-  data?: unknown;
-
-  @ApiPropertyOptional({ description: '是否开启双向流通信' })
-  bidi?: boolean;
-}
+export type CentrifugoProxySubscribeDto = z.infer<typeof CentrifugoProxySubscribeSchema>;
 
 /**
  * Centrifugo Proxy Webhook 响应错误对象

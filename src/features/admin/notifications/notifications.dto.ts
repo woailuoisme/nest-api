@@ -1,4 +1,3 @@
-import { createZodDto } from 'nestjs-zod';
 import { z } from 'zod';
 
 export const NotificationTypeSchema = z.enum(['info', 'warning', 'success', 'error']);
@@ -12,9 +11,9 @@ export const SendNotificationSchema = z.object({
   metadata: z.record(z.string(), z.unknown()).optional().describe('附加结构化元数据'),
 });
 
-export class SendNotificationDto extends createZodDto(SendNotificationSchema) {}
+export type SendNotificationDto = z.infer<typeof SendNotificationSchema>;
 
-/** SSE 流与接口返回的标准化通知负载实体模型 */
+/** SSE 流与接口返回的标准化通知负载实体模型（同一 schema 驱动 OpenAPI 文档与运行时序列化） */
 export const NotificationEntitySchema = z.object({
   id: z.string().describe('通知唯一 ID'),
   title: z.string().describe('通知标题'),
@@ -24,6 +23,6 @@ export const NotificationEntitySchema = z.object({
   metadata: z.record(z.string(), z.unknown()).optional().describe('附加结构化元数据'),
 });
 
-export class NotificationEntity extends createZodDto(NotificationEntitySchema) {}
+export type NotificationEntity = z.infer<typeof NotificationEntitySchema>;
 
 export type NotificationPayload = z.infer<typeof NotificationEntitySchema>;

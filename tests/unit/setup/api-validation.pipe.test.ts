@@ -1,8 +1,7 @@
 import { UnprocessableEntityException } from '@nestjs/common';
-import { createZodDto } from 'nestjs-zod';
 import { describe, expect, it } from 'vitest';
 import { z } from 'zod';
-import { CustomZodValidationPipe } from '@/setup/middleware';
+import { createApiValidationPipe } from '@/setup/middleware';
 
 const TestSchema = z.object({
   name: z.string().trim().min(2),
@@ -10,19 +9,17 @@ const TestSchema = z.object({
   age: z.coerce.number().int().min(18).optional(),
 });
 
-class TestDto extends createZodDto(TestSchema) {}
+describe('createApiValidationPipe (Standard Schema 校验管道)', () => {
+  const pipe = createApiValidationPipe();
 
-describe('CustomZodValidationPipe', () => {
-  const pipe = new CustomZodValidationPipe();
-
-  it('合法入参应成功通过并执行 trim 与类型转换', () => {
+  it('合法入参应成功通过并执行 trim 与类型转换', async () => {
     const input = {
       name: '  Alice  ',
       email: 'alice@example.com',
       age: '25',
     };
 
-    const result = pipe.transform(input, { type: 'body', metatype: TestDto });
+    const result = await pipe.transform(input, { type: 'body', schema: TestSchema });
 
     expect(result).toEqual({
       name: 'Alice',
@@ -31,7 +28,7 @@ describe('CustomZodValidationPipe', () => {
     });
   });
 
-  it('非法入参应抛出 UnprocessableEntityException (422) 并携带字段级错误 map', () => {
+  it('非法入参应抛出 UnprocessableEntityException (422) 并携带字段级错误 map', async () => {
     const invalidInput = {
       name: 'A', // too short
       email: 'invalid-email',
@@ -40,7 +37,7 @@ describe('CustomZodValidationPipe', () => {
 
     let caughtError: UnprocessableEntityException | undefined;
     try {
-      pipe.transform(invalidInput, { type: 'body', metatype: TestDto });
+      await pipe.transform(invalidInput, { type: 'body', schema: TestSchema });
     } catch (e) {
       caughtError = e as UnprocessableEntityException;
     }
@@ -66,9 +63,23 @@ describe('CustomZodValidationPipe', () => {
     expect(response.errors.age).toBeDefined();
   });
 
-  it('非 ZodDto 类型的入参应直接透传，不触发校验', () => {
+  it('嵌套字段错误应聚合为点分路径键', async () => {
+    const NestedSchema = z.object({ profile: z.object({ nickname: z.string().min(2) }) });
+
+    let caughtError: UnprocessableEntityException | undefined;
+    try {
+      await pipe.transform({ profile: { nickname: 'x' } }, { type: 'body', schema: NestedSchema });
+    } catch (e) {
+      caughtError = e as UnprocessableEntityException;
+    }
+
+    const response = caughtError?.getResponse() as { fields?: Record<string, string[]> };
+    expect(Object.keys(response.fields ?? {})).toEqual(['profile.nickname']);
+  });
+
+  it('未声明 schema 的入参应直接透传，不触发校验', async () => {
     const rawData = { foo: 'bar' };
-    const result = pipe.transform(rawData, { type: 'body', metatype: Object });
+    const result = await pipe.transform(rawData, { type: 'body', metatype: Object });
 
     expect(result).toBe(rawData);
   });

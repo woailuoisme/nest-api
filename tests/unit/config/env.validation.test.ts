@@ -1,9 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import { validateEnv } from '@/config/env.validation';
+import { envSchema } from '@/config/env.validation';
 
 /** 构造通过校验所需的最小配置，overrides 覆盖待测字段 */
 function envOf(overrides: Record<string, unknown>) {
-  return validateEnv({
+  return envSchema.parse({
     APP_ENV: 'local',
     DB_URL: 'postgres://localhost:5432/nestforge',
     JWT_ACCESS_SECRET: 'access-secret-at-least-16-chars',
@@ -123,7 +123,7 @@ describe('Smart Defaults & Derivations', () => {
   });
 
   it('极简配置: 仅提供 DB_URL 时自动产出完整的工业级默认配置', () => {
-    const config = validateEnv({
+    const config = envSchema.parse({
       DB_URL: 'postgresql://postgres:pass@localhost:5432/db',
     });
     expect(config.APP_ENV).toBe('local');

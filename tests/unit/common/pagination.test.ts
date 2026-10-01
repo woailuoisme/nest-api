@@ -1,70 +1,74 @@
 /**
- * 分页 DTO 单元测试
+ * 分页契约单元测试
  *
- * 覆盖：PageOptionsRequest 跳过/取回计算、PageMetaResource 分页元信息运算
+ * 覆盖：请求参数 schema 的强制转换与边界、分页输出信封 schema 的结构与白名单裁剪、分页元信息类运算
  */
 import { describe, expect, it } from 'vitest';
+import { z } from 'zod';
 import {
   CursorPageMetaResource,
-  CursorPageOptionsRequest,
+  CursorPageOptionsSchema,
   CursorPaginatedResultResource,
   PageMetaResource,
-  PageOptionsRequest,
+  PageMetaSchema,
+  PageOptionsSchema,
   PaginatedResultResource,
+  paginatedEnvelopeSchema,
 } from '@/common/dto/pagination.dto';
 
-describe('PageOptionsRequest', () => {
-  describe('skip / take 计算', () => {
-    it('默认值：page=1, pageSize=20', () => {
-      const opts = new PageOptionsRequest();
-      expect(opts.skip).toBe(0);
-      expect(opts.take).toBe(20);
-    });
+describe('PageOptionsSchema（Offset 分页查询参数）', () => {
+  it('查询字符串应强制转换为整数', () => {
+    expect(PageOptionsSchema.parse({ page: '2', pageSize: '15' })).toEqual({ page: 2, pageSize: 15 });
+  });
 
-    it('第 2 页应跳过 15 条', () => {
-      const opts = new PageOptionsRequest();
-      opts.page = 2;
-      opts.pageSize = 15;
-      expect(opts.skip).toBe(15);
-      expect(opts.take).toBe(15);
-    });
+  it('缺省字段保持 undefined，由消费方回退默认值', () => {
+    expect(PageOptionsSchema.parse({})).toEqual({});
+  });
 
-    it('第 3 页每页 20 条应跳过 40 条', () => {
-      const opts = new PageOptionsRequest();
-      opts.page = 3;
-      opts.pageSize = 20;
-      expect(opts.skip).toBe(40);
-      expect(opts.take).toBe(20);
-    });
+  it('page 小于 1 应被拒绝', () => {
+    expect(() => PageOptionsSchema.parse({ page: 0 })).toThrow();
+  });
 
-    it('取 page 为 undefined 时使用默认值 1', () => {
-      const opts = new PageOptionsRequest();
-      opts.page = undefined;
-      opts.pageSize = 10;
-      expect(opts.skip).toBe(0);
-      expect(opts.take).toBe(10);
-    });
-
-    it('取 pageSize 为 undefined 时使用默认值 20', () => {
-      const opts = new PageOptionsRequest();
-      opts.page = 3;
-      opts.pageSize = undefined;
-      expect(opts.skip).toBe(40);
-      expect(opts.take).toBe(20);
-    });
+  it('pageSize 超出上限应被拒绝', () => {
+    expect(() => PageOptionsSchema.parse({ pageSize: 100_000 })).toThrow();
   });
 });
 
-describe('CursorPageOptionsRequest', () => {
-  it('take 计算：默认每页 20 条', () => {
-    const opts = new CursorPageOptionsRequest();
-    expect(opts.take).toBe(20);
+describe('CursorPageOptionsSchema（Cursor 分页查询参数）', () => {
+  it('cursor 为可选字符串，pageSize 强制转换', () => {
+    expect(CursorPageOptionsSchema.parse({ cursor: 'abc', pageSize: '5' })).toEqual({ cursor: 'abc', pageSize: 5 });
+    expect(CursorPageOptionsSchema.parse({})).toEqual({});
+  });
+});
+
+describe('分页输出信封 schema', () => {
+  const PageSchema = paginatedEnvelopeSchema(z.object({ id: z.string() }));
+
+  it('应包含 items 数组与 meta 元数据', () => {
+    const parsed = PageSchema.parse({
+      items: [{ id: 'a' }],
+      meta: { page: 1, pageSize: 20, total: 1, totalPages: 1 },
+    });
+
+    expect(parsed.items).toHaveLength(1);
+    expect(parsed.meta.totalPages).toBe(1);
   });
 
-  it('take 计算：自定义 pageSize', () => {
-    const opts = new CursorPageOptionsRequest();
-    opts.pageSize = 50;
-    expect(opts.take).toBe(50);
+  it('应作为白名单裁剪未声明字段（信封层与 items 层同时生效）', () => {
+    const parsed = PageSchema.parse({
+      items: [{ id: 'a', password: 'secret' }],
+      meta: { page: 1, pageSize: 20, total: 1, totalPages: 1 },
+      extra: true,
+    }) as { items: Record<string, unknown>[] } & Record<string, unknown>;
+
+    expect(parsed).not.toHaveProperty('extra');
+    expect(parsed.items[0]).not.toHaveProperty('password');
+  });
+
+  it('PageMetaSchema 与 PageMetaResource 字段严格一致', () => {
+    const meta = new PageMetaResource({ page: 1, pageSize: 20 }, 100);
+
+    expect(PageMetaSchema.parse({ ...meta })).toEqual({ page: 1, pageSize: 20, total: 100, totalPages: 5 });
   });
 });
 

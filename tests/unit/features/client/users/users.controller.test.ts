@@ -69,9 +69,9 @@ describe('UsersController', () => {
   describe('POST /users/me/avatar — 上传头像', () => {
     it('应传递 UploadedFile 调用 UsersService.updateAvatar', async () => {
       const file = {
-        type: 'memory' as const,
         fieldname: 'file',
-        filename: 'avatar.png',
+        originalname: 'avatar.png',
+        encoding: '7bit',
         mimetype: 'image/png',
         buffer: Buffer.from('png-data'),
         size: 8,

@@ -1,8 +1,8 @@
 import { createHash, randomUUID } from 'node:crypto';
-import { createReadStream } from 'node:fs';
 import { extname, parse } from 'node:path';
+import { BadRequestException } from '@nestjs/common';
 import { deburr } from 'es-toolkit/string';
-import type { UploadedFile } from '@/common/storage/interfaces/upload.interface';
+import { isMemoryUpload, isStreamUpload, type UploadedFile } from '@/common/storage/interfaces/upload.interface';
 import type { MediaSaveOptions } from '../interfaces/media.interface';
 
 const DEFAULT_PREFIX = 'media';
@@ -36,14 +36,17 @@ export async function computeFileHash(file: UploadedFile, contentBuffer?: Buffer
   if (contentBuffer) {
     return createHash('sha256').update(contentBuffer).digest('hex');
   }
-  if (file.type === 'memory') {
+  if (isMemoryUpload(file)) {
     return createHash('sha256').update(file.buffer).digest('hex');
   }
 
-  // 流式模式：从临时文件增量计算哈希（for-await 与项目其余流处理保持一致，异常自然上抛）
+  // 流式模式（仅可消费一次）：边读边算，异常自然上抛
+  if (!isStreamUpload(file)) {
+    throw new BadRequestException('上传载荷既非内存模式也非流式模式，无法计算内容哈希');
+  }
   const hash = createHash('sha256');
-  for await (const chunk of createReadStream(file.tmpPath)) {
-    hash.update(chunk);
+  for await (const chunk of file.stream) {
+    hash.update(chunk as Buffer);
   }
   return hash.digest('hex');
 }
@@ -64,7 +67,7 @@ export async function buildMediaPath(
 ): Promise<string> {
   const prefix = options?.prefix ?? DEFAULT_PREFIX;
   const naming = options?.naming ?? 'date-uuid';
-  const originalExt = extname(file.filename).toLowerCase();
+  const originalExt = extname(file.originalname).toLowerCase();
   const ext = overrideExt ? (overrideExt.startsWith('.') ? overrideExt : `.${overrideExt}`) : originalExt;
 
   if (typeof naming === 'function') {
@@ -73,6 +76,11 @@ export async function buildMediaPath(
 
   switch (naming) {
     case 'hash': {
+      // 兜底：流式载荷只能消费一次，此处读流算哈希会让调用方随后拿到已耗尽的流（静默写出 0 字节文件）。
+      // MediaService.save 已在上层拒绝该组合，这里保护直接调用 buildMediaPath 的场景。
+      if (!contentBuffer && isStreamUpload(file)) {
+        throw new BadRequestException('hash 命名需读取全量内容，流式上传请改用内存模式（FileInterceptor）或先落盘');
+      }
       const hash = await computeFileHash(file, contentBuffer);
       // 分散在两级目录中，防止单目录下文件过多 (如 uploads/media/a1/b2/a1b2c3d4...webp)
       const dir1 = hash.slice(0, 2);
@@ -81,7 +89,7 @@ export async function buildMediaPath(
     }
 
     case 'slug-random': {
-      const nameWithoutExt = parse(file.filename).name;
+      const nameWithoutExt = parse(file.originalname).name;
       const safeSlug = slugify(nameWithoutExt) || 'file';
       const randomSuffix = randomUUID().replace(/-/g, '').slice(0, 8);
       const yyyymmdd = getUtcDateString();

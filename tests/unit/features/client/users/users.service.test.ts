@@ -99,9 +99,9 @@ describe('UsersService (前端自助面)', () => {
 
   describe('updateAvatar() — 更新头像', () => {
     const avatarFile: UploadedFile = {
-      type: 'memory',
       fieldname: 'file',
-      filename: 'avatar.png',
+      originalname: 'avatar.png',
+      encoding: '7bit',
       mimetype: 'image/png',
       buffer: Buffer.from('png-data'),
       size: 8,

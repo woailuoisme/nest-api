@@ -1,4 +1,4 @@
-import { Global, Module } from '@nestjs/common';
+import { Module } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { DiscoveryModule } from '@nestjs/core';
 import { connect } from 'mqtt';
@@ -12,7 +12,7 @@ import { MqttService } from './transports/mqtt.service';
 import { parseMqttDsn, resolveMqttBrokerUrl } from './transports/utils/dsn.parser';
 
 /**
- * 全局工业物联网与 MQTT 5.0 设备控制核心模块
+ * 工业物联网与 MQTT 5.0 设备控制核心模块
  *
  * 统一收敛：
  * 1. MQTT 5.0 传输层客户端 (MqttService) 与拓扑探索 (MqttExplorerService)。
@@ -20,8 +20,9 @@ import { parseMqttDsn, resolveMqttBrokerUrl } from './transports/utils/dsn.parse
  * 3. 工业设备数字影子缓存与遥测领域事件分发 (IotTelemetryService)。
  * 4. 同步 RPC 指令下发与关联对比响应回执 (IotCommandService)。
  * 5. 模拟与查询 REST 控制器 (IotController)。
+ *
+ * 领域型模块，保持显式 import（不使用 @Global），以维持依赖关系可见性。
  */
-@Global()
 @Module({
   imports: [DiscoveryModule],
   controllers: [IotController],

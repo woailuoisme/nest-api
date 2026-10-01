@@ -121,11 +121,25 @@ Authorization: Bearer <your_access_token>
 >
 > 🔗 [API 幂等性工业级客户端接入指南](./idempotency.md)
 
-### 3.4 条件请求与并发防丢失 (Lost Update Prevention via ETag)
+### 3.5 安全响应头与跨站请求防护 (Security Headers & CSRF)
 
-- `GET /{version}/{resources}/:{id}` 响应头携带实体版本标识：`ETag: W/"<version_hash>"`；
-- `PATCH` / `PUT` 更新时请求头携带 `If-Match: W/"<version_hash>"`；
-- 若版本已过时，服务端拒绝写入并返回 `HTTP 412 Precondition Failed`，杜绝后写覆盖先写。
+服务端统一启用框架内置安全响应头（默认值与 helmet 8 一致）：`X-Content-Type-Options: nosniff`、`X-Frame-Options: SAMEORIGIN`、`Referrer-Policy`、`Cross-Origin-Opener-Policy`、`Cross-Origin-Resource-Policy`、`Strict-Transport-Security` 等，并移除 `X-Powered-By`。响应头由基础设施统一注入，端点无需自行声明。
+
+写请求受**基于 Fetch Metadata 的跨站请求防护**保护（非令牌方案）：
+
+- `GET` / `HEAD` / `OPTIONS` 恒放行；
+- 浏览器发起的跨站写请求（`Sec-Fetch-Site: cross-site`，或缺失该头且 `Origin` 与请求 Host 不匹配）返回 `403 Forbidden`；
+- **不带 `Origin` / `Sec-Fetch-Site` 的服务端调用（cURL、SDK、Webhook 回调）不受影响**；
+- 独立域名的前端需由服务端在 `TRUSTED_ORIGINS` 中登记来源；第三方回调端点（如微信支付结果通知）由服务端显式豁免。
+
+> ⚠️ 若前端部署在与 API 不同的域名下且未登记 `TRUSTED_ORIGINS`，跨域写请求将被 403 拒绝（读取类请求不受影响）。
+
+### 3.6 文件上传契约 (Multipart Upload)
+
+- 上传请求使用 `Content-Type: multipart/form-data`，**表单字段名由服务端定义并属对外契约**（如头像上传固定字段名 `file`）；
+- 单文件大小上限由服务端在流式读取过程中强制，超限返回 `413 Payload Too Large`；
+- 文件类型按 MIME 与扩展名双白名单校验，违规返回 `400 Bad Request`；
+- 流式上传（大文件）不经中间落盘，失败路径不残留半成品文件。
 
 ---
 
@@ -271,6 +285,9 @@ Authorization: Bearer <your_access_token>
 }
 ```
 
+> `fields` 的键为「点号分隔的字段路径」：顶层字段为 `email`，嵌套字段为 `profile.nickname`，
+> 数组元素为 `items.0.name`；无法归入具体字段的校验失败统一归入 `root`。
+
 #### 3. 服务器内部异常 (500 Internal Server Error)
 
 ```json
@@ -398,4 +415,7 @@ X-RateLimit-Reset: 1756137600
 - [ ] **规范命名**：URL 资源路径统一使用复数名词，JSON 属性统一使用 `camelCase`，枚举值统一使用 `UPPER_SNAKE`；
 - [ ] **写操作幂等**：重要状态变更与非幂等创建端点支持 `Idempotency-Key`，并经由数据库唯一约束原子抢占；
 - [ ] **并发安全防护**：核心并发修改支持 `ETag` 与 `If-Match` 校验，拦截丢失更新；
+- [ ] **跨站写保护就绪**：需被第三方服务端调用的写端点（Webhook 等）已加入服务端跨站防护豁免清单，避免被误拒；
+- [ ] **上传字段契约一致**：上传端点的 multipart 表单字段名与服务端定义一致（原生拦截器按字段名精确匹配）；
+- [ ] **错误码可机读**：需要客户端分支处理的业务错误已声明稳定错误码（`error.code`），不依赖文案解析；
 - [ ] **生产脱敏与追踪**：`x-request-id` 正确回写响应头，生产环境不泄露任何调试堆栈与内部系统细节。

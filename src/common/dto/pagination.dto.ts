@@ -1,5 +1,4 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { createZodDto } from 'nestjs-zod';
 import { z } from 'zod';
 import { PAGINATION } from '@/common/constants/app.constants';
 
@@ -16,15 +15,7 @@ export const PageOptionsSchema = z.object({
   pageSize: PageSizeSchema,
 });
 
-export class PageOptionsRequest extends createZodDto(PageOptionsSchema) {
-  get skip(): number {
-    return ((this.page ?? PAGINATION.DEFAULT_PAGE) - 1) * this.take;
-  }
-
-  get take(): number {
-    return this.pageSize ?? PAGINATION.DEFAULT_PER_PAGE;
-  }
-}
+export type PageOptionsRequest = z.infer<typeof PageOptionsSchema>;
 
 export class PageMetaResource {
   @ApiProperty({ example: 1, description: 'Current page number' })
@@ -70,10 +61,43 @@ export const CursorPageOptionsSchema = z.object({
   pageSize: PageSizeSchema,
 });
 
-export class CursorPageOptionsRequest extends createZodDto(CursorPageOptionsSchema) {
-  get take(): number {
-    return this.pageSize ?? PAGINATION.DEFAULT_PER_PAGE;
-  }
+export type CursorPageOptionsRequest = z.infer<typeof CursorPageOptionsSchema>;
+
+// ─── 分页输出契约（同一 schema 驱动运行时响应序列化与 OpenAPI 文档）────────────────
+
+/** Offset 分页元数据 schema（字段与 PageMetaResource 严格一致） */
+export const PageMetaSchema = z.object({
+  page: z.number().int().describe('Current page number'),
+  pageSize: z.number().int().describe('Items per page'),
+  total: z.number().int().describe('Total item count'),
+  totalPages: z.number().int().describe('Total number of pages'),
+});
+
+/** Cursor 分页元数据 schema（字段与 CursorPageMetaResource 严格一致） */
+export const CursorPageMetaSchema = z.object({
+  hasMore: z.boolean().describe('Indicates if there are more items'),
+  nextCursor: z.string().nullable().describe('Cursor to pass for next page'),
+  prevCursor: z.string().nullable().describe('Cursor to pass for previous page'),
+});
+
+/**
+ * 分页信封 schema 工厂：把资源 schema 包装为 `{ items, meta }` 输出契约。
+ *
+ * 供 `@SerializeOptions({ schema })` 运行时序列化与 OpenAPI 响应文档共用，确保两种分页信封结构永不漂移。
+ */
+export function paginatedEnvelopeSchema<T extends z.ZodType>(item: T) {
+  return z.object({
+    items: z.array(item).describe('列表数据集合（空数据时保底为空数组 []）'),
+    meta: PageMetaSchema.describe('Offset 分页元数据'),
+  });
+}
+
+/** Cursor 分页信封 schema 工厂 */
+export function cursorPaginatedEnvelopeSchema<T extends z.ZodType>(item: T) {
+  return z.object({
+    items: z.array(item).describe('列表数据集合（空数据时保底为空数组 []）'),
+    meta: CursorPageMetaSchema.describe('Cursor 游标分页元数据'),
+  });
 }
 
 export class CursorPageMetaResource {

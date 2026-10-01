@@ -1,5 +1,6 @@
-import { promises as fs } from 'node:fs';
+import { createReadStream, promises as fs } from 'node:fs';
 import { join } from 'node:path';
+import { Readable } from 'node:stream';
 import { PayloadTooLargeException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { createTestPng } from 'tests/factories/image.factory';
@@ -11,27 +12,26 @@ import type { UploadedFile } from '@/common/storage/interfaces/upload.interface'
 import { StorageService } from '@/common/storage/storage.service';
 import type { MediaJobs } from '@/jobs/media/media.jobs';
 
-/** 内存模式上传文件工厂 */
-function memoryImage(buffer: Buffer, filename = 'test.png', mimetype = 'image/png'): UploadedFile {
+/** 内存模式上传文件工厂（平台原生 UploadedMultipartFile 形状） */
+function memoryImage(buffer: Buffer, originalname = 'test.png', mimetype = 'image/png'): UploadedFile {
   return {
-    type: 'memory',
     fieldname: 'file',
-    filename,
+    originalname,
+    encoding: '7bit',
     mimetype,
     buffer,
     size: buffer.byteLength,
   };
 }
 
-/** 流式上传文件工厂 */
-function streamFile(tmpPath: string, filename = 'test.png', mimetype = 'image/png', truncated = false): UploadedFile {
+/** 流式上传文件工厂（平台原生 MultipartFileStream 形状） */
+function streamFile(stream: Readable, originalname = 'test.png', mimetype = 'image/png'): UploadedFile {
   return {
-    type: 'stream',
     fieldname: 'file',
-    filename,
+    originalname,
+    encoding: '7bit',
     mimetype,
-    tmpPath,
-    truncated,
+    stream,
   };
 }
 
@@ -92,6 +92,15 @@ describe('MediaService', () => {
       expect(result.metadata?.format).toBe('png');
     });
 
+    it('流式载荷 + hash 命名：应快速失败，避免静默产出 0 字节文件', async () => {
+      const file = streamFile(Readable.from([testImageBuffer]), 'clip.mp4', 'video/mp4');
+
+      await expect(mediaService.save(file, { prefix: 'videos', naming: 'hash' })).rejects.toThrow(
+        'hash 命名需读取全量内容',
+      );
+      expect(storageMock.put).not.toHaveBeenCalled();
+    });
+
     it('生成缩略图与多规格变体 (imgproxy JIT 动态签名模式，零额外磁盘写入)', async () => {
       const file = memoryImage(testImageBuffer, 'cover.png');
       const result = await mediaService.save(file, {
@@ -122,14 +131,7 @@ describe('MediaService', () => {
 
     it('非图片文件：直接存储，不调用图像处理', async () => {
       const textBuffer = Buffer.from('hello world');
-      const file: UploadedFile = {
-        type: 'memory',
-        fieldname: 'doc',
-        filename: 'document.pdf',
-        mimetype: 'application/pdf',
-        buffer: textBuffer,
-        size: textBuffer.byteLength,
-      };
+      const file = memoryImage(textBuffer, 'document.pdf', 'application/pdf');
 
       const result = await mediaService.save(file, { prefix: 'docs' });
       expect(storageMock.put).toHaveBeenCalledTimes(1);
@@ -138,32 +140,32 @@ describe('MediaService', () => {
       expect(result.variants).toBeUndefined();
     });
 
-    it('流式文件上传与临时文件清理', async () => {
-      const tmpPath = join(PATHS.STORAGE_TMP, `test-${Date.now()}.png`);
+    it('流式文件上传：内容被完整消费且不产生中间临时文件', async () => {
+      const srcPath = join(PATHS.STORAGE_TMP, `test-${Date.now()}.png`);
       await fs.mkdir(PATHS.STORAGE_TMP, { recursive: true });
-      await fs.writeFile(tmpPath, testImageBuffer);
+      await fs.writeFile(srcPath, testImageBuffer);
 
-      const file = streamFile(tmpPath, 'streamed.png');
+      const file = streamFile(createReadStream(srcPath), 'streamed.png');
       const result = await mediaService.save(file, { prefix: 'uploads' });
 
       expect(storageMock.put).toHaveBeenCalledTimes(1);
       expect(result.path).toMatch(/^uploads\/\d{8}\/[0-9a-f-]{36}\.png$/);
+      // 平台原生流式载荷由消费方直接读取，不落中间临时文件
+      expect((file as { stream: Readable }).stream.readableEnded).toBe(true);
 
-      // 临时文件应已被删除
-      const exists = await fs
-        .access(tmpPath)
-        .then(() => true)
-        .catch(() => false);
-      expect(exists).toBe(false);
+      await fs.rm(srcPath, { force: true });
     });
 
-    it('流式截断时抛出 PayloadTooLargeException (413) 且不读取到内存', async () => {
-      const tmpPath = join(PATHS.STORAGE_TMP, `test-trunc-${Date.now()}.png`);
-      await fs.mkdir(PATHS.STORAGE_TMP, { recursive: true });
-      await fs.writeFile(tmpPath, testImageBuffer);
+    it('流式载荷超限（原生流抛 PayloadTooLargeException）时中断且不落盘', async () => {
+      async function* failingStream() {
+        yield testImageBuffer.subarray(0, 16);
+        throw new PayloadTooLargeException('文件超出大小上限');
+      }
 
-      const file = streamFile(tmpPath, 'streamed.png', 'image/png', true);
+      const file = streamFile(Readable.from(failingStream()), 'too-big.png');
+
       await expect(mediaService.save(file)).rejects.toThrow(PayloadTooLargeException);
+      expect(storageMock.put).not.toHaveBeenCalled();
     });
 
     it('主图生成写入失败时自动安全回滚', async () => {

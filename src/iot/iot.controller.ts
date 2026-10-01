@@ -7,12 +7,17 @@ import { Roles } from '@/common/decorators/roles.decorator';
 import { ApiSuccessResponse } from '@/common/decorators/swagger-response.decorator';
 import {
   CommandResponseEntity,
-  DeviceCriticalEventDto,
+  type DeviceCriticalEventDto,
+  DeviceCriticalEventSchema,
+  DeviceIdSchema,
   DeviceShadowEntity,
-  DeviceTokenRequestDto,
+  type DeviceTokenRequestDto,
+  DeviceTokenRequestSchema,
   DeviceTokenResponseDto,
-  MockTelemetryDto,
-  SendCommandDto,
+  type MockTelemetryDto,
+  MockTelemetrySchema,
+  type SendCommandDto,
+  SendCommandSchema,
 } from './dto/iot.dto';
 import { IotCommandService } from './services/iot-command.service';
 import { IotTelemetryService } from './services/iot-telemetry.service';
@@ -41,7 +46,7 @@ export class IotController {
   @Get(':deviceId/shadow')
   @ApiOperation({ summary: '查询设备实时状态影子' })
   @ApiSuccessResponse(DeviceShadowEntity, { description: '设备影子状态' })
-  getShadow(@Param('deviceId') deviceId: string): DeviceShadowEntity {
+  getShadow(@Param('deviceId', { schema: DeviceIdSchema }) deviceId: string): DeviceShadowEntity {
     return this.telemetryService.getDeviceShadowOrFail(deviceId);
   }
 
@@ -50,7 +55,10 @@ export class IotController {
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: '向工业设备下发控制指令' })
   @ApiSuccessResponse(CommandResponseEntity, { description: '设备指令执行回执' })
-  async sendCommand(@Param('deviceId') deviceId: string, @Body() dto: SendCommandDto): Promise<CommandResponseEntity> {
+  async sendCommand(
+    @Param('deviceId', { schema: DeviceIdSchema }) deviceId: string,
+    @Body({ schema: SendCommandSchema }) dto: SendCommandDto,
+  ): Promise<CommandResponseEntity> {
     return this.commandService.sendCommand(deviceId, dto.command, dto.params, dto.timeoutMs);
   }
 
@@ -60,7 +68,7 @@ export class IotController {
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: '签发设备认证凭据' })
   @ApiSuccessResponse(DeviceTokenResponseDto, { description: 'Mosquitto 认证专用 JWT 凭据' })
-  issueDeviceToken(@Body() dto: DeviceTokenRequestDto): DeviceTokenResponseDto {
+  issueDeviceToken(@Body({ schema: DeviceTokenRequestSchema }) dto: DeviceTokenRequestDto): DeviceTokenResponseDto {
     return this.telemetryService.issueDeviceToken(dto);
   }
 
@@ -69,7 +77,7 @@ export class IotController {
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: '模拟工业设备遥测上报' })
   @ApiSuccessResponse(DeviceShadowEntity, { description: '遥测上报成功并更新影子' })
-  async mockTelemetry(@Body() dto: MockTelemetryDto): Promise<DeviceShadowEntity> {
+  async mockTelemetry(@Body({ schema: MockTelemetrySchema }) dto: MockTelemetryDto): Promise<DeviceShadowEntity> {
     return this.telemetryService.simulateTelemetry(dto.tenantId, dto.deviceId, dto.telemetry);
   }
 
@@ -77,7 +85,9 @@ export class IotController {
   @Roles(Role.OPERATOR, Role.ADMIN, Role.SUPER_ADMIN)
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: '模拟工业设备硬件告警' })
-  async mockEvent(@Body() dto: DeviceCriticalEventDto): Promise<{ success: boolean }> {
+  async mockEvent(
+    @Body({ schema: DeviceCriticalEventSchema }) dto: DeviceCriticalEventDto,
+  ): Promise<{ success: boolean }> {
     await this.telemetryService.simulateEvent(dto);
     return { success: true };
   }

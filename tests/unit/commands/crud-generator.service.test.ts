@@ -45,6 +45,32 @@ describe('CrudGeneratorService', () => {
       expect(testArtifact!.outputPath).toBe('tests/unit/features/admin/sampleProduct/sampleProduct.service.test.ts');
       expect(testArtifact!.content).toContain("from '@/features/admin/sampleProduct/sampleProduct.service'");
     });
+
+    it('产物应使用原生 Standard Schema 契约（@Body({ schema }) + @SerializeOptions），且不再产出 createZodDto', () => {
+      const ctx = TemplateRenderer.buildContext('sample_product', [
+        { name: 'title', type: 'string', required: true, description: '产品标题' },
+        { name: 'price', type: 'float', required: true, description: '价格' },
+      ]);
+      const tmplDir = resolve(process.cwd(), 'src/commands/generator/templates');
+      const artifacts = TemplateRenderer.renderAll(tmplDir, ctx);
+
+      const dtoArtifact = artifacts.find((a) => a.outputPath.endsWith('.dto.ts'));
+      expect(dtoArtifact).toBeDefined();
+      // 输出契约：资源 schema 同时驱动运行时序列化与 OpenAPI，列表信封复用分页工厂
+      expect(dtoArtifact!.content).toContain('export const SampleProductResourceSchema = z.object({');
+      expect(dtoArtifact!.content).toContain('paginatedEnvelopeSchema(SampleProductResourceSchema)');
+
+      const controllerArtifact = artifacts.find((a) => a.outputPath.endsWith('.controller.ts'));
+      expect(controllerArtifact!.content).toContain('@Body({ schema: CreateSampleProductSchema })');
+      expect(controllerArtifact!.content).toContain('@Query({ schema: FindSampleProductsSchema })');
+      expect(controllerArtifact!.content).toContain('@SerializeOptions({ schema: SampleProductResourceSchema })');
+      expect(controllerArtifact!.content).toContain('@SerializeOptions({ schema: SampleProductPageResourceSchema })');
+
+      // 迁移到框架原生通道后不应再有任何 nestjs-zod 残留
+      for (const artifact of artifacts) {
+        expect(artifact.content).not.toContain('createZodDto');
+      }
+    });
   });
 
   describe('parseSchemaFields()', () => {

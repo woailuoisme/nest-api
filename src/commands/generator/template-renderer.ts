@@ -9,6 +9,7 @@ import {
   hasType,
   INTEGER_TYPES,
   REAL_TYPES,
+  RESPONSE_ZOD_VALIDATORS,
   SEARCHABLE_TYPES,
   TEXT_TYPES,
   TIMESTAMP_TYPES,
@@ -147,6 +148,16 @@ export const TemplateRenderer = {
       if (description) {
         zodFilterValidation += `.describe('搜索 ${escapeTsString(description)}')`;
       }
+
+      // 响应资源 schema：输出类型（无输入约束），可选列在实体上为 null
+      let zodResponseValidation = RESPONSE_ZOD_VALIDATORS[f.type] ?? 'z.string()';
+      if (isOptional) {
+        zodResponseValidation += '.nullable()';
+      }
+      if (description) {
+        zodResponseValidation += `.describe('${escapeTsString(description)}')`;
+      }
+
       return {
         name: f.name,
         type: f.type,
@@ -159,6 +170,7 @@ export const TemplateRenderer = {
         responseApiProperty: buildApiProperty(f.name, description, tsType, isOptional),
         zodValidation,
         zodFilterValidation,
+        zodResponseValidation,
         mockValue: cfg.mock,
         createMockValue: cfg.mock,
       };

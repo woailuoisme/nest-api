@@ -1,10 +1,14 @@
-import { createReadStream, promises as fs } from 'node:fs';
 import { extname } from 'node:path';
-import { Injectable, Logger, Optional, PayloadTooLargeException } from '@nestjs/common';
+import { BadRequestException, Injectable, Logger, Optional } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { isEmptyObject } from 'es-toolkit';
 import type { StorageDriver } from '@/common/storage/interfaces/storage.interface';
-import type { UploadedFile } from '@/common/storage/interfaces/upload.interface';
+import {
+  getUploadContent,
+  isMemoryUpload,
+  isStreamUpload,
+  type UploadedFile,
+} from '@/common/storage/interfaces/upload.interface';
 import { StorageService } from '@/common/storage/storage.service';
 import { MediaJobs } from '@/jobs/media/media.jobs';
 import { ImgproxyService } from './imgproxy/imgproxy.service';
@@ -77,21 +81,30 @@ export class MediaService {
    */
   async save(file: UploadedFile, opts?: MediaSaveOptions): Promise<MediaUploadResult> {
     const disk = this.storage.disk(opts?.disk);
-    const isImg = this.img.isImage(file.mimetype, file.filename);
+    const isImg = this.img.isImage(file.mimetype, file.originalname);
     const newlyCreatedPaths: string[] = [];
+    const isStream = !isMemoryUpload(file);
 
-    // 1. 严格流式防御：优先检测全局 limits 截断，避免将超大文件读入内存导致 OOM
-    if (file.type === 'stream' && file.truncated) {
-      await fs.unlink(file.tmpPath).catch(() => undefined);
-      throw new PayloadTooLargeException(`文件 ${file.filename} 超出大小上限`);
+    // 流式载荷只能消费一次，而 hash 命名需要在命名阶段读取全量内容 → 明确拒绝，避免静默产出空文件
+    if (isStream && opts?.naming === 'hash') {
+      throw new BadRequestException('hash 命名需读取全量内容，流式上传请改用内存模式（FileInterceptor）');
     }
 
     try {
-      // 2. 非图片文件（或 SVG 矢量）：保持 O(1) 流式直传存盘
-      if (!isImg || extname(file.filename).toLowerCase() === '.svg') {
+      // 1. 非图片文件（或 SVG 矢量）：保持 O(1) 流式直传存盘
+      if (!isImg || extname(file.originalname).toLowerCase() === '.svg') {
         const path = await buildMediaPath(file, opts);
-        const content = file.type === 'stream' ? createReadStream(file.tmpPath) : file.buffer;
-        return await this.persistToDisk(disk, path, content, file.mimetype, newlyCreatedPaths);
+        const content = getUploadContent(file);
+        try {
+          return await this.persistToDisk(disk, path, content, file.mimetype, newlyCreatedPaths);
+        } catch (error) {
+          // 流式载荷边写边传，中途失败（如超出 limits.fileSize 的 413）可能已留下部分写入的目标文件 → 幂等清理。
+          // 仅流式载荷需要：内存载荷在传入前已完整持有内容，写入失败不会产生半成品。
+          if (isStreamUpload(file)) {
+            await disk.delete(path).catch(() => undefined);
+          }
+          throw error;
+        }
       }
 
       // 3. 图片文件：提取 Buffer 并快速解析元数据
@@ -127,11 +140,6 @@ export class MediaService {
         await this.comp.deletePaths(disk, newlyCreatedPaths);
       }
       throw error;
-    } finally {
-      // 消费即删：确保流式临时文件彻底清理
-      if (file.type === 'stream') {
-        await fs.unlink(file.tmpPath).catch(() => undefined);
-      }
     }
   }
 
@@ -274,7 +282,15 @@ export class MediaService {
     return variants;
   }
 
+  /** 读取全量内容：内存载荷直接返回 buffer，流式载荷边读边聚合 */
   private async getFileBuffer(file: UploadedFile): Promise<Buffer> {
-    return file.type === 'memory' ? file.buffer : fs.readFile(file.tmpPath);
+    if (!isStreamUpload(file)) {
+      return file.buffer;
+    }
+    const chunks: Buffer[] = [];
+    for await (const chunk of file.stream) {
+      chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk as string));
+    }
+    return Buffer.concat(chunks);
   }
 }

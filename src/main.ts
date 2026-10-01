@@ -12,7 +12,18 @@ import { createFastifyAdapter, PinoLoggerService, setupApplicationPipeline, setu
  */
 async function bootstrap() {
   const timezone = setupTimezone();
-  const app = await NestFactory.create<NestFastifyApplication>(AppModule, createFastifyAdapter(), { bufferLogs: true });
+  const cookieSecret = process.env.COOKIE_SECRET;
+  const app = await NestFactory.create<NestFastifyApplication>(AppModule, createFastifyAdapter(), {
+    bufferLogs: true,
+    rawBody: true,
+    // 框架内置 Cookie 支持（opt-in）：仅当显式配置 COOKIE_SECRET 时启用，不凭空引入弱默认签名密钥
+    ...(cookieSecret ? { cookies: { secret: cookieSecret } } : {}),
+    // 路由冲突诊断：重复路由（method+path+version 完全一致）在注册前被拦截并直接拒绝启动。
+    // 注：框架仅在「顺序敏感」适配器上应用 shadow 策略；Fastify 适配器 isRouteOrderSensitive() 为 false，
+    // 其 radix 路由天然静态段优先（/users/me 不会被 /users/:id 遮蔽），故 shadow 与 routeResolutionStrategy 对 Fastify 均为 no-op，
+    // 保留 shadow 仅为切换适配器时行为不退化。
+    routeConflictPolicy: { duplicate: 'error', shadow: 'warn' },
+  });
 
   setupShutdownHooks(app);
   const panels = await setupApplicationPipeline(app);

@@ -1,8 +1,20 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { createZodDto } from 'nestjs-zod';
 import { z } from 'zod';
 
 // ─── 工业设备遥测上报 Schema & DTO ────────────────────────────────────────
+
+/**
+ * 设备标识 schema — 路径参数与请求体共用。
+ *
+ * 设备标识既可能是 UUID 也可能是产线序列号（如 `plc-01`），故不假设 UUID，
+ * 但必须排除路径穿越与控制字符，避免作为 MQTT topic / 影子键使用时污染拓扑。
+ */
+export const DeviceIdSchema = z
+  .string()
+  .min(1)
+  .max(64)
+  .regex(/^[A-Za-z0-9_.:-]+$/, '设备标识仅允许字母、数字与 _ . : -')
+  .describe('设备唯一标识符 (UUID / 序列号)');
 
 export const DeviceStatusEnum = z.enum(['running', 'idle', 'warning', 'fault']);
 export type DeviceStatus = z.infer<typeof DeviceStatusEnum>;
@@ -16,7 +28,7 @@ export const DeviceTelemetrySchema = z.object({
   timestamp: z.number().optional().describe('遥测采集时间戳 (毫秒)'),
 });
 
-export class DeviceTelemetryDto extends createZodDto(DeviceTelemetrySchema) {}
+export type DeviceTelemetryDto = z.infer<typeof DeviceTelemetrySchema>;
 
 // ─── 工业设备指令下发 Schema & DTO ────────────────────────────────────────
 
@@ -26,7 +38,7 @@ export const SendCommandSchema = z.object({
   timeoutMs: z.number().int().min(500).max(60000).default(5000).optional().describe('等待设备响应超时阈值 (毫秒)'),
 });
 
-export class SendCommandDto extends createZodDto(SendCommandSchema) {}
+export type SendCommandDto = z.infer<typeof SendCommandSchema>;
 
 // ─── 模拟遥测测试 Schema & DTO ────────────────────────────────────────────
 
@@ -36,17 +48,17 @@ export const MockTelemetrySchema = z.object({
   telemetry: DeviceTelemetrySchema.describe('遥测数据载荷'),
 });
 
-export class MockTelemetryDto extends createZodDto(MockTelemetrySchema) {}
+export type MockTelemetryDto = z.infer<typeof MockTelemetrySchema>;
 
 // ─── 设备安全凭证签发 Schema & DTO ──────────────────────────────────────────
 
 export const DeviceTokenRequestSchema = z.object({
-  deviceId: z.string().min(1).describe('设备唯一标识符 (UUID / 序列号)'),
+  deviceId: DeviceIdSchema,
   deviceSecret: z.string().min(6).describe('设备预置通信密钥 (Pre-Shared Secret)'),
   tenantId: z.string().default('default').optional().describe('所属租户 ID'),
 });
 
-export class DeviceTokenRequestDto extends createZodDto(DeviceTokenRequestSchema) {}
+export type DeviceTokenRequestDto = z.infer<typeof DeviceTokenRequestSchema>;
 
 export class DeviceTokenResponseDto {
   @ApiProperty({ example: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...', description: 'Mosquitto 认证专用 JWT 凭证' })
@@ -63,7 +75,7 @@ export class DeviceTokenResponseDto {
 
 export const DeviceCriticalEventSchema = z.object({
   tenantId: z.string().default('default').describe('租户 ID'),
-  deviceId: z.string().min(1).describe('设备序列号'),
+  deviceId: DeviceIdSchema.describe('设备序列号'),
   level: z.enum(['warning', 'critical']).default('warning').describe('告警等级'),
   metric: z.string().describe('告警测点或类型 (如 e_stop, over_temp, vibration_limit)'),
   value: z.number().describe('触发时测点数值'),
@@ -72,7 +84,7 @@ export const DeviceCriticalEventSchema = z.object({
   timestamp: z.number().optional().describe('事件发生时间戳 (毫秒)'),
 });
 
-export class DeviceCriticalEventDto extends createZodDto(DeviceCriticalEventSchema) {}
+export type DeviceCriticalEventDto = z.infer<typeof DeviceCriticalEventSchema>;
 
 // ─── 设备在线/遗嘱状态变更 Schema & DTO ────────────────────────────────────────
 
@@ -83,8 +95,6 @@ export const DeviceStatusPayloadSchema = z.object({
 });
 
 export type DeviceStatusPayload = z.infer<typeof DeviceStatusPayloadSchema>;
-
-export class DeviceStatusPayloadDto extends createZodDto(DeviceStatusPayloadSchema) {}
 
 // ─── 实体模型定义 ──────────────────────────────────────────────────────────
 
@@ -101,7 +111,8 @@ export class DeviceShadowEntity {
   @ApiProperty({ example: '2026-09-11T08:30:00.000Z', description: '最后一次通信时间' })
   lastSeenAt: string;
 
-  @ApiProperty({ type: () => DeviceTelemetryDto, nullable: true, description: '最新遥测影子快照' })
+  // 遥测字段契约由 DeviceTelemetrySchema 定义（该模块未纳入对外 Swagger 文档，此处仅作类型级说明）
+  @ApiProperty({ type: 'object', nullable: true, additionalProperties: true, description: '最新遥测影子快照' })
   telemetry: DeviceTelemetryDto | null;
 }
 

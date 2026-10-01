@@ -44,6 +44,21 @@ export const FILTER_ZOD_VALIDATORS: Record<FieldType, string> = {
   date: 'z.coerce.date().optional()',
 };
 
+/**
+ * 响应资源 schema 校验器：仅表达输出类型（不含 min/max 等输入约束）。
+ *
+ * 输出契约用于运行时白名单裁剪与 OpenAPI 文档，若复用输入的强约束会把合法数据判为非法（如非正值数值）。
+ */
+export const RESPONSE_ZOD_VALIDATORS: Record<FieldType, string> = {
+  string: 'z.string()',
+  email: 'z.string()',
+  number: 'z.number().int()',
+  float: 'z.number()',
+  boolean: 'z.boolean()',
+  text: 'z.string()',
+  date: 'z.date()',
+};
+
 // ─── 类型判断辅助 ───────────────────────────────────────
 
 const VARCHAR_TYPES = new Set<FieldType>(['string', 'email']);

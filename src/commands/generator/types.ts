@@ -35,6 +35,8 @@ export interface TemplateField {
   responseApiProperty: string;
   zodValidation: string;
   zodFilterValidation: string;
+  /** 响应资源 schema 校验器（输出类型，无输入约束） */
+  zodResponseValidation: string;
   mockValue: string;
   createMockValue: string;
 }

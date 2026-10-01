@@ -201,16 +201,16 @@ const fundFlow = await wepay.downloadFundFlowBill({ billDate: '2026-01-01', acco
 
 ### 4.1 原始报文验签（关键约束）
 
-微信 `Wechatpay-Signature` 覆盖的待签名串包含**原始 body 字符串**，重新 `JSON.stringify` 必然验签失败。项目在 `src/setup/plugins.ts` 注册了全局 JSON content-type parser：
+微信 `Wechatpay-Signature` 覆盖的待签名串包含**原始 body 字符串**，重新 `JSON.stringify` 必然验签失败。项目在 `src/main.ts` 的 `NestFactory.create` 选项中启用了 NestJS 原生 `rawBody: true` 支持：
 
 ```ts
-fastify.addContentTypeParser('application/json', { parseAs: 'string' }, (request, body, done) => {
-  (request as RawBodyFastifyRequest).rawBody = body;
-  done(null, body ? JSON.parse(body) : {});
+const app = await NestFactory.create<NestFastifyApplication>(AppModule, createFastifyAdapter(), {
+  bufferLogs: true,
+  rawBody: true,
 });
 ```
 
-该 parser 同时返回解析后的对象，既有 controller 的 `request.body` 语义零破坏，所有路由均可按需读取 `request.rawBody`。
+NestJS 的 `FastifyAdapter` 会在内部自动将原始报文 Buffer 挂载至 `request.rawBody`，同时保留 Fastify 原生安全的 JSON 解析（防原型污染与 bodyLimit），并在 `PaymentsController.extractRawBody` 中自动将 Buffer 解码为 UTF-8 字符串用于验签，保证 controller 既有 `request.body` 语义零破坏。
 
 ### 4.2 处理流程
 

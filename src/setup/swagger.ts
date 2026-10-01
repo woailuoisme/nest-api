@@ -5,18 +5,20 @@ import type { NestFastifyApplication } from '@nestjs/platform-fastify';
 import type { OpenAPIObject } from '@nestjs/swagger';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import { renderApiReference } from '@scalar/client-side-rendering';
-import { cleanupOpenApiDoc } from 'nestjs-zod';
 import { APP_VERSION, OPENAPI_VERSION, PATHS, ROUTES } from '@/common/constants/app.constants';
 import { ADMIN_FEATURE_MODULES, CLIENT_FEATURE_MODULES } from '@/features';
 import { BETTER_AUTH_SECURITY_SCHEMES, getProcessedBetterAuthOpenAPI } from './swagger/better-auth-openapi';
+import { zodStandardSchemaConverter } from './swagger/standard-schema-converter';
 
 function createCleanDocument(
   app: NestFastifyApplication,
   config: Omit<OpenAPIObject, 'paths'>,
   include: readonly Type<unknown>[],
 ): OpenAPIObject {
-  const rawDocument = SwaggerModule.createDocument(app, config, { include: [...include] });
-  const doc = cleanupOpenApiDoc(rawDocument);
+  const doc = SwaggerModule.createDocument(app, config, {
+    include: [...include],
+    standardSchemaConverter: zodStandardSchemaConverter,
+  });
   delete doc.paths['/auth/{path}'];
   delete doc.paths['/v1/auth/{path}'];
   delete doc.paths['/v1/auth/*'];

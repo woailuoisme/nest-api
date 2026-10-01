@@ -1,10 +1,9 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { createZodDto } from 'nestjs-zod';
 import { z } from 'zod';
 import { Role } from '@/common/constants/roles';
-import { PageOptionsSchema } from '@/common/dto/pagination.dto';
+import { PageOptionsSchema, paginatedEnvelopeSchema } from '@/common/dto/pagination.dto';
 
-// ─── 请求 DTO ────────────────────────────────────────────
+// ─── 请求 DTO（Nest 12 原生 Standard Schema：schema 即契约，类型由 z.infer 派生）────────
 
 export const CreateUserSchema = z.object({
   name: z.string().trim().min(2).max(100).describe('用户名称'),
@@ -13,7 +12,7 @@ export const CreateUserSchema = z.object({
   role: z.enum(Role).optional().describe('角色'),
 });
 
-export class CreateUserRequest extends createZodDto(CreateUserSchema) {}
+export type CreateUserRequest = z.infer<typeof CreateUserSchema>;
 
 export const FindUsersSchema = PageOptionsSchema.extend({
   search: z.string().optional().describe('按姓名或邮箱模糊搜索'),
@@ -22,27 +21,27 @@ export const FindUsersSchema = PageOptionsSchema.extend({
   filter: z.record(z.string(), z.string()).optional().describe('Spatie 风格过滤对象'),
 });
 
-export class FindUsersRequest extends createZodDto(FindUsersSchema) {}
+export type FindUsersRequest = z.infer<typeof FindUsersSchema>;
 
 export const SearchUsersSchema = PageOptionsSchema.extend({
   q: z.string().default('').describe('搜索关键词'),
   role: z.enum(Role).optional().describe('按角色筛选'),
 });
 
-export class SearchUsersRequest extends createZodDto(SearchUsersSchema) {}
+export type SearchUsersRequest = z.infer<typeof SearchUsersSchema>;
 
 export const UpdateUserSchema = z.object({
   name: z.string().trim().min(2).max(100).optional().describe('用户名称'),
   email: z.email().toLowerCase().trim().optional().describe('电子邮箱'),
 });
 
-export class UpdateUserRequest extends createZodDto(UpdateUserSchema) {}
+export type UpdateUserRequest = z.infer<typeof UpdateUserSchema>;
 
 export const ChangeRoleSchema = z.object({
   role: z.enum(Role).describe('目标角色'),
 });
 
-export class ChangeRoleRequest extends createZodDto(ChangeRoleSchema) {}
+export type ChangeRoleRequest = z.infer<typeof ChangeRoleSchema>;
 
 // ─── 响应 DTO ────────────────────────────────────────────
 
@@ -57,6 +56,29 @@ function toDate(value: Date | number | string): Date {
   const ms = typeof value === 'number' && value < SECONDS_TIMESTAMP_UPPER_BOUND ? value * 1000 : value;
   return new Date(ms);
 }
+
+/**
+ * 用户资源输出契约（运行时响应序列化 + OpenAPI 文档的单一事实源）
+ *
+ * 以白名单方式裁剪 `new UserEntity(row)` 自 `user` 表带入的其余列
+ * （twoFactorEnabled / phoneNumber / lastLoginMethod / isAnonymous 等），杜绝敏感字段意外外泄。
+ */
+export const UserResourceSchema = z.object({
+  id: z.string().describe('用户ID'),
+  name: z.string().describe('用户名'),
+  email: z.string().describe('邮箱'),
+  role: z.enum(Role).describe('角色'),
+  image: z.string().nullable().describe('头像URL'),
+  avatarUrl: z.string().nullable().describe('头像URL (别名)'),
+  emailVerified: z.boolean().describe('邮箱是否已验证'),
+  banned: z.boolean().nullish().describe('是否被封禁'),
+  banReason: z.string().nullish().describe('封禁原因'),
+  createdAt: z.date().describe('创建时间'),
+  updatedAt: z.date().describe('更新时间'),
+});
+
+/** 用户分页列表输出契约（`{ items, meta }` 信封） */
+export const UserPageResourceSchema = paginatedEnvelopeSchema(UserResourceSchema);
 
 export class UserEntity {
   @ApiProperty({ example: '018e3d60-0000-7000-8000-000000000001', description: '用户ID' })

@@ -1,10 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import {
-  CentrifugoProxySubscribeDto,
-  CentrifugoProxySubscribeSchema,
-  RealtimeSubscribeDto,
-  RealtimeSubscribeSchema,
-} from '@/realtime/dto/realtime.dto';
+import { CentrifugoProxySubscribeSchema, RealtimeSubscribeSchema } from '@/realtime/dto/realtime.dto';
 
 describe('RealtimeSubscribeDto & Schema', () => {
   it('合法的订阅载荷应成功解析', () => {
@@ -51,11 +46,6 @@ describe('RealtimeSubscribeDto & Schema', () => {
 
     expect(() => RealtimeSubscribeSchema.parse(invalidData)).toThrow();
   });
-
-  it('RealtimeSubscribeDto 实例与 Schema 契约一致', () => {
-    expect(RealtimeSubscribeDto).toBeDefined();
-    expect(RealtimeSubscribeDto.schema).toBe(RealtimeSubscribeSchema);
-  });
 });
 
 describe('CentrifugoProxySubscribeDto & Schema', () => {
@@ -87,10 +77,5 @@ describe('CentrifugoProxySubscribeDto & Schema', () => {
 
   it('channel 为空时应抛出校验异常', () => {
     expect(() => CentrifugoProxySubscribeSchema.parse({ channel: '' })).toThrow('channel 不能为空');
-  });
-
-  it('CentrifugoProxySubscribeDto 实例与 Schema 契约一致', () => {
-    expect(CentrifugoProxySubscribeDto).toBeDefined();
-    expect(CentrifugoProxySubscribeDto.schema).toBe(CentrifugoProxySubscribeSchema);
   });
 });

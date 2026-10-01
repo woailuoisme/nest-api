@@ -48,9 +48,13 @@ export class PaymentsController {
    * 提取原始报文
    *
    * 微信要求以原始 body 而非重新序列化的 JSON 验签，rawBody 由
-   * `src/setup/plugins.ts` 中的全局 JSON content-type parser 挂载。
+   * NestJS 原生 `{ rawBody: true }` 挂载为 Buffer。
    */
   private extractRawBody(request: FastifyRequest): string {
-    return (request as RawBodyFastifyRequest).rawBody ?? '';
+    const raw = (request as RawBodyFastifyRequest).rawBody;
+    if (Buffer.isBuffer(raw)) {
+      return raw.toString('utf-8');
+    }
+    return typeof raw === 'string' ? raw : '';
   }
 }

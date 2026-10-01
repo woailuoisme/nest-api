@@ -1,63 +1,84 @@
 /**
- * 上传链路 E2E 测试 — 真实 @fastify/multipart + 真实 multipart body。
+ * 上传链路 E2E — 平台原生 multipart 拦截器（`@nestjs/platform-fastify/multipart`）。
  *
- * 覆盖：单/多文件 streamToDisk 不挂起（P0 回归）、内存模式收集、
- *      流式 save 落盘与 tmp 清理、超限 413、mime 校验 400。
+ * 覆盖：内存模式收集与精确 size、流式载荷完整消费（无中间临时文件、不挂起）、
+ *      落盘与最终 URL、超出 limits.fileSize 的 413（内存与流式两路）、fileFilter 白名单 400。
  *
- * 隔离：最终文件落 storage/tmp/e2e-uploads，拦截器 tmp 落 storage/tmp（git 忽略），afterAll 统一清理。
+ * 隔离：最终文件落 storage/tmp/e2e-uploads（git 忽略），afterAll 统一清理并断言无残留。
  */
 import { promises as fs } from 'node:fs';
 import { join } from 'node:path';
 import fastifyMultipart from '@fastify/multipart';
-import { Controller, Post } from '@nestjs/common';
+import {
+  Controller,
+  Post,
+  UploadedFile as UploadedFileDecorator,
+  UploadedFiles as UploadedFilesDecorator,
+  UseInterceptors,
+} from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
-import { APP_INTERCEPTOR } from '@nestjs/core';
-import { FastifyAdapter, NestFastifyApplication } from '@nestjs/platform-fastify';
+import { FastifyAdapter, type NestFastifyApplication } from '@nestjs/platform-fastify';
+import { FileInterceptor, FileStreamInterceptor, FilesInterceptor } from '@nestjs/platform-fastify/multipart';
 import { Test, TestingModule } from '@nestjs/testing';
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { PATHS } from '@/common/constants/app.constants';
-import { UploadedFile, UploadedFiles } from '@/common/decorators/uploaded.decorator';
-import { MultipartInterceptor } from '@/common/interceptors/multipart.interceptor';
 import { MediaModule } from '@/common/media/media.module';
 import { MediaService } from '@/common/media/media.service';
-import type { UploadedFile as UploadedFilePayload } from '@/common/storage/interfaces/upload.interface';
+import {
+  createUploadFileFilter,
+  isStreamUpload,
+  type UploadedFile,
+} from '@/common/storage/interfaces/upload.interface';
 import { StorageModule } from '@/common/storage/storage.module';
 
-/** E2E 专用上传控制器 — 各路由分别覆盖一种载荷形态 */
+/** E2E 专用上传控制器 — 各路由分别覆盖一种原生拦截器/载荷形态 */
 @Controller('test-upload')
 class UploadTestController {
   constructor(private readonly mediaService: MediaService) {}
 
-  /** 内存模式：单文件收集 */
+  /** 内存模式：单文件收集（默认 memoryStorage） */
   @Post('memory')
-  uploadMemory(@UploadedFile() file: UploadedFilePayload | undefined) {
-    if (file?.type !== 'memory') return { ok: false };
-    return { ok: true, filename: file.filename, size: file.size };
+  @UseInterceptors(FileInterceptor('file'))
+  uploadMemory(@UploadedFileDecorator() file?: UploadedFile) {
+    if (!file || isStreamUpload(file)) return { ok: false };
+    return { ok: true, filename: file.originalname, size: file.size };
   }
 
-  /** 流式模式：仅收集不消费 — 若流未被消费，handler 永不执行，请求即挂起（P0 回归点） */
+  /** 流式模式：完整消费流并统计字节数（不消费会触发 busboy 回压导致请求挂起，P0 回归点） */
   @Post('stream')
-  uploadStream(@UploadedFile({ streamToDisk: true }) file: UploadedFilePayload | undefined) {
-    if (file?.type !== 'stream') return { ok: false };
-    return { ok: true, filename: file.filename, tmpPath: file.tmpPath };
+  @UseInterceptors(FileStreamInterceptor('file'))
+  async uploadStream(@UploadedFileDecorator() file?: UploadedFile) {
+    if (!file || !isStreamUpload(file)) return { ok: false };
+    let bytes = 0;
+    for await (const chunk of file.stream) {
+      bytes += Buffer.isBuffer(chunk) ? chunk.length : Buffer.byteLength(chunk as string);
+    }
+    return { ok: true, filename: file.originalname, bytes };
   }
 
-  /** 流式模式 + save 落盘（写盘后判定截断 → 413） */
+  /** 流式模式 + save 落盘 */
   @Post('stream-save')
-  async uploadStreamSave(@UploadedFile({ streamToDisk: true }) file: UploadedFilePayload) {
+  @UseInterceptors(FileStreamInterceptor('file'))
+  async uploadStreamSave(@UploadedFileDecorator() file: UploadedFile) {
     const { url } = await this.mediaService.save(file, { prefix: 'e2e' });
     return { ok: true, url };
   }
 
-  /** 流式模式：多文件收集 */
+  /** 多文件收集（同字段名多文件） */
   @Post('multiple')
-  uploadMultiple(@UploadedFiles({ streamToDisk: true }) files: UploadedFilePayload[]) {
-    return { ok: true, count: files.length, filenames: files.map((f) => f.filename) };
+  @UseInterceptors(FilesInterceptor('file', 5))
+  uploadMultiple(@UploadedFilesDecorator() files: UploadedFile[] = []) {
+    return { ok: true, count: files.length, filenames: files.map((f) => f.originalname) };
   }
 
-  /** 内存模式 + mime 白名单校验 */
+  /** 内存模式 + fileFilter 白名单校验 */
   @Post('validated')
-  uploadValidated(@UploadedFile({ allowedMime: ['image/png'] }) _file: UploadedFilePayload) {
+  @UseInterceptors(
+    FileInterceptor('file', {
+      fileFilter: createUploadFileFilter({ allowedMime: ['image/png'], allowedExt: ['.png'] }),
+    }),
+  )
+  uploadValidated(@UploadedFileDecorator() _file?: UploadedFile) {
     return { ok: true };
   }
 }
@@ -83,6 +104,22 @@ function buildMultipart(
 async function listTmpFiles(): Promise<string[]> {
   try {
     return (await fs.readdir(join(process.cwd(), PATHS.STORAGE_TMP))).filter((name) => name !== 'e2e-uploads');
+  } catch {
+    return [];
+  }
+}
+
+/** 递归收集目录下的文件（空目录不计入 —— 流式写入失败可能留下空目录树，属可接受状态） */
+async function listFilesRecursively(dir: string): Promise<string[]> {
+  try {
+    const entries = await fs.readdir(dir, { withFileTypes: true });
+    const nested = await Promise.all(
+      entries.map(async (entry) => {
+        const full = join(dir, entry.name);
+        return entry.isDirectory() ? listFilesRecursively(full) : [full];
+      }),
+    );
+    return nested.flat();
   } catch {
     return [];
   }
@@ -115,11 +152,10 @@ describe('上传链路 (e2e)', () => {
         }),
       ],
       controllers: [UploadTestController],
-      providers: [{ provide: APP_INTERCEPTOR, useClass: MultipartInterceptor }],
     }).compile();
 
     app = moduleFixture.createNestApplication<NestFastifyApplication>(new FastifyAdapter());
-    // 显式注册 multipart 插件：fileSize=2048B，正常文件通过、超大文件触发截断
+    // 全局 multipart 插件：fileSize=2048B，原生拦截器未显式声明 limits 时回落到此（与生产一致）
     await app.register(fastifyMultipart as unknown as Parameters<typeof app.register>[0], {
       limits: { fileSize: 2048 },
     });
@@ -153,17 +189,15 @@ describe('上传链路 (e2e)', () => {
     return post(url, buildMultipart([filePart(filename, mimetype, content)], boundary));
   }
 
-  it('单文件 streamToDisk 请求不挂起并返回 tmpPath（P0 回归）', async () => {
-    const response = await postFile('/test-upload/stream', 'a.png', 'image/png', Buffer.from('hello e2e'));
+  it('流式载荷完整消费且请求不挂起（P0 回归）', async () => {
+    const content = Buffer.from('hello e2e');
+    const response = await postFile('/test-upload/stream', 'a.png', 'image/png', content);
 
     expect(response.statusCode).toBe(201);
-    const body = JSON.parse(response.payload);
-    expect(body.ok).toBe(true);
-    expect(body.filename).toBe('a.png');
-    expect(body.tmpPath).toMatch(/^storage[\\/]tmp[\\/][0-9a-f-]{36}$/);
+    expect(JSON.parse(response.payload)).toMatchObject({ ok: true, filename: 'a.png', bytes: content.length });
   });
 
-  it('多文件 streamToDisk 顺序收集', async () => {
+  it('多文件顺序收集', async () => {
     const payload = buildMultipart(
       [filePart('a.png', 'image/png', Buffer.from('aaa')), filePart('b.txt', 'text/plain', Buffer.from('bbb'))],
       boundary,
@@ -182,7 +216,7 @@ describe('上传链路 (e2e)', () => {
     expect(JSON.parse(response.payload)).toMatchObject({ ok: true, filename: 'a.png', size: content.length });
   });
 
-  it('流式 save 落盘到最终路径并返回 URL，tmp 消费即删', async () => {
+  it('流式 save 落盘到最终路径并返回 URL，且不产生中间临时文件', async () => {
     const content = Buffer.from('final content');
     const response = await postFile('/test-upload/stream-save', 'a.png', 'image/png', content);
 
@@ -195,7 +229,7 @@ describe('上传链路 (e2e)', () => {
     expect(await listTmpFiles()).toHaveLength(0);
   });
 
-  it('超过 fileSize 上限 → 写盘后判定截断抛 413，失败路径无孤儿残留', async () => {
+  it('流式载荷超过 fileSize 上限 → 413 且无孤儿文件', async () => {
     const response = await postFile(
       '/test-upload/stream-save',
       'big.bin',
@@ -204,15 +238,14 @@ describe('上传链路 (e2e)', () => {
     );
 
     expect(response.statusCode).toBe(413);
-    // 失败路径不残留最终文件
-    expect(await fs.readdir(uploadRoot).catch(() => [])).toHaveLength(0);
-    // P0 修复回归：超限触发 pipeline 拒绝时，部分写入的 tmp 文件必须被清理
+    // 失败路径不残留任何（含部分写入的）最终文件
+    expect(await listFilesRecursively(uploadRoot)).toHaveLength(0);
     await vi.waitFor(async () => {
       expect(await listTmpFiles()).toHaveLength(0);
     });
   });
 
-  it('内存模式超限 → 拦截器直接抛 413', async () => {
+  it('内存模式超限 → 413', async () => {
     const response = await postFile(
       '/test-upload/memory',
       'big.bin',
@@ -223,13 +256,13 @@ describe('上传链路 (e2e)', () => {
     expect(response.statusCode).toBe(413);
   });
 
-  it('mime 不在白名单 → 400', async () => {
+  it('mime / 扩展名不在白名单 → 400', async () => {
     const response = await postFile('/test-upload/validated', 'a.exe', 'application/x-msdownload', Buffer.from('x'));
 
     expect(response.statusCode).toBe(400);
   });
 
-  it('请求结束后 storage/tmp 无残留文件（finalize / onResponse 兜底）', async () => {
+  it('请求结束后 storage/tmp 无残留文件', async () => {
     await postFile('/test-upload/stream', 'a.png', 'image/png', Buffer.from('x'));
 
     await vi.waitFor(async () => {

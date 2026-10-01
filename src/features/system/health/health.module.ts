@@ -1,5 +1,8 @@
 import { Module } from '@nestjs/common';
 import { TerminusModule } from '@nestjs/terminus';
+import { MediaModule } from '@/common/media/media.module';
+import { IotModule } from '@/iot/iot.module';
+import { RealtimeModule } from '@/realtime/realtime.module';
 import { HealthController } from './health.controller';
 import { CentrifugoHealthIndicator } from './indicators/centrifugo-health.indicator';
 import { CircuitBreakerHealthIndicator } from './indicators/circuit-breaker-health.indicator';
@@ -14,7 +17,8 @@ import { StorageHealthIndicator } from './indicators/storage-health.indicator';
 import { WepayHealthIndicator } from './indicators/wepay-health.indicator';
 
 @Module({
-  imports: [TerminusModule],
+  // 探针依赖的领域模块显式 import（Media/Iot/Realtime 均为非全局模块）
+  imports: [TerminusModule, MediaModule, IotModule, RealtimeModule],
   controllers: [HealthController],
   providers: [
     DatabaseHealthIndicator,

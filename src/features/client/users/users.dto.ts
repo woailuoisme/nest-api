@@ -1,7 +1,26 @@
 import { ApiProperty } from '@nestjs/swagger';
+import { z } from 'zod';
 import { Role } from '@/common/constants/roles';
 
 // ─── 响应 DTO ────────────────────────────────────────────
+
+/**
+ * 用户资源输出契约（前端自助面）
+ *
+ * 与 admin 管理面相互独立：以白名单裁剪 `new UserEntity(row)` 带入的 user 表其余列，
+ * 同时作为 `@SerializeOptions({ schema })` 运行时序列化与 OpenAPI 文档的单一事实源。
+ */
+export const UserResourceSchema = z.object({
+  id: z.string().describe('用户ID'),
+  name: z.string().describe('用户名'),
+  email: z.string().describe('邮箱'),
+  role: z.enum(Role).describe('角色'),
+  image: z.string().nullable().describe('头像URL'),
+  avatarUrl: z.string().nullable().describe('头像URL (别名)'),
+  emailVerified: z.boolean().describe('邮箱是否已验证'),
+  createdAt: z.date().describe('创建时间'),
+  updatedAt: z.date().describe('更新时间'),
+});
 
 /** 秒级时间戳上界：小于该量级视为秒级（毫秒时间戳自 1973 年起即远超此值） */
 const SECONDS_TIMESTAMP_UPPER_BOUND = 1e11;
