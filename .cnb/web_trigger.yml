@@ -2,12 +2,12 @@
 # 文档: https://docs.cnb.cool/zh/build/web-trigger.html
 #
 # 说明：multi-arch 手动任务已移除，main 分支的推送会自动构建并推送
-# amd64 镜像（tags: latest, latest-amd64，见 .cnb.yml 的 main.push）。
+# amd64 镜像（tags: latest, alpine，见 .cnb.yml 的 main.push）。
 
 branch:
   - buttons:
       - name: Docker build (amd64)
-        description: "Fast build and push linux/amd64 image only (tag: latest-amd64)"
+        description: "Fast build and push linux/amd64 image (tags: latest, alpine)"
         event: web_trigger_amd64
 
       - name: Helm chart publish

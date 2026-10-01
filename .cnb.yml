@@ -1,10 +1,10 @@
 # ── push main：自动构建并推送镜像 ────────────────────────────────────
 main:
   push:
-    # 合并进 main 即构建并推送 amd64 镜像 -> latest, latest-amd64
+    # 合并进 main 即构建并推送 amd64 镜像 -> latest, alpine
     # 单架构（linux/amd64）不经 QEMU，构建更快；如需 arm64，请走 v* 标签发布（tag_push）
     # 或 .github/workflows/build.yml 的多架构流水线（推送 GHCR / Docker Hub）。
-    # 与手动 amd64 任务共享 latest-amd64-cache 缓存层。
+    # alpine 为变体标签（镜像基于 oven/bun:*-alpine），与 latest 指向同一构建产物。
     - services:
         - docker
       stages:
@@ -14,17 +14,17 @@ main:
             REGISTRY="${CNB_DOCKER_REGISTRY}/${CNB_REPO_SLUG_LOWERCASE}"
             docker buildx build \
               --tag "${REGISTRY}:latest" \
-              --tag "${REGISTRY}:latest-amd64" \
+              --tag "${REGISTRY}:alpine" \
               --file deploy/app/Dockerfile \
               --platform linux/amd64 \
-              --cache-from "type=registry,ref=${REGISTRY}:latest-amd64-cache" \
-              --cache-to "type=registry,ref=${REGISTRY}:latest-amd64-cache,mode=max,image-manifest=true,oci-mediatypes=true" \
+              --cache-from "type=registry,ref=${REGISTRY}:amd64-cache" \
+              --cache-to "type=registry,ref=${REGISTRY}:amd64-cache,mode=max,image-manifest=true,oci-mediatypes=true" \
               --push \
               .
 
 # ── 全局：手动触发 & 标签发布 ────────────────────────────────────────
 $:
-  # 手动触发：构建并推送 amd64 单架构镜像 -> latest-amd64（仅单标签，便于快速验证）
+  # 手动触发：按 main 同一套标签快建一次镜像 -> latest, alpine
   web_trigger_amd64:
     - services:
         - docker
@@ -34,11 +34,12 @@ $:
             set -euo pipefail
             REGISTRY="${CNB_DOCKER_REGISTRY}/${CNB_REPO_SLUG_LOWERCASE}"
             docker buildx build \
-              --tag "${REGISTRY}:latest-amd64" \
+              --tag "${REGISTRY}:latest" \
+              --tag "${REGISTRY}:alpine" \
               --file deploy/app/Dockerfile \
               --platform linux/amd64 \
-              --cache-from "type=registry,ref=${REGISTRY}:latest-amd64-cache" \
-              --cache-to "type=registry,ref=${REGISTRY}:latest-amd64-cache,mode=max,image-manifest=true,oci-mediatypes=true" \
+              --cache-from "type=registry,ref=${REGISTRY}:amd64-cache" \
+              --cache-to "type=registry,ref=${REGISTRY}:amd64-cache,mode=max,image-manifest=true,oci-mediatypes=true" \
               --push \
               .
 
@@ -56,7 +57,7 @@ $:
             CHART_FILE=$(ls *.tgz | head -1)
             helm push "${CHART_FILE}" oci://${CNB_HELM_REGISTRY}/${CNB_GROUP_SLUG_LOWERCASE}
 
-  # 推送 v* 标签：构建版本化镜像
+  # 推送 v* 标签：构建版本化镜像（保留版本号标签供 tag_deploy.yml 固定部署）
   tag_push:
     - services:
         - docker
