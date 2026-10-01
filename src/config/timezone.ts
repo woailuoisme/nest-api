@@ -1,6 +1,6 @@
 /**
  * 全局时区工具 — 统一进程时区（默认东八区 Asia/Shanghai）。
- * 在 Nest 应用创建前调用，使日志显示、pino-roll 换日边界、定时任务均按配置时区工作。
+ * 在 Nest 应用创建前调用，使日志时间戳、定时任务均按配置时区工作。
  */
 
 /** 默认 IANA 时区（东八区） */
@@ -22,9 +22,10 @@ export function setupTimezone(): string {
 
   process.env.TZ = timezone;
 
-  // 触发 Intl 内部时区缓存刷新（Node 对 process.env.TZ 变更的缓存策略）
+  // 触发 Intl 内部时区缓存刷新（Node 对 process.env.TZ 变更的缓存策略）：
+  // 构造 + 解析本身即副作用，无需再取 timeZone 值
   try {
-    new Intl.DateTimeFormat().resolvedOptions().timeZone;
+    new Intl.DateTimeFormat().resolvedOptions();
   } catch {
     // 平台不支持时忽略
   }
