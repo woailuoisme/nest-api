@@ -1,7 +1,9 @@
+import fastifyCompress from '@fastify/compress';
+import fastifyMultipart from '@fastify/multipart';
+import fastifyStatic from '@fastify/static';
 import { ConfigService } from '@nestjs/config';
 import type { NestFastifyApplication } from '@nestjs/platform-fastify';
 import { describe, expect, it, vi } from 'vitest';
-import { auth } from '@/common/auth/better-auth';
 import { PinoLoggerService } from '@/setup/logger/pino-logger.service';
 import { registerFastifyPlugins } from '@/setup/plugins';
 
@@ -22,13 +24,6 @@ describe('registerFastifyPlugins', () => {
 
     const routes: Record<string, (req: unknown, reply: unknown) => Promise<void> | void> = {};
 
-    type ContentTypeParser = (
-      req: Record<string, unknown>,
-      body: string,
-      done: (error: Error | null, result?: unknown) => void,
-    ) => void;
-    const contentParsers: Record<string, ContentTypeParser> = {};
-
     const mockFastify = {
       addHook: vi.fn((event: string, hook: (req: unknown, reply: unknown) => Promise<void> | void) => {
         if (hooks[event]) {
@@ -37,9 +32,6 @@ describe('registerFastifyPlugins', () => {
       }),
       get: vi.fn((url: string, handler: (req: unknown, reply: unknown) => Promise<void> | void) => {
         routes[url] = handler;
-      }),
-      addContentTypeParser: vi.fn((contentType: string, _options: unknown, parser: ContentTypeParser) => {
-        contentParsers[contentType] = parser;
       }),
     };
 
@@ -50,10 +42,13 @@ describe('registerFastifyPlugins', () => {
     const mockConfigService = {
       get: vi.fn((key: string) => {
         if (key === 'UPLOAD_MAX_FILE_SIZE_BYTES') return 10 * 1024 * 1024;
+        if (key === 'COMPRESSION_ENABLED') return true;
+        if (key === 'COMPRESSION_THRESHOLD_BYTES') return 1024;
         return undefined;
       }),
     };
 
+    const registerMock = vi.fn().mockResolvedValue(undefined);
     const mockApp = {
       get: vi.fn((token: unknown) => {
         if (token === ConfigService) return mockConfigService;
@@ -63,7 +58,7 @@ describe('registerFastifyPlugins', () => {
       getHttpAdapter: () => ({
         getInstance: () => mockFastify,
       }),
-      register: vi.fn().mockResolvedValue(undefined),
+      register: registerMock,
     } as unknown as NestFastifyApplication;
 
     await registerFastifyPlugins(mockApp);
@@ -71,35 +66,6 @@ describe('registerFastifyPlugins', () => {
     expect(mockFastify.addHook).toHaveBeenCalledWith('onRequest', expect.any(Function));
     expect(mockFastify.addHook).toHaveBeenCalledWith('onResponse', expect.any(Function));
     expect(mockFastify.get).toHaveBeenCalledWith('/favicon.ico', expect.any(Function));
-    expect(mockFastify.addContentTypeParser).toHaveBeenCalledWith(
-      'application/json',
-      { parseAs: 'string' },
-      expect.any(Function),
-    );
-
-    // 0. 验证全局 JSON parser 在返回解析对象的同时挂载原始报文（微信支付等回调需以原始 body 验签）
-    const jsonParser = contentParsers['application/json'];
-    const rawRequest: Record<string, unknown> = { url: '/v1/payments/wepay/notify' };
-    let parsedBody: unknown;
-    jsonParser(rawRequest, '{"a":1}', (_error, result) => {
-      parsedBody = result;
-    });
-    expect(rawRequest.rawBody).toBe('{"a":1}');
-    expect(parsedBody).toEqual({ a: 1 });
-
-    // 空请求体应解析为空对象而非报错
-    const emptyRequest: Record<string, unknown> = { url: '/v1/payments/wepay/notify' };
-    let emptyBody: unknown;
-    jsonParser(emptyRequest, '', (_error, result) => {
-      emptyBody = result;
-    });
-    expect(emptyRequest.rawBody).toBe('');
-    expect(emptyBody).toEqual({});
-
-    // 非法 JSON 应回报错误而非抛出
-    const malformedError = vi.fn();
-    jsonParser({ url: '/x' }, '{invalid', malformedError);
-    expect(malformedError).toHaveBeenCalledWith(expect.any(Error));
 
     // 1. 验证 onRequest Hook 透传 x-request-id
     const onRequestHook = hooks.onRequest[0];
@@ -177,5 +143,29 @@ describe('registerFastifyPlugins', () => {
     mockLoggerService.logHttp.mockClear();
     await onResponseHook({ ...completedReq, url: '/api/v1/docs-preview' }, mockReply);
     expect(mockLoggerService.logHttp).toHaveBeenCalledTimes(1);
+
+    // 7. 响应压缩：注册顺序必须早于 fastifyStatic（插件 README 要求），且只传入阈值
+    expect(registerMock.mock.calls.map((call) => call[0])).toEqual([fastifyCompress, fastifyStatic, fastifyMultipart]);
+    expect(registerMock).toHaveBeenCalledWith(fastifyCompress, { threshold: 1024 });
+  });
+
+  it('压缩开关关闭时不注册 @fastify/compress，仅保留 static 与 multipart', async () => {
+    const registerMock = vi.fn().mockResolvedValue(undefined);
+    const mockApp = {
+      get: vi.fn((token: unknown) => {
+        if (token === ConfigService) {
+          return { get: vi.fn((key: string) => (key === 'COMPRESSION_ENABLED' ? false : undefined)) };
+        }
+        if (token === PinoLoggerService) return { logHttp: vi.fn() };
+        return undefined;
+      }),
+      getHttpAdapter: () => ({ getInstance: () => ({ addHook: vi.fn(), get: vi.fn() }) }),
+      register: registerMock,
+    } as unknown as NestFastifyApplication;
+
+    await registerFastifyPlugins(mockApp);
+
+    expect(registerMock).not.toHaveBeenCalledWith(fastifyCompress, expect.anything());
+    expect(registerMock.mock.calls.map((call) => call[0])).toEqual([fastifyStatic, fastifyMultipart]);
   });
 });

@@ -1,6 +1,6 @@
 import { mkdir } from 'node:fs/promises';
 import { join, posix } from 'node:path';
-import fastifyHelmet from '@fastify/helmet';
+import fastifyCompress from '@fastify/compress';
 import fastifyMultipart from '@fastify/multipart';
 import fastifyStatic from '@fastify/static';
 import { ConfigService } from '@nestjs/config';
@@ -28,20 +28,15 @@ type FastifyLike = {
     hook: (request: FastifyRequest, reply: FastifyReply, payload: unknown) => Promise<unknown> | unknown,
   ): void;
   get: (url: string, handler: (request: FastifyRequest, reply: FastifyReply) => void | Promise<void>) => void;
-  addContentTypeParser(
-    contentType: string,
-    options: { parseAs: 'string' },
-    parser: (request: FastifyRequest, body: string, done: (error: Error | null, result?: unknown) => void) => void,
-  ): void;
 };
 
 /**
  * 携带原始请求报文的 Fastify 请求
  *
- * `rawBody` 由 {@link registerFastifyPlugins} 注册的全局 JSON content-type parser 挂载，
+ * `rawBody` 由 NestJS 原生 `{ rawBody: true }` 挂载为 Buffer（必要时亦可兼容 string），
  * 供需以原始报文验签的第三方回调（如微信支付）使用。
  */
-export type RawBodyFastifyRequest = FastifyRequest & { rawBody?: string };
+export type RawBodyFastifyRequest = FastifyRequest & { rawBody?: Buffer | string };
 
 /** /uploads/ 下无需鉴权的公开子目录（如产品图、公开头像） */
 const PUBLIC_UPLOAD_PREFIX = '/uploads/public/';
@@ -60,11 +55,13 @@ function isOpsPanelPath(url: string): boolean {
 }
 
 /**
- * 注册 Fastify 插件（Helmet, Static 文件服务, Multipart 文件上传）与原生全链路可观测性 Hooks。
+ * 注册 Fastify 插件（响应压缩, Static 文件服务, Multipart 文件上传）与原生全链路可观测性 Hooks。
+ * 安全响应头与跨站请求防护已由框架内置能力接管（见 src/setup/middleware.ts），不再注册 @fastify/helmet。
  *
  * 1. 原生 Hooks 早于所有 Guard 与 Interceptor 执行，100% 捕获包括 401/403/404/429/500 在内的所有流量；
  * 2. 自动透传并回写 x-request-id 响应头，并初始化全链路 RequestContext (AsyncLocalStorage)；
  * 3. 私有上传文件需 JWT 鉴权（Authorization header 或 ?token= query），/uploads/public/ 子目录保持公开。
+ * 4. 响应压缩仅作用于文本类可压缩类型且超过阈值的响应；SSE、分片响应与已压缩二进制一律原样透出。
  */
 export async function registerFastifyPlugins(app: NestFastifyApplication): Promise<void> {
   type RegisterPlugin = Parameters<typeof app.register>[0];
@@ -116,23 +113,7 @@ export async function registerFastifyPlugins(app: NestFastifyApplication): Promi
     return payload;
   });
 
-  // 4. 全局 JSON content-type parser：保留原始报文至 request.rawBody
-  //    第三方回调（微信支付等）必须以**原始 body** 验签，重新序列化的 JSON 会导致验签失败；
-  //    parser 同时返回解析后的对象，保证既有 controller 的 body 语义零破坏。
-  fastify.addContentTypeParser('application/json', { parseAs: 'string' }, (request, body, done) => {
-    (request as RawBodyFastifyRequest).rawBody = body;
-    if (!body) {
-      done(null, {});
-      return;
-    }
-    try {
-      done(null, JSON.parse(body));
-    } catch (error) {
-      done(error instanceof Error ? error : new Error(String(error)));
-    }
-  });
-
-  // 5. 原生 204 No Content 拦截 /favicon.ico，彻底消除 404 告警与磁盘 I/O，24 小时浏览器缓存
+  // 4. 原生 204 No Content 拦截 /favicon.ico，彻底消除 404 告警与磁盘 I/O，24 小时浏览器缓存
   fastify.get('/favicon.ico', (_request, reply) => {
     reply.header('Cache-Control', 'public, max-age=86400, immutable');
     reply.code(204).send();
@@ -141,7 +122,24 @@ export async function registerFastifyPlugins(app: NestFastifyApplication): Promi
   // 确保上传目录存在，避免 fastifyStatic 因 root 缺失而启动失败
   await mkdir(join(process.cwd(), PATHS.STORAGE_UPLOADS), { recursive: true });
 
-  await app.register(fastifyHelmet as unknown as RegisterPlugin, { contentSecurityPolicy: false });
+  // 5. 响应压缩（@fastify/compress）
+  //    必须早于 fastifyStatic 注册：插件 README 明确要求「启用 global 钩子的 @fastify/compress 先于 @fastify/static」，
+  //    否则静态资源不参与压缩协商。以下排除规则由插件内置行为保证，无需自定义类型白名单：
+  //    - SSE：默认可压缩类型正则形如 `^text\/(?!event-stream)|…`，event-stream 被显式排除；日志查看器直写 reply.raw 亦绕过 onSend；
+  //    - 已压缩二进制：webp/jpeg/png/mp4 与 xlsx 均不匹配默认可压缩类型；
+  //    - 分片响应（206 / Content-Range）与已带 Content-Encoding 的响应直接跳过；
+  //    - 客户端可用 x-no-compression 请求头临时关闭压缩（插件内置逃生阀）；
+  //    - 已知取舍：application/octet-stream（未知扩展名文件）在插件默认正则与 mime-db 中均被标为可压缩，
+  //      且 customTypes 只能放宽不能收紧（mime-db 为兜底判定，仍会放行），按路由 compress:false 对静态资源也不适用
+  //      → 接受之：对已压缩内容仅属 CPU 浪费，无正确性问题。若要收紧，请在 Nginx/CDN 侧统一压缩策略。
+  //    不显式传 encodings：插件默认即为「服务端支持的全部编码」（br/gzip/deflate + Node 支持 zstd 时的 zstd），
+  //    显式传列表只会收窄协商范围。
+  if (config.get<boolean>('COMPRESSION_ENABLED')) {
+    await app.register(fastifyCompress as unknown as RegisterPlugin, {
+      threshold: config.get<number>('COMPRESSION_THRESHOLD_BYTES'),
+    });
+  }
+
   await app.register(fastifyStatic as unknown as RegisterPlugin, {
     root: join(process.cwd(), PATHS.STORAGE_UPLOADS),
     prefix: '/uploads/',
