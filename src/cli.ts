@@ -1,4 +1,5 @@
 import 'dotenv/config';
+import './setup/sentry';
 import { CommandFactory } from 'nest-commander';
 import { CliModule } from './cli.module';
 import { setupTimezone } from './config/timezone';

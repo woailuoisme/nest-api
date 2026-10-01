@@ -1,4 +1,5 @@
 import 'dotenv/config';
+import '@/setup/sentry';
 import { NestFactory } from '@nestjs/core';
 import { setupWorkerShutdownHooks } from '@/setup';
 import { PinoLoggerService } from '@/setup/logger/pino-logger.service';

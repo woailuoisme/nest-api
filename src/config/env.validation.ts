@@ -84,6 +84,8 @@ export const envSchema = z
     BULL_BOARD_PASSWORD: z.string().optional(),
     LOG_VIEWER_USER: z.string().optional(),
     LOG_VIEWER_PASSWORD: z.string().optional(),
+    // Sentry / GlitchTip DSN：未配置时不初始化 SDK（本地零配置可跑）
+    SENTRY_DSN: z.string().optional(),
     GOOGLE_CLIENT_ID: z.string().optional(),
     GOOGLE_CLIENT_SECRET: z.string().optional(),
     THROTTLE_TTL: z.coerce.number().default(60),

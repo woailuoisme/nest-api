@@ -6,6 +6,25 @@ import pretty from 'pino-pretty';
 import pinoRoll from 'pino-roll';
 import { v7 as uuidv7 } from 'uuid';
 import { isProductionEnv, PATHS } from '@/common/constants/app.constants';
+import { captureLog } from '@/setup/sentry';
+
+/** Pino level 数值：50 = error，60 = fatal */
+const ERROR_LOG_LEVEL = 50;
+
+/**
+ * error/fatal 级日志桥接到 Sentry（GlitchTip）
+ *
+ * ponytail: 只在 level≥50 时上报且 SDK 未初始化时为空操作，故非错误路径为零开销；
+ * 若后续需要 warn 级或自定义采样，改这里的阈值即可。
+ */
+const sentryHooks: pino.LoggerOptions['hooks'] = {
+  logMethod(inputArgs, method, level) {
+    if (level >= ERROR_LOG_LEVEL) {
+      captureLog(inputArgs);
+    }
+    method.apply(this, inputArgs);
+  },
+};
 
 /** 敏感 Token 查询参数脱敏正则（预编译复用） */
 export const AUTH_QUERY_REGEX = /([?&](?:token|access_token|refresh_token)=)[^&\s]*/g;
@@ -121,6 +140,7 @@ export async function createPinoLogger(customDestination?: Writable): Promise<pi
       {
         level: 'debug',
         redact: { paths: REDACT_PATHS, censor: '[redacted]' },
+        hooks: sentryHooks,
       },
       customDestination,
     );
@@ -161,6 +181,7 @@ export async function createPinoLogger(customDestination?: Writable): Promise<pi
         paths: REDACT_PATHS,
         censor: '[redacted]',
       },
+      hooks: sentryHooks,
     },
     pino.multistream(streams),
   );

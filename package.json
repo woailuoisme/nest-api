@@ -41,6 +41,7 @@
     "@nestjs/terminus": "^12.1.0",
     "@nestjs/throttler": "^6.7.1",
     "@scalar/client-side-rendering": "^0.4.7",
+    "@sentry/node": "^11.2.0",
     "better-auth": "^1.7.7",
     "bullmq": "^6.3.11",
     "cache-manager": "^7.2.9",
