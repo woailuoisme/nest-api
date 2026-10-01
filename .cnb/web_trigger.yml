@@ -1,12 +1,11 @@
 # 手动触发按钮 — 显示在分支详情页
 # 文档: https://docs.cnb.cool/zh/build/web-trigger.html
+#
+# 说明：multi-arch 手动任务已移除，main 分支的推送会自动构建并推送
+# amd64 镜像（tags: latest, latest-amd64，见 .cnb.yml 的 main.push）。
 
 branch:
   - buttons:
-      - name: Docker build (multi-arch)
-        description: "Build and push multi-arch image (tags: latest, latest-multi)"
-        event: web_trigger
-
       - name: Docker build (amd64)
         description: "Fast build and push linux/amd64 image only (tag: latest-amd64)"
         event: web_trigger_amd64
