@@ -127,4 +127,6 @@ export const OTP = {
 /** 依赖注入令牌 */
 export const INJECTION_TOKENS = {
   REDIS_CLIENT: 'REDIS_CLIENT',
+  THROTTLER_STORAGE: 'THROTTLER_STORAGE',
+  MAIL_TRANSPORTER: 'MAIL_TRANSPORTER',
 } as const;

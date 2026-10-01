@@ -3,17 +3,9 @@ import { Inject, Injectable, Logger } from '@nestjs/common';
 import { compact, isNil } from 'es-toolkit';
 import type Redis from 'ioredis';
 import { INJECTION_TOKENS } from '@/common/constants/app.constants';
+import { UNLOCK_LUA_SCRIPT } from './lua-scripts';
 
 const REDIS_CLIENT = INJECTION_TOKENS.REDIS_CLIENT;
-
-/** Lua script for atomic unlock: 仅当持有相同 token 时才允许删除锁 */
-const UNLOCK_LUA_SCRIPT = `
-if redis.call("get", KEYS[1]) == ARGV[1] then
-  return redis.call("del", KEYS[1])
-else
-  return 0
-end
-`;
 
 /**
  * 深度 Redis 服务 — 封装高杠杆原子操作：

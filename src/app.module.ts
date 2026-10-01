@@ -3,7 +3,7 @@ import { Module } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { APP_GUARD } from '@nestjs/core';
 import { EventEmitterModule } from '@nestjs/event-emitter';
-import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
+import { ThrottlerGuard, ThrottlerModule, type ThrottlerStorage } from '@nestjs/throttler';
 import { I18nModule } from 'nestjs-i18n';
 import { isTruthyEnv } from '@/common/constants/app.constants';
 import { AccessControlGuard } from '@/common/guards/access-control.guard';
@@ -19,9 +19,10 @@ import { MediaModule } from './common/media/media.module';
 import { LoadSheddingGuard, ResilienceModule } from './common/resilience';
 import { SearchModule } from './common/search/search.module';
 import { StorageModule } from './common/storage/storage.module';
+import { THROTTLER_STORAGE, ThrottlerStorageModule } from './common/throttler';
 import { MiniprogramModule } from './common/wechat/miniprogram';
 import { WepayModule } from './common/wechat/pay';
-import { type EnvConfig, validateEnv } from './config/env.validation';
+import { type EnvConfig, envSchema } from './config/env.validation';
 import { createBullModuleConfig } from './database/bull.config';
 import { DatabaseModule } from './database/drizzle/drizzle.module';
 import { RedisModule } from './database/redis.module';
@@ -37,20 +38,25 @@ const isWorkerEmbedded = isTruthyEnv(process.env.WORKER_EMBEDDED);
 
 @Module({
   imports: [
-    ConfigModule.forRoot({ isGlobal: true, validate: validateEnv }),
+    // 采用 Nest 12 原生 Standard Schema 通道校验环境变量（Zod schema 即契约，校验失败格式与旧 validate 一致）
+    ConfigModule.forRoot({ isGlobal: true, validationSchema: envSchema }),
     EventEmitterModule.forRoot({ wildcard: true }),
     I18nModule.forRoot(createI18nModuleConfig()),
     LoggerModule,
     ThrottlerModule.forRootAsync({
-      // ThrottlerAsyncOptions 要求显式声明 imports（即使为空）
-      imports: [],
-      inject: [ConfigService],
-      useFactory: (config: ConfigService<EnvConfig, true>) => [
-        {
-          ttl: config.get('THROTTLE_TTL') * 1000,
-          limit: config.get('THROTTLE_LIMIT'),
-        },
-      ],
+      // 必须以「对象形态」提供选项：@nestjs/throttler 仅在非数组形态下才采用 options.storage，
+      // 数组形态会强制回落到进程内 ThrottlerStorageService —— 多副本部署下限流额度将被放大 N 倍
+      imports: [ThrottlerStorageModule],
+      inject: [ConfigService, THROTTLER_STORAGE],
+      useFactory: (config: ConfigService<EnvConfig, true>, storage: ThrottlerStorage) => ({
+        throttlers: [
+          {
+            ttl: config.get('THROTTLE_TTL') * 1000,
+            limit: config.get('THROTTLE_LIMIT'),
+          },
+        ],
+        storage,
+      }),
     }),
     BullModule.forRootAsync({
       inject: [ConfigService],

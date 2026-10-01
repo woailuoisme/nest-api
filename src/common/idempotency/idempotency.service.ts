@@ -9,16 +9,10 @@ import {
   UnprocessableEntityException,
 } from '@nestjs/common';
 import { delay } from 'es-toolkit';
+import { UNLOCK_LUA_SCRIPT } from '@/database/lua-scripts';
 import { RedisService } from '@/database/redis.service';
 
 /** 解锁 Lua 脚本：安全核对 Token，防止误删他人的锁 */
-const UNLOCK_LUA_SCRIPT = `
-if redis.call("get", KEYS[1]) == ARGV[1] then
-  return redis.call("del", KEYS[1])
-else
-  return 0
-end
-`;
 
 /** IETF 草案与 Stripe 工业标准：Key 最大 256 字符，可见 ASCII 字符 */
 export const MAX_IDEMPOTENCY_KEY_LENGTH = 256;

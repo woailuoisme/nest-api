@@ -36,7 +36,7 @@ function hasMiniprogramCredentials(data: { MINIPROGRAM_APPID?: string; MINIPROGR
   return Boolean(data.MINIPROGRAM_APPID && data.MINIPROGRAM_APPSECRET);
 }
 
-const envSchema = z
+export const envSchema = z
   .object({
     // Laravel 风格：local/testing/production（生产必须为 production）
     APP_ENV: z
@@ -58,7 +58,21 @@ const envSchema = z
     MAIL_FROM_NAME: z.string().default('NestForge'),
 
     BETTER_AUTH_SECRET: z.string().min(16).default('nestforge-better-auth-secret-key-32-chars!'),
+    /**
+     * 框架内置 Cookie 支持的签名密钥（≥32 字符）。
+     *
+     * 未配置时 `NestFactory.create` 不开启内置 Cookie 能力（`setCookie(..., { signed: true })` /
+     * `@SignedCookies()` 不可用）；配置后由主进程在引导阶段读取 `process.env` 直接注入。
+     */
+    COOKIE_SECRET: z.string().min(32).optional(),
     BETTER_AUTH_URL: z.string().optional(),
+    /**
+     * 额外信任的浏览器来源（逗号分隔，`scheme://host[:port]`），供内置跨站请求防护（CSRF）放行跨域写请求。
+     *
+     * 同源请求与 http(s) 服务端调用无需配置；独立域名的前端（SPA）需在此列出自身来源。
+     * APP_URL / BETTER_AUTH_URL / PASSKEY_ORIGIN 会自动纳入信任列表。
+     */
+    TRUSTED_ORIGINS: z.string().optional(),
     PASSKEY_RP_ID: z.string().optional(),
     PASSKEY_ORIGIN: z.string().optional(),
 
@@ -74,8 +88,14 @@ const envSchema = z
     GOOGLE_CLIENT_SECRET: z.string().optional(),
     THROTTLE_TTL: z.coerce.number().default(60),
     THROTTLE_LIMIT: z.coerce.number().default(100),
+    // 限流计数后端：redis 为跨副本共享计数（默认，Redis 故障时自动降级）；memory 仅进程内计数
+    THROTTLE_STORAGE: z.enum(['redis', 'memory']).default('redis'),
     /** 全局 HTTP 请求超时时间（毫秒），默认 15000ms（15 秒） */
     HTTP_TIMEOUT_MS: z.coerce.number().positive().default(15_000),
+    // 是否启用响应压缩（服务端支持 br/gzip/deflate，Node 支持 zstd 时一并参与协商）。默认 true
+    COMPRESSION_ENABLED: envBoolean(true),
+    /** 响应压缩体积阈值（字节）：小于该值的响应不压缩，避免小响应上的 CPU 负收益。默认 1024 */
+    COMPRESSION_THRESHOLD_BYTES: z.coerce.number().int().nonnegative().default(1024),
     /** 优雅停机硬超时保底时间（毫秒），默认 10000ms（10 秒） */
     SHUTDOWN_TIMEOUT_MS: z.coerce.number().int().positive().default(10_000),
     /** 优雅停机下线缓冲等待时间（毫秒），收到 SIGTERM 后等待网关/K8s 摘流，默认 0ms */
@@ -179,14 +199,3 @@ const envSchema = z
   }));
 
 export type EnvConfig = z.infer<typeof envSchema>;
-
-export function validateEnv(config: Record<string, unknown>): EnvConfig {
-  const parsed = envSchema.safeParse(config);
-
-  if (!parsed.success) {
-    const issues = parsed.error.issues.map((issue) => `${issue.path.join('.')}: ${issue.message}`).join('\n');
-    throw new Error(`Invalid environment variables:\n${issues}`);
-  }
-
-  return parsed.data;
-}
