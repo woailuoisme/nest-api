@@ -1,8 +1,10 @@
-import { Injectable } from '@nestjs/common';
+import { Inject, Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { type ISendMailOptions, MailerService } from '@nestjs-modules/mailer';
+import type { SendMailOptions, SentMessageInfo, Transporter } from 'nodemailer';
 import type { EnvConfig } from '@/config/env.validation';
 import { type MailJobData, MailJobName, type MailLocale } from '@/jobs/mail/mail.jobs';
+import { MailTemplateRenderer } from './mail-template.renderer';
+import { MAIL_TRANSPORTER } from './mail-transporter.provider';
 
 /** 邮件主题文案字典（与模板语言严格对齐） */
 export const MAIL_SUBJECTS: Record<MailJobName, Record<MailLocale, string>> = {
@@ -15,14 +17,15 @@ export const MAIL_SUBJECTS: Record<MailJobName, Record<MailLocale, string>> = {
  * 全局邮件领域服务 (MailService 门面)
  *
  * 统一提供强类型发信接口，统筹主题文案、业务跳转链接拼装与模板渲染上下文。
- * 底层基于 @nestjs-modules/mailer + HandlebarsAdapter，兼顾异步队列消费与业务同步直发需求。
+ * 底层直接使用 nodemailer 传输层与自持 Handlebars 渲染器，兼顾异步队列消费与业务同步直发需求。
  */
 @Injectable()
 export class MailService {
   private readonly appUrl: string;
 
   constructor(
-    private readonly mailerService: MailerService,
+    @Inject(MAIL_TRANSPORTER) private readonly transporter: Transporter,
+    private readonly renderer: MailTemplateRenderer,
     config: ConfigService<EnvConfig, true>,
   ) {
     this.appUrl = config.get('APP_URL');
@@ -70,12 +73,14 @@ export class MailService {
   /**
    * 透传底层原始发信接口（供业务自定义扩展或特殊发信诉求使用）
    */
-  sendMail(options: ISendMailOptions) {
-    return this.mailerService.sendMail(options);
+  sendMail(options: SendMailOptions): Promise<SentMessageInfo> {
+    return this.transporter.sendMail(options);
   }
 
   /**
    * 统一模板发信：主题与模板名均由 MailJobName + locale 推导（MailJobName 枚举值即模板基名）
+   *
+   * 渲染失败（如模板缺失、strict 模式下缺少变量）直接抛错，由队列重试策略承接，不静默降级为空正文。
    */
   private async sendTemplateMail(params: {
     to: string;
@@ -84,11 +89,15 @@ export class MailService {
     jobName: MailJobName;
     link: string;
   }): Promise<void> {
-    await this.mailerService.sendMail({
+    const html = await this.renderer.render(`${params.jobName}.${params.locale}.hbs`, {
+      name: params.name,
+      link: params.link,
+    });
+
+    await this.transporter.sendMail({
       to: params.to,
       subject: MAIL_SUBJECTS[params.jobName][params.locale],
-      template: `${params.jobName}.${params.locale}.hbs`,
-      context: { name: params.name, link: params.link },
+      html,
     });
   }
 }
