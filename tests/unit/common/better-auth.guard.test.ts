@@ -8,6 +8,16 @@ import { IS_PUBLIC_KEY } from '@/common/decorators/public.decorator';
 import { BetterAuthGuard } from '@/common/guards/better-auth.guard';
 
 /**
+ * 只打桩 auth 实例，不加载真实 Better Auth 运行时
+ *
+ * 守卫测试仅需要 `api.getSession` 一个入口；加载真实实例会把 better-auth 全量模块图（含加密实现）
+ * 拉进模块注册表，影响同 worker 内其他以 vi.mock('better-auth/crypto') 打桩的用例。
+ */
+vi.mock('@/common/auth/better-auth', () => ({
+  auth: { api: { getSession: vi.fn() } },
+}));
+
+/**
  * 会话校验 spy 的最小契约：Better Auth 的 `auth.api.getSession` 返回类型极复杂，
  * 此处只声明用例需要的三个能力，避免与第三方类型签名缠斗。
  */
@@ -30,7 +40,8 @@ describe('BetterAuthGuard', () => {
   beforeEach(() => {
     reflector = new Reflector();
     guard = new BetterAuthGuard(reflector);
-    getSession = vi.spyOn(auth.api, 'getSession') as unknown as SessionSpy;
+    // 上方 vi.mock 已把该入口替换为 vi.fn()，此处仅取其宽类型视图；调用记录由 clearMocks 逐例清理
+    getSession = auth.api.getSession as unknown as SessionSpy;
   });
 
   afterEach(() => {

@@ -37,8 +37,17 @@ export default defineConfig({
     clearMocks: true,
     /** 并行执行；fork 更隔离但启动慢，threads 适合单元测试 */
     pool: 'threads',
-    /** worker 内模块只求值一次以提速；依赖 restoreMocks/clearMocks 兜底，防止文件间污染 */
-    isolate: false,
+    /**
+     * 每个测试文件独立的模块注册表（vitest 默认）。
+     *
+     * 曾被关闭以提速（worker 内模块只求值一次），但那会使隔离失效：模块注册表在同一 worker 内共享后，
+     * 某文件先加载真实模块会令另一文件的 vi.mock 工厂失效（restoreMocks/clearMocks 只清理 spy 状态，
+     * 无法撤销模块缓存）。实测后果是顺序执行时 features/admin/users/users.service.test.ts 中
+     * 依赖 vi.mock('better-auth/crypto') 与 vi.mock('@/database/drizzle/drizzle-pagination') 的 4 个用例失败，
+     * 而单跑或不同调度下通过 —— 典型的顺序依赖。套件整体代价约 +7s（并行 ~5.3s → ~12.4s），
+     * 远低于一次随机失败带来的排查成本。
+     */
+    isolate: true,
     coverage: {
       reporter: ['text', 'html', 'lcov'],
       exclude: [
