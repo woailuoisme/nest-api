@@ -2,7 +2,7 @@
   "$schema": "https://biomejs.dev/schemas/2.5.13/schema.json",
   // ── 扫描范围 ────────────────────────────────────────────
   "files": {
-    "includes": ["src/**", "tests/**", "*.ts", "*.mts", "*.json", "*.jsonc", "!src/setup/log-viewer/ui/assets"]
+    "includes": ["src/**", "tests/**", "*.ts", "*.mts", "*.json", "*.jsonc"]
   },
   // ── IDE 辅助（保存时自动整理 imports） ──────────────────
   "assist": {
@@ -81,7 +81,7 @@
     },
     // ── Handlebars 模板与静态资产：完全跳过 ──────────────────────────
     {
-      "includes": ["**/*.hbs", "src/setup/log-viewer/ui/assets/**/*"],
+      "includes": ["**/*.hbs"],
       "formatter": { "enabled": false },
       "linter": { "enabled": false }
     },

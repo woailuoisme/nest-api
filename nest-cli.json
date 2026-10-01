@@ -10,9 +10,7 @@
     "assets": [
       { "include": "i18n/translations/**/*" },
       { "include": "common/mail/templates/*.hbs" },
-      { "include": "commands/generator/templates/*.hbs" },
-      { "include": "setup/log-viewer/ui/templates/**/*" },
-      { "include": "setup/log-viewer/ui/assets/**/*" }
+      { "include": "commands/generator/templates/*.hbs" }
     ]
   }
 }

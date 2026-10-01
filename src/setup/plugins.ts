@@ -12,7 +12,6 @@ import { PATHS, ROUTES } from '@/common/constants/app.constants';
 import { RequestContext } from '@/common/context';
 import { extractIp, PinoLoggerService } from '@/setup/logger';
 import { isAppShuttingDown } from './lifecycle';
-import { LOG_VIEWER_PATH } from './log-viewer/constants';
 
 /** 仅暴露所需 Hook 与路由 API 的最小 Fastify 接口（规避 platform-fastify 嵌套 fastify 类型差异） */
 type FastifyLike = {
@@ -42,10 +41,10 @@ export type RawBodyFastifyRequest = FastifyRequest & { rawBody?: Buffer | string
 const PUBLIC_UPLOAD_PREFIX = '/uploads/public/';
 
 /**
- * 不写入访问日志的路径前缀：API 文档、队列看板与日志查看器的高频轮询与 SSE 心跳属自检流量，
- * 逐条记录只会淹没业务请求日志。`/docs` 同时覆盖 docs-json、docs/admin 与 docs/auth。
+ * 不写入访问日志的路径前缀：API 文档与队列看板的自检流量，逐条记录只会淹没业务请求日志。
+ * `/docs` 同时覆盖 docs-json、docs/admin 与 docs/auth。
  */
-const ACCESS_LOG_EXCLUDED_PREFIXES = [`/${ROUTES.DOCS}`, `/${ROUTES.QUEUES}`, LOG_VIEWER_PATH];
+const ACCESS_LOG_EXCLUDED_PREFIXES = [`/${ROUTES.DOCS}`, `/${ROUTES.QUEUES}`];
 
 /** 请求路径是否命中运维面板（含 /docs-json 等以短横线派生的 JSON 端点） */
 function isOpsPanelPath(url: string): boolean {
