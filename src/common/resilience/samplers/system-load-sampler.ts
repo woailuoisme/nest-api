@@ -1,4 +1,4 @@
-import { type IntervalHistogram, monitorEventLoopDelay } from 'node:perf_hooks';
+import { monitorEventLoopDelay } from 'node:perf_hooks';
 import v8 from 'node:v8';
 import { Injectable, type OnModuleDestroy, type OnModuleInit } from '@nestjs/common';
 import { TrafficPriority } from '../enum/index.js';
@@ -69,7 +69,8 @@ export class SystemLoadSampler implements OnModuleInit, OnModuleDestroy {
     return SystemLoadSampler.sharedSampler;
   }
 
-  private histogram?: IntervalHistogram;
+  /** 事件循环延迟直方图（类型由 API 推导：@types/node 24 与 26 对该类型命名不同，推导可双向兼容） */
+  private histogram?: ReturnType<typeof monitorEventLoopDelay>;
   private readonly thresholds: Record<TrafficPriority, PriorityThresholdConfig> = {
     [TrafficPriority.SHEDDABLE]: { ...TIERED_LOAD_SHEDDING_THRESHOLDS[TrafficPriority.SHEDDABLE] },
     [TrafficPriority.DEFAULT]: { ...TIERED_LOAD_SHEDDING_THRESHOLDS[TrafficPriority.DEFAULT] },
