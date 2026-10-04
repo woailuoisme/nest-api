@@ -1,6 +1,6 @@
 # ── push main：自动构建并推送镜像 ────────────────────────────────────
 main:
-  push:
+  push: &docker_build_amd64
     # 合并进 main 即构建并推送 amd64 镜像 -> latest, alpine
     # 单架构（linux/amd64）不经 QEMU，构建更快；如需 arm64，请走 v* 标签发布（tag_push）
     # 或 .github/workflows/build.yml 的多架构流水线（推送 GHCR / Docker Hub）。
@@ -12,36 +12,21 @@ main:
           script: |
             set -euo pipefail
             REGISTRY="${CNB_DOCKER_REGISTRY}/${CNB_REPO_SLUG_LOWERCASE}"
+            CACHE="type=registry,ref=${REGISTRY}:cache"
+
             docker buildx build \
-              --tag "${REGISTRY}:latest" \
-              --tag "${REGISTRY}:alpine" \
-              --file deploy/app/Dockerfile \
               --platform linux/amd64 \
-              --cache-from "type=registry,ref=${REGISTRY}:amd64-cache" \
-              --cache-to "type=registry,ref=${REGISTRY}:amd64-cache,mode=max,image-manifest=true,oci-mediatypes=true" \
-              --push \
-              .
+              --cache-from "${CACHE}" \
+              --cache-to "${CACHE},mode=max,image-manifest=true,oci-mediatypes=true" \
+              -f deploy/app/Dockerfile \
+              -t "${REGISTRY}:latest" \
+              -t "${REGISTRY}:alpine" \
+              --push .
 
 # ── 全局：手动触发 & 标签发布 ────────────────────────────────────────
 $:
   # 手动触发：按 main 同一套标签快建一次镜像 -> latest, alpine
-  web_trigger_amd64:
-    - services:
-        - docker
-      stages:
-        - name: Docker build and push (amd64)
-          script: |
-            set -euo pipefail
-            REGISTRY="${CNB_DOCKER_REGISTRY}/${CNB_REPO_SLUG_LOWERCASE}"
-            docker buildx build \
-              --tag "${REGISTRY}:latest" \
-              --tag "${REGISTRY}:alpine" \
-              --file deploy/app/Dockerfile \
-              --platform linux/amd64 \
-              --cache-from "type=registry,ref=${REGISTRY}:amd64-cache" \
-              --cache-to "type=registry,ref=${REGISTRY}:amd64-cache,mode=max,image-manifest=true,oci-mediatypes=true" \
-              --push \
-              .
+  web_trigger_amd64: *docker_build_amd64
 
   # 手动触发：构建并推送 Helm chart
   web_trigger_helm:
@@ -67,15 +52,16 @@ $:
             set -euo pipefail
             REGISTRY="${CNB_DOCKER_REGISTRY}/${CNB_REPO_SLUG_LOWERCASE}"
             VERSION="${CNB_BRANCH##*/}"
+            CACHE="type=registry,ref=${REGISTRY}:cache"
+
             docker buildx build \
-              --tag "${REGISTRY}:${VERSION}" \
-              --tag "${REGISTRY}:latest" \
-              --file deploy/app/Dockerfile \
               --platform linux/amd64,linux/arm64 \
-              --cache-from "type=registry,ref=${REGISTRY}:cache-alpine-multi" \
-              --cache-to "type=registry,ref=${REGISTRY}:cache-alpine-multi,mode=max,image-manifest=true,oci-mediatypes=true" \
-              --push \
-              .
+              --cache-from "${CACHE}" \
+              --cache-to "${CACHE},mode=max,image-manifest=true,oci-mediatypes=true" \
+              -f deploy/app/Dockerfile \
+              -t "${REGISTRY}:${VERSION}" \
+              -t "${REGISTRY}:latest" \
+              --push .
 
     # 标签部署：Drizzle 数据库迁移
     - stages:
