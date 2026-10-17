@@ -2,8 +2,11 @@ import type { IncomingMessage } from 'node:http';
 import { hostname } from 'node:os';
 import { basename } from 'node:path';
 import { Writable } from 'node:stream';
+
+import { context, trace } from '@opentelemetry/api';
 import pino from 'pino';
 import { v7 as uuidv7 } from 'uuid';
+
 import { isProductionEnv } from '@/common/constants/app.constants';
 import { captureLog } from '@/setup/sentry';
 
@@ -92,9 +95,21 @@ export function redactUrl(url?: string): string {
  * 生产 JSON 日志是唯一留存通道，且 api 与独立 worker 进程产出完全同构的 JSON；
  * 采集端需要 `service` 字段区分来源。独立 worker 的入口是 `dist/workers/worker.main.js`（见 justfile `start-worker`）。
  */
-function resolveServiceName(): string {
+export function resolveServiceName(): string {
   return basename(process.argv[1] ?? '').startsWith('worker.main') ? 'worker' : 'api';
 }
+
+/**
+ * 日志-链路关联：将当前活动 span 的 trace 上下文注入日志 JSON（O2 内日志可跳转 trace）。
+ *
+ * OTel 未初始化或无活动 span 时零开销（一次 getSpan 查询即返回 undefined）。
+ */
+const traceMixin: pino.LoggerOptions['mixin'] = () => {
+  const span = trace.getSpan(context.active());
+  if (!span) return {};
+  const { traceId, spanId, traceFlags } = span.spanContext();
+  return { trace_id: traceId, span_id: spanId, trace_flags: traceFlags };
+};
 
 /**
  * 创建进程内 Pino 实例（单通道 stdout）：
@@ -112,6 +127,7 @@ export async function createPinoLogger(customDestination?: Writable): Promise<pi
         level: 'debug',
         redact: { paths: REDACT_PATHS, censor: '[redacted]' },
         hooks: sentryHooks,
+        mixin: traceMixin,
       },
       customDestination,
     );
@@ -122,6 +138,7 @@ export async function createPinoLogger(customDestination?: Writable): Promise<pi
     level: isProduction ? 'info' : 'debug',
     redact: { paths: REDACT_PATHS, censor: '[redacted]' },
     hooks: sentryHooks,
+    mixin: traceMixin,
     // 开发/测试走 pretty，无需 JSON 基字段（pretty 本就忽略 pid/hostname），故只喂给生产通道
     ...(isProduction
       ? {

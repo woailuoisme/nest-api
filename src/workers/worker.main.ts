@@ -1,8 +1,11 @@
 import 'dotenv/config';
 import '@/setup/sentry';
+import '@/setup/otel/telemetry';
 import { NestFactory } from '@nestjs/core';
+
 import { setupWorkerShutdownHooks } from '@/setup';
 import { PinoLoggerService } from '@/setup/logger/pino-logger.service';
+
 import { setupTimezone } from '../config/timezone';
 import { WorkerModule } from './worker.module';
 

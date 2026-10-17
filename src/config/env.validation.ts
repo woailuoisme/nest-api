@@ -1,4 +1,5 @@
 import { z } from 'zod';
+
 import { APP_ENV_VALUES, isTruthyEnv, PATHS } from '@/common/constants/app.constants';
 import { DEFAULT_TIMEZONE, isTimezoneValid } from '@/config/timezone';
 
@@ -24,10 +25,10 @@ function hasWepayCredentials(data: {
 }): boolean {
   return Boolean(
     data.WEPAY_APPID &&
-      data.WEPAY_MCHID &&
-      data.WEPAY_SERIAL_NO &&
-      data.WEPAY_APIV3_KEY &&
-      (data.WEPAY_PRIVATE_KEY || data.WEPAY_PRIVATE_KEY_PATH),
+    data.WEPAY_MCHID &&
+    data.WEPAY_SERIAL_NO &&
+    data.WEPAY_APIV3_KEY &&
+    (data.WEPAY_PRIVATE_KEY || data.WEPAY_PRIVATE_KEY_PATH),
   );
 }
 
@@ -84,6 +85,16 @@ export const envSchema = z
     BULL_BOARD_PASSWORD: z.string().optional(),
     // Sentry / GlitchTip DSN：未配置时不初始化 SDK（本地零配置可跑）
     SENTRY_DSN: z.string().optional(),
+    // OpenTelemetry：未配置 OTLP endpoint 时不初始化 SDK（traces/metrics 双信号经 otel-collector 转推 OpenObserve）
+    OTEL_EXPORTER_OTLP_ENDPOINT: z.url().optional(),
+    /** 追加 OTLP 导出的认证头（`key1=value1,key2=value2` 格式，collector 无需认证时留空） */
+    OTEL_EXPORTER_OTLP_HEADERS: z.string().optional(),
+    /** 服务名覆盖（默认 nestforge-api / nestforge-worker，按进程角色自动推导） */
+    OTEL_SERVICE_NAME: z.string().optional(),
+    /** 追踪采样器（官方标准枚举，默认 parentbased_always_on；生产建议 parentbased_traceidratio） */
+    OTEL_TRACES_SAMPLER: z.string().optional(),
+    /** 采样器参数（如 parentbased_traceidratio 配 0.01 即 1% 采样） */
+    OTEL_TRACES_SAMPLER_ARG: z.string().optional(),
     GOOGLE_CLIENT_ID: z.string().optional(),
     GOOGLE_CLIENT_SECRET: z.string().optional(),
     THROTTLE_TTL: z.coerce.number().default(60),
@@ -132,7 +143,7 @@ export const envSchema = z
     SEARCH_QUEUE_ENABLED: envBoolean(true),
     // 统一动态图片处理 DSN (例如: imgproxy://key:salt@localhost:8080?publicUrl=http://localhost:8080)
     IMGPROXY_URL: z.string().optional(),
-    // 统一 MQTT 5.0 物联网与工业通信 DSN (例如: mqtt://admin:password@localhost:1883?clientId=nest-forge)
+    // 统一 MQTT 5.0 物联网与工业通信 DSN (例如: mqtt://admin:password@localhost:1883?clientId=nest-api)
     MQTT_URL: z.string().optional(),
     // 是否启用工业设备模拟响应器（Simulated PLC Agent）。默认 false
     IOT_SIMULATED_DEVICE_ENABLED: envBoolean(false),

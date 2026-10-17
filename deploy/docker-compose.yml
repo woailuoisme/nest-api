@@ -4,3 +4,4 @@ include:
   - meilisearch/docker-compose.yml
   - imgproxy/docker-compose.yml
   - mosquitto/docker-compose.yml
+  - otelcol/docker-compose.yml

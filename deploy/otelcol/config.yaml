@@ -1,0 +1,118 @@
+# OpenTelemetry Collector (contrib)：NestForge 统一遥测网关
+# 应用 OTLP (4317/4318) + Docker 容器 stdout (filelog) → memory_limiter → resourcedetection → batch → OpenObserve
+receivers:
+  otlp:
+    protocols:
+      grpc:
+        endpoint: 0.0.0.0:4317
+      http:
+        endpoint: 0.0.0.0:4318
+
+  # Docker json-file 容器日志采集（Pino stdout JSON，零应用侵入）
+  filelog/containers:
+    include:
+      - /var/lib/docker/containers/*/*.log
+    start_at: end
+    include_file_path: false
+    operators:
+      # Docker 日志信封：{log, stream, time, ...}
+      - type: json_parser
+        id: docker-envelope
+        parse_from: body
+      # Pino 单行 JSON（非 JSON 输出原样保留）
+      - type: json_parser
+        id: pino
+        parse_from: attributes.log
+        parse_to: attributes.pino
+        if: 'attributes.log matches "^\\{.*\\}$"'
+      # 消息体与关键元数据提升到标准位置
+      - type: move
+        from: attributes.pino.msg
+        to: body
+        if: 'attributes.pino.msg != nil'
+      - type: move
+        from: attributes.pino.service
+        to: attributes["service.role"]
+        if: 'attributes.pino.service != nil'
+      - type: move
+        from: attributes.pino.hostname
+        to: attributes["host.name"]
+        if: 'attributes.pino.hostname != nil'
+      # 日志-链路关联字段（Pino mixin 注入）
+      - type: move
+        from: attributes.pino.trace_id
+        to: attributes["trace.id"]
+        if: 'attributes.pino.trace_id != nil'
+      - type: move
+        from: attributes.pino.span_id
+        to: attributes["span.id"]
+        if: 'attributes.pino.span_id != nil'
+      # Pino 数值 level (10~60) → OTel severity
+      - type: severity_parser
+        parse_from: attributes.pino.level
+        if: 'attributes.pino.level != nil'
+        mapping:
+          fatal:
+            - "60"
+          error:
+            - "50"
+          warn:
+            - "40"
+          info:
+            - "30"
+          debug:
+            - "20"
+          trace:
+            - "10"
+      # 容器时间戳（RFC3339Nano）→ 日志时间
+      - type: time_parser
+        parse_from: attributes.time
+        layout_type: gotime
+        layout: '2006-01-02T15:04:05.999999999Z07:00'
+        if: 'attributes.time != nil'
+
+processors:
+  memory_limiter:
+    check_interval: 1s
+    limit_mib: 512
+    spike_limit_mib: 128
+  # 资源探测：env（OO_* / K8s 注入）优先，system（host.name 等）补齐
+  resourcedetection:
+    detectors: [env, system]
+    timeout: 2s
+    override: false
+  batch:
+    timeout: 5s
+    send_batch_size: 512
+
+exporters:
+  # OpenObserve：endpoint 以组织段结尾且不带尾斜杠，collector 自动追加 /v1/traces|metrics|logs
+  otlphttp/openobserve:
+    endpoint: ${env:OO_ENDPOINT}
+    headers:
+      Authorization: "Basic ${env:OO_AUTH}"
+    compression: gzip
+
+extensions:
+  health_check:
+    endpoint: 0.0.0.0:13133
+  # filelog 断点续传状态存储
+  file_storage:
+    directory: /var/lib/otelcol
+    timeout: 10s
+
+service:
+  extensions: [health_check, file_storage]
+  pipelines:
+    traces:
+      receivers: [otlp]
+      processors: [memory_limiter, resourcedetection, batch]
+      exporters: [otlphttp/openobserve]
+    metrics:
+      receivers: [otlp]
+      processors: [memory_limiter, resourcedetection, batch]
+      exporters: [otlphttp/openobserve]
+    logs:
+      receivers: [otlp, filelog/containers]
+      processors: [memory_limiter, resourcedetection, batch]
+      exporters: [otlphttp/openobserve]

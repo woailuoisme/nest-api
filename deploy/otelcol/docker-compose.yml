@@ -1,0 +1,25 @@
+services:
+  otel-collector:
+    image: otel/opentelemetry-collector-contrib:latest
+    container_name: nestforge-otel-collector
+    restart: unless-stopped
+    command: ["--config=/etc/otelcol/config.yaml"]
+    environment:
+      # OpenObserve 摄取端点（.../api/<org>，无尾斜杠）与 Basic 凭证（base64(email:token)），来源 deploy/.env
+      OO_ENDPOINT: ${OO_ENDPOINT}
+      OO_AUTH: ${OO_AUTH}
+    volumes:
+      - ./config.yaml:/etc/otelcol/config.yaml:ro
+      # Docker json-file 容器日志（只读；macOS Docker Desktop 无此路径，filelog 仅 Linux 生产环境生效）
+      - /var/lib/docker/containers:/var/lib/docker/containers:ro
+    networks:
+      - backend
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+networks:
+  backend:
+    external: true

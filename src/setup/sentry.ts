@@ -7,15 +7,19 @@
  * 未配置 SENTRY_DSN 时不初始化：本地与测试环境零配置可用，日志桥接也随之退化为空操作。
  */
 import { inspect } from 'node:util';
+
 import * as Sentry from '@sentry/node';
 
 const dsn = process.env.SENTRY_DSN;
 
 if (dsn) {
+  // OTel 已接管分布式追踪（setup/otel/telemetry.ts）：避免其内置 OTel 与自定义 NodeSDK 抢占全局 TracerProvider 及重复 spans
+  const otelOwned = Boolean(process.env.OTEL_EXPORTER_OTLP_ENDPOINT);
   Sentry.init({
     dsn,
-    tracesSampleRate: 0.01, // 1% 事务采样
+    tracesSampleRate: otelOwned ? 0 : 0.01, // OTel 接管时归零，否则保持 1% 事务采样
     // 注：v11 已移除 session 相关概念（无 autoSessionTracking 选项），GlitchTip 不支持 sessions 的顾虑随之不存在
+    ...(otelOwned ? { skipOpenTelemetrySetup: true } : {}),
   });
 }
 

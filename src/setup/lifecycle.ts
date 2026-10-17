@@ -1,4 +1,5 @@
 import type { Server } from 'node:http';
+
 import { type INestApplicationContext, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import type { NestFastifyApplication } from '@nestjs/platform-fastify';
@@ -110,6 +111,9 @@ export function setupShutdownHooks(app: NestFastifyApplication): void {
     logger.log('[3/3] 正在关闭应用并释放数据库、缓存与消息队列等底层基础设施...');
     try {
       await app.close();
+      // 停机期动态导入：flush OTel spans/metrics（未初始化时空操作），避免传递性求值污染非 OTel 入口
+      const { shutdownTelemetry } = await import('./otel/telemetry');
+      await shutdownTelemetry();
       cancelWatchdog();
       logger.log('应用已安全关闭，进程正常退出。');
       process.exit(0);
@@ -141,6 +145,9 @@ export function setupWorkerShutdownHooks(app: INestApplicationContext): void {
     logger.log(`收到 ${signal} 停机信号，正在停止 Worker 并等待正在消费的队列任务安全完成...`);
     try {
       await app.close();
+      // 同上：停机期动态导入 flush OTel
+      const { shutdownTelemetry } = await import('./otel/telemetry');
+      await shutdownTelemetry();
       cancelWatchdog();
       logger.log('Worker 资源已全部安全释放，正常退出。');
       process.exit(0);
