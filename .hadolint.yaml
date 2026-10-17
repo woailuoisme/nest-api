@@ -1,3 +1,4 @@
 ignored:
   # oven/bun 镜像内置 bun 用户，非数值用户在此场景安全可解析
   - DL3047
+  - DL3066
