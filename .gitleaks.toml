@@ -1,0 +1,41 @@
+# Gitleaks Configuration for NestForge (nest-api)
+# Docs: https://github.com/gitleaks/gitleaks
+
+title = "NestForge Gitleaks Baseline"
+
+[extend]
+# 继承 Gitleaks 官方默认高精度检测规则集
+useDefault = true
+
+[allowlist]
+description = "Global allowlist for build artifacts, mock tests, seeds, documentation, and sample envs"
+
+# 1. 路径白名单：忽略本地配置范例、测试工厂、测试用例、构建产物与数据库种子
+paths = [
+  '''(?i)^\.env(\..+)?$''',
+  '''(?i)^deploy/\.env(\..+)?$''',
+  '''(?i)^\.env\.example$''',
+  '''(?i)^deploy/\.env\.example$''',
+  '''(?i)^dist/.*''',
+  '''(?i)^storage/.*''',
+  '''(?i)^tests/.*''',
+  '''(?i)^docs/.*''',
+  '''(?i)^src/database/seeds/.*''',
+  '''(?i)^bun\.lock.*''',
+  '''(?i)^package-lock\.json$''',
+]
+
+# 2. 正则白名单：过滤常见测试伪造凭据、占位符及误报标识符
+regexes = [
+  '''(?i)0123456789abcdef0123456789abcdef''',
+  '''(?i)operator123456''',
+  '''(?i)admin123456''',
+  '''(?i)secret-key-12345''',
+  '''(?i)s3cr3t-def456''',
+  '''(?i)test-secret-key''',
+  '''(?i)resObj\.i18nKey''',
+  '''(?i)i18nKey''',
+  '''(?i)eyJhbGciOiJIUzI1NiIsInR5cCI''',
+  '''(?i)9348e3a2b1c4d5e6f7a8b9c0d1e2f3a4''',
+  '''(?i)MIIEvQIBADANBgkq''',
+]

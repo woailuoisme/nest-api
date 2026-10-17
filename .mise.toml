@@ -10,4 +10,4 @@ sd = "latest"           # Intuitive find & replace CLI tool (sd)
 hadolint = "latest"     # Dockerfile linter
 yq = "latest"           # YAML/JSON processor (jq for YAML)
 
-gitleaks = "latest"
+gitleaks = "latest"     # Git secrets & credential leak detector

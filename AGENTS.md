@@ -26,7 +26,8 @@ just sg-lint      # ast-grep 架构规则静态检查
 just sg-test      # ast-grep 规则单测 (rule-tests)
 just outline <path> # 查看文件或目录的紧凑 AST 结构大纲
 just check-deprecated # 一键全库扫描已废弃 (@deprecated) 的第三方/原生函数
-just check        # fix + fmt + type + sg-lint + sg-test (提交前完整检查)
+just secret-check     # gitleaks 密钥与敏感凭据泄漏静态扫描
+just check        # fix + fmt + type + secret-check + sg-lint + sg-test + i18n-check (提交前完整检查)
 just test         # 单元测试
 just test-e2e     # E2E 测试
 just test-cov     # 单测 + 覆盖率
