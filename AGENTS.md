@@ -9,7 +9,7 @@
 - 运行时: Bun ≥ 1.2 + Node ≥ 24，纯 ESM（`"type": "module"`）
 - 框架: NestJS 12 + Fastify 5（非 Express）· ORM: Drizzle 0.45（PostgreSQL 多文件 schema）· 校验: Zod 4 · Redis + BullMQ
 - 构建: SWC（`resolveFully`），类型检查 `tsc --noEmit` · 测试: Vitest 5 · Lint: oxlint · 格式: oxfmt · 任务: Just
-- 工具库: es-toolkit（唯一首选，严禁 Lodash）· 日志: 原生 Pino（stdout 单通道，异常经 Sentry 上报）· 可观测: OpenTelemetry（traces/metrics → otel-collector → OpenObserve）
+- 工具库: es-toolkit（唯一首选，严禁 Lodash）· 日志: 原生 Pino（stdout 单通道）· 可观测: OpenTelemetry（traces/metrics → otel-collector → OpenObserve）
 
 ## 常用命令
 
@@ -84,7 +84,6 @@ src/
 │   ├── excel/      # ExcelJS 封装
 │   ├── mail/       # 统一邮件服务 (直连 nodemailer + 自持 Handlebars 渲染器 + MJML 模板)
 │   ├── media/      # 媒体处理服务 (imgproxy JIT动态实时渲染/纯JS元数据/矢量二维码/命名策略)
-│   ├── resilience/ # 熔断 (CircuitBreaker) / 优雅限流 / 过载保护 (LoadShedding) / 超时拦截
 │   ├── search/     # Laravel Scout 风格搜索引擎抽象 (Meilisearch / Noop / 队列异步同步)
 │   └── storage/    # 本地/S3 驱动 (drivers/local.driver.ts, s3.driver.ts)
 ├── config/         # env.validation.ts (Zod schema)
@@ -163,7 +162,7 @@ tests/
 - **全文搜索模型解耦 (Laravel Scout 模式)**：数据表/实体如需支持全文检索，统一在 `src/database/search/` 目录下实现 `Searchable` 契约（如 `user.searchable.ts`）并注册入全局索引映射；业务数据增删改时通过 `SearchSyncService` 发布队列异步同步任务，严禁在业务 Service 中直接硬编码调用底层搜索引擎 SDK（如 Meilisearch 客户端），保障驱动可插拔性（Meilisearch / Noop 空驱动降级）。
 - **工业物联网总线解耦 (Decoupled MQTT & Telemetry)**：物联网设备指令交互与遥测采集集中收敛于顶级目录 `src/iot/`。传输层与业务服务一体化内聚，监听统一使用声明式 `@MqttSubscribe(topic, options)` 装饰器；向物理/仿真设备下发控制指令统一调用 `IotCommandService` 或 `MqttService.publish()` / RPC，禁止外部业务逻辑直连外部 MQTT Broker 客户端。
 - **上传链路 (Native Multipart Pipeline)**：文件上传统一使用平台原生能力 —— 路由级 `FileInterceptor` / `FilesInterceptor` / `FileStreamInterceptor`（`@nestjs/platform-fastify/multipart`）+ `@nestjs/common` 的 `@UploadedFile/@UploadedFiles` 参数装饰器。大小上限由拦截器 `limits.fileSize` 在流式写入过程中强制（超限即 413）；MIME / 扩展名白名单由 `createUploadFileFilter()` 注入 `fileFilter`（违规 400）。载荷类型 `UploadedFile = MemoryUpload | MultipartFileStream`（`src/common/storage/interfaces/upload.interface.ts`）交由 `MediaService.save()` 落盘。**表单字段名（如头像的 `file`）属对外契约的一部分**（原生拦截器按字段名精确匹配）；**禁止再引入自研的全局 multipart 收集拦截器或第二套解析实现**（历史自研实现因争抢同一条 busboy 流、需自管三层临时文件清理，已在 Nest 12 对齐中删除）。
-- **模块可见性 (@Global 政策)**：仅**叶基础设施**（Storage / Excel / Mail / Search / Cache / Logger / Redis / Drizzle / Idempotency / Jobs / Wechat）使用 `@Global()`；**领域模块一律显式 import**（`MediaModule` / `IotModule` / `RealtimeModule` / `ResilienceModule`），保证依赖关系可追溯。新增领域模块时请在使用方 `imports` 中显式声明，不要依赖全局可见性。
+- **模块可见性 (@Global 政策)**：仅**叶基础设施**（Storage / Excel / Mail / Search / Cache / Logger / Redis / Drizzle / Idempotency / Jobs / Wechat）使用 `@Global()`；**领域模块一律显式 import**（`MediaModule` / `IotModule` / `RealtimeModule`），保证依赖关系可追溯。新增领域模块时请在使用方 `imports` 中显式声明，不要依赖全局可见性。
 
 ### 环境变量
 
@@ -200,14 +199,13 @@ tests/
 
 ### 安全基线 (Nest 12 内置能力)
 
-- **安全响应头**: `app.useSecurityHeaders({ contentSecurityPolicy: false })` —— 默认值与 helmet 8 等价（CSP 保持关闭以兼容 Scalar / Bull Board / 日志面板的内联脚本），已移除 `@fastify/helmet` 依赖。
+- **安全响应头与边缘网关分层**: 常见安全响应头（X-Frame-Options, X-Content-Type-Options, HSTS 等）与传输压缩由边缘反向代理/Ingress（如 Traefik / Nginx）统一接管并开启 gzip/brotli/zstd。应用层移除了冗余的响应头与压缩中间件，降低 Node.js 进程 CPU 负载并消除流式事件/大文件直出的缓冲延迟；Fastify 适配器开启 `trustProxy: true` 以确保准确提取网关转发的客户端真实 IP。
 - **跨站请求防护 (CSRF)**: `app.enableCsrfProtection()` 基于 Fetch Metadata（`Sec-Fetch-Site` + Origin/Host 回退），**非令牌方案** —— 无 `Origin` / `Sec-Fetch-Site` 的服务端调用天然放行；跨域浏览器写请求需在 `TRUSTED_ORIGINS` 声明来源，第三方回调（微信支付 `*/payments/wepay/notify`）已在 `exclude` 中豁免。CORS 仍保持开放（`enableCors()`），由 CSRF 承担写请求的跨站防护。
 - **内置 Cookie**: 仅在配置 `COOKIE_SECRET` 时启用（`setCookie` / `@SignedCookies()`）。
 - **路由冲突诊断**: `routeConflictPolicy: { duplicate: 'error', shadow: 'warn' }` 在适配器注册前拦截重复路由（`method+path+version` 完全一致）；Fastify 为顺序不敏感适配器，框架只在该类适配器上应用 `duplicate` 策略，故 `shadow` 与 `routeResolutionStrategy` 对 Fastify 不生效（radix 路由天然静态段优先）。
 
-### HTTP 边界能力（压缩与限流）
+### HTTP 边界能力（限流与缓存）
 
-- **响应压缩**: `@fastify/compress` 在 `registerFastifyPlugins` 中注册，**必须先于 `@fastify/static`**（插件 README 硬性要求，否则静态资源不参与协商）。不显式传 `encodings`：默认即为服务端支持全集（br / gzip / deflate，Node 支持 zstd 时含 zstd），显式列表只会收窄协商范围。阈值由 `COMPRESSION_THRESHOLD_BYTES` 控制（默认 1024 字节，流式响应对该阈值不适用）。以下一律不压缩：`text/event-stream`（插件默认可压缩类型正则已排除 event-stream）、分片响应（206 / `Content-Range`）、已带 `Content-Encoding` 的响应、已压缩二进制（webp / png / jpeg / mp4 / xlsx）。**已知取舍**：`application/octet-stream`（未知扩展名文件）在插件默认正则与 mime-db 中均被标为可压缩，且 `customTypes` 只能放宽不能收紧（mime-db 为兜底判定会重新放行），按路由 `compress: false` 对 `@fastify/static` 亦不可用 —— 故接受此项（仅 CPU 浪费，无正确性问题），如需收紧请在网关侧统一压缩策略。客户端可用 `x-no-compression` 请求头临时关闭；`COMPRESSION_ENABLED=false` 时整段跳过注册。
 - **限流计数跨副本一致**: `ThrottlerModule` 必须以**对象形态**配置（数组形态会强制回落到进程内存储，多副本下限流额度被放大 N 倍）。`THROTTLE_STORAGE=redis`（默认）时由 `RedisThrottlerStorage`（`src/common/throttler/`）以单条 Lua 在 Redis 侧原子完成计数与封禁判定，键空间 `throttle:{throttlerName}:{key}`（`key` 为 @nestjs/throttler 默认 generateKey 的 SHA-256 摘要：class + handler + 名称 + 客户端标识，无明文个人信息；仍不在日志中输出）。本地无 Redis 时设 `THROTTLE_STORAGE=memory`（仅进程内计数）。
 - **限流降级的两层要求（缺一不可）**: ① 语义层 —— Redis 不可用时回退进程内计数并限频告警，限流基础设施抖动不得演化为 5xx；② 时间层 —— 客户端 `status` 非 `ready`（`'wait'` 除外，那是 `lazyConnect` 冷启动，必须放行否则永不建连）时立即降级，就绪时对单次调用加 `THROTTLE_REDIS_TIMEOUT_MS`（100ms）时间上界。**守卫阶段不受 `HTTP_TIMEOUT_MS` 约束**（Nest 生命周期为 middleware → guards → interceptors），故请求热路径上的依赖调用必须自带上界：ioredis 默认 `enableOfflineQueue: true`，断连期间的命令会排进离线队列等完整个重连周期（实测单次 >7s、连续请求可达 20s）。
 - **Redis Lua 脚本唯一事实源**: 全部脚本集中在 `src/database/lua-scripts.ts`，**禁止在调用处内联复制脚本文本**（历史上解锁脚本曾被复制两份）。加载策略按调用频率区分：请求热路径用 `defineCommand`（EVALSHA 优先 + NOSCRIPT 回落，避免重传脚本体），低频临界区脚本直接 `eval`。
@@ -233,10 +231,10 @@ BullMQ 队列由 `AuthModule → MailJobs` 依赖，CLI 模块也需 `BullModule
   - 路径参数：非 schema 场景沿用内置管道（`ParseUUIDPipe` 等）；领域标识用显式 schema（如 IoT 的 `DeviceIdSchema`），不要假设 UUID。
 - **日志**: 业务服务、控制器与基础设施使用注入的 `Logger` (Pino)，严禁在业务逻辑中使用 `console.log`（CLI / Seeder 终端输出除外）。
   - **原生极速架构**: 彻底消除 `nestjs-pino` / `pino-http` 额外包装层，基于原生 `@Global()` `LoggerModule` 与 `PinoLoggerService` 实现。
-  - **单通道 stdout**: 生产输出单行 JSON（带 `service`/`hostname` 基字段与 ISO 时间，便于多进程 / 多副本归集），开发 / 测试输出 `pino-pretty` 彩色单行。**不落盘**：日志留存交容器日志驱动（`deploy/app/docker-compose.yml` 的 `json-file` 上限，分离 `worker` 拓扑需复用同一 `logging` 块），异常另经 `sentryHooks`（level ≥ 50）上报 Sentry / GlitchTip；Pino `mixin` 注入 `trace_id`/`span_id`（无活动 span 零开销），otel-collector `filelog` 采集容器 stdout 后三信号在 OpenObserve 内互相关联。
+  - **单通道 stdout**: 生产输出单行 JSON（带 `service`/`hostname` 基字段与 ISO 时间，便于多进程 / 多副本归集），开发 / 测试输出 `pino-pretty` 彩色单行。**不落盘**：日志留存交容器日志驱动（`deploy/app/docker-compose.yml` 的 `json-file` 上限，分离 `worker` 拓扑需复用同一 `logging` 块）；Pino `mixin` 注入 `trace_id`/`span_id`（无活动 span 零开销），otel-collector `filelog` 采集容器 stdout 后三信号在 OpenObserve 内互相关联。
   - **依赖形态约束**: `pino-pretty` 属 devDependencies（生产镜像 `bun install --production` 不含它），故**必须动态导入**（`await import('pino-pretty')`）；任何对 devDependency 的静态导入都会让生产进程启动即崩，`tests/unit/setup/logger.config.test.ts` 已加回归锁。
   - **框架噪音过滤**: `SILENT_BOOTSTRAP_CONTEXTS` 自动静默 `InstanceLoader`、`RoutesResolver`、`RouterExplorer` 和 `NestApplication` 的 `INFO` 级别日常输出，WARN / ERROR 异常无损放行。
-  - **APM 选型**: 不接入 `@nestjs/observe`（供应商型 APM agent，需外部凭证与 SaaS 采集端），走标准 OpenTelemetry 自托管链路：`src/setup/otel/telemetry.ts`（副作用模块，main/worker 先导）按官方标准 env（`OTEL_EXPORTER_OTLP_ENDPOINT` 等）初始化 NodeSDK，traces + metrics 经 OTLP/HTTP+protobuf 推 otel-collector；**未配置 endpoint 时零初始化**（动态 import 均不执行）。纯 ESM 约束：require-hook 类探针（ioredis/pg）不生效，HTTP server spans 由 `@fastify/otel`（diagnostics-channel，`registerOnInitialization: true` 自动挂接全部 Fastify 实例）承担，出站 fetch 由 undici 探针承担；`@sentry/node` 在 OTel 启用时以 `skipOpenTelemetrySetup: true` 让渡 TracerProvider 只做错误告警。优雅关停经 `shutdownTelemetry()` flush。
+  - **APM 选型**: 不接入 `@nestjs/observe`（供应商型 APM agent，需外部凭证与 SaaS 采集端），走标准 OpenTelemetry 自托管链路：`src/setup/otel/telemetry.ts`（副作用模块，main/worker 先导）按官方标准 env（`OTEL_EXPORTER_OTLP_ENDPOINT` 等）初始化 NodeSDK，traces + metrics 经 OTLP/HTTP+protobuf 推 otel-collector；**未配置 endpoint 时零初始化**（动态 import 均不执行）。纯 ESM 约束：require-hook 类探针（ioredis/pg）不生效，HTTP server spans 由 `@fastify/otel`（diagnostics-channel，`registerOnInitialization: true` 自动挂接全部 Fastify 实例）承担，出站 fetch 由 undici 探针承担。优雅关停经 `shutdownTelemetry()` flush。
 - **分层异常处理 (Tiered Exception Handling)**:
   - **Controller 层**: 严禁写任何 `try-catch`，所有错误 100% 冒泡交由全局过滤器。
   - **Service 层 (常规)**: 默认不写 `try-catch` 包裹正常业务，业务校验失败直接直抛标准异常 (`NotFoundException` / `BadRequestException` 等)。

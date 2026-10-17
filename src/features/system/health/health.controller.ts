@@ -3,10 +3,8 @@ import { ApiExcludeController } from '@nestjs/swagger';
 import { DiskHealthIndicator, HealthCheck, HealthCheckService, MemoryHealthIndicator } from '@nestjs/terminus';
 
 import { Public } from '@/common/decorators/public.decorator';
-import { BypassLoadShedding } from '@/common/resilience';
 
 import { CentrifugoHealthIndicator } from './indicators/centrifugo-health.indicator';
-import { CircuitBreakerHealthIndicator } from './indicators/circuit-breaker-health.indicator';
 import { DatabaseHealthIndicator } from './indicators/database-health.indicator';
 import { ImgproxyHealthIndicator } from './indicators/imgproxy-health.indicator';
 import { MiniprogramHealthIndicator } from './indicators/miniprogram-health.indicator';
@@ -28,7 +26,6 @@ const DISK_THRESHOLD_PERCENT = 0.9;
 
 @ApiExcludeController()
 @Public()
-@BypassLoadShedding()
 @Controller({ path: 'health', version: VERSION_NEUTRAL })
 export class HealthController {
   constructor(
@@ -36,7 +33,6 @@ export class HealthController {
     private readonly dbIndicator: DatabaseHealthIndicator,
     private readonly redisIndicator: RedisHealthIndicator,
     private readonly storageIndicator: StorageHealthIndicator,
-    private readonly circuitBreakerIndicator: CircuitBreakerHealthIndicator,
     private readonly centrifugoIndicator: CentrifugoHealthIndicator,
     private readonly searchIndicator: SearchHealthIndicator,
     private readonly imgproxyIndicator: ImgproxyHealthIndicator,
@@ -53,7 +49,6 @@ export class HealthController {
       () => this.dbIndicator.isHealthy('database'),
       () => this.redisIndicator.isHealthy('redis'),
       () => this.storageIndicator.isHealthy('storage'),
-      () => this.circuitBreakerIndicator.isHealthy('circuit_breakers'),
       () => this.centrifugoIndicator.isHealthy('centrifugo'),
       () => this.searchIndicator.isHealthy('search'),
       () => this.imgproxyIndicator.isHealthy('imgproxy'),

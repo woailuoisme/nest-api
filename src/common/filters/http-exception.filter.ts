@@ -5,7 +5,6 @@ import { isEmptyObject } from 'es-toolkit';
 import type { FastifyReply, FastifyRequest } from 'fastify';
 import { I18nContext } from 'nestjs-i18n';
 
-import { calculateJitteredRetryAfter, isLoadShedError } from '@/common/resilience';
 import type { I18nPath } from '@/i18n';
 
 interface HttpResponse {
@@ -16,15 +15,6 @@ interface HttpResponse {
   header?: (name: string, value: string) => HttpResponse;
   setHeader?: (name: string, value: string) => void;
   end?: (chunk: string) => void;
-}
-
-/** 兼容 FastifyReply.header 与原生 ServerResponse.setHeader 的响应头写入 */
-function applyResponseHeader(response: HttpResponse, name: string, value: string): void {
-  if (typeof response.header === 'function') {
-    response.header(name, value);
-  } else {
-    response.setHeader?.(name, value);
-  }
 }
 
 /** 兼容 FastifyReply.code/status 与原生 ServerResponse 的 JSON 写回 */
@@ -156,14 +146,6 @@ export function resolveErrorEnvelope(exception: unknown, debug = false): Resolve
         code = 'VALIDATION_FAILED';
       }
     }
-  } else if (isLoadShedError(exception)) {
-    status = HttpStatus.SERVICE_UNAVAILABLE;
-    code = 'SERVICE_UNAVAILABLE';
-    message = exception.message;
-    log = {
-      level: exception.priority === 'CRITICAL' ? 'error' : 'warn',
-      message: `System load shed [Priority: ${exception.priority}]: ${exception.message}`,
-    };
   } else {
     const dbError = extractDatabaseError(exception);
     if (dbError) {
@@ -295,13 +277,6 @@ export class HttpExceptionFilter implements ExceptionFilter {
       } else {
         this.#logger.error(line, log.stack);
       }
-    }
-
-    if (isLoadShedError(exception)) {
-      const retryAfterSeconds = calculateJitteredRetryAfter(5);
-      applyResponseHeader(response, 'Retry-After', String(retryAfterSeconds));
-      applyResponseHeader(response, 'X-Retry-After-Ms', String(retryAfterSeconds * 1000));
-      applyResponseHeader(response, 'X-Load-Shed-Priority', exception.priority);
     }
 
     sendJsonResponse(response, status, body);

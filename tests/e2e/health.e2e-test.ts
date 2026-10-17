@@ -6,7 +6,6 @@ import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { AppModule } from '@/app.module';
 import { HttpExceptionFilter } from '@/common/filters/http-exception.filter';
 import { CentrifugoHealthIndicator } from '@/features/system/health/indicators/centrifugo-health.indicator';
-import { CircuitBreakerHealthIndicator } from '@/features/system/health/indicators/circuit-breaker-health.indicator';
 import { DatabaseHealthIndicator } from '@/features/system/health/indicators/database-health.indicator';
 import { ImgproxyHealthIndicator } from '@/features/system/health/indicators/imgproxy-health.indicator';
 import { MiniprogramHealthIndicator } from '@/features/system/health/indicators/miniprogram-health.indicator';
@@ -27,7 +26,6 @@ const AGGREGATED_INDICATORS = [
   'database',
   'redis',
   'storage',
-  'circuit_breakers',
   'centrifugo',
   'search',
   'imgproxy',
@@ -54,11 +52,6 @@ describe('HealthController (e2e)', () => {
       .useValue(stubIndicator({ redis: { status: 'up' } }))
       .overrideProvider(StorageHealthIndicator)
       .useValue(stubIndicator({ storage: { status: 'up', driver: 'local' } }))
-      // CircuitBreakerHealthIndicator 为同步实现，保持 mockReturnValue 语义
-      .overrideProvider(CircuitBreakerHealthIndicator)
-      .useValue({
-        isHealthy: vi.fn().mockReturnValue({ circuit_breakers: { status: 'up', totalCount: 0, breakers: [] } }),
-      })
       .overrideProvider(CentrifugoHealthIndicator)
       .useValue(stubIndicator({ centrifugo: { status: 'up', driver: 'centrifugo' } }))
       .overrideProvider(SearchHealthIndicator)

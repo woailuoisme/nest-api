@@ -133,7 +133,6 @@ just dev
 | **客户端 API 文档 (Scalar)** | `http://localhost:4300/docs` | 客户端公共业务接口与在线调试 |
 | **管理后台 API 文档 (Scalar)** | `http://localhost:4300/docs/admin` | 管理后台自包含领域接口（带 `/v1/admin` 前缀） |
 | **Better Auth 认证 API 文档** | `http://localhost:4300/docs/auth` | 14+ 认证插件全量端点参考手册 |
-| **BullMQ 任务队列控制台** | `http://localhost:4300/queues` | 异步任务运行状态、重试与失败监控 |
 | **系统健康检查探针** | `http://localhost:4300/health` | 实时检测 DB、Redis、实时、搜索、存储等健康状态 |
 | **Prometheus 监控指标** | `http://localhost:4300/metrics` | 生产级 Prometheus 格式指标输出 |
 | **Centrifugo 实时管理控制台** | `http://localhost:8000` | 实时连接、频道订阅与广播监控 |

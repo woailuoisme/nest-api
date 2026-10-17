@@ -7,7 +7,6 @@ import { RealtimeModule } from '@/realtime/realtime.module';
 
 import { HealthController } from './health.controller';
 import { CentrifugoHealthIndicator } from './indicators/centrifugo-health.indicator';
-import { CircuitBreakerHealthIndicator } from './indicators/circuit-breaker-health.indicator';
 import { DatabaseHealthIndicator } from './indicators/database-health.indicator';
 import { ImgproxyHealthIndicator } from './indicators/imgproxy-health.indicator';
 import { MiniprogramHealthIndicator } from './indicators/miniprogram-health.indicator';
@@ -26,7 +25,6 @@ import { WepayHealthIndicator } from './indicators/wepay-health.indicator';
     DatabaseHealthIndicator,
     RedisHealthIndicator,
     StorageHealthIndicator,
-    CircuitBreakerHealthIndicator,
     CentrifugoHealthIndicator,
     SearchHealthIndicator,
     ImgproxyHealthIndicator,

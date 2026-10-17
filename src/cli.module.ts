@@ -7,7 +7,6 @@ import { FEATURE_MODULES } from '@/features';
 
 import { CommandsModule } from './commands/commands.module';
 import { MediaModule } from './common/media/media.module';
-import { ResilienceModule } from './common/resilience';
 import { SearchModule } from './common/search/search.module';
 import { StorageModule } from './common/storage/storage.module';
 import { MiniprogramModule } from './common/wechat/miniprogram';
@@ -36,7 +35,6 @@ import { RealtimeModule } from './realtime/realtime.module';
     MiniprogramModule,
     SearchModule,
     IotModule,
-    ResilienceModule,
     ...FEATURE_MODULES,
     RealtimeModule,
     JobsModule,

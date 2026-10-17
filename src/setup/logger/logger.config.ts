@@ -8,25 +8,6 @@ import pino from 'pino';
 import { v7 as uuidv7 } from 'uuid';
 
 import { isProductionEnv } from '@/common/constants/app.constants';
-import { captureLog } from '@/setup/sentry';
-
-/** Pino level 数值：50 = error，60 = fatal */
-const ERROR_LOG_LEVEL = 50;
-
-/**
- * error/fatal 级日志桥接到 Sentry（GlitchTip）
- *
- * ponytail: 只在 level≥50 时上报且 SDK 未初始化时为空操作，故非错误路径为零开销；
- * 若后续需要 warn 级或自定义采样，改这里的阈值即可。
- */
-const sentryHooks: pino.LoggerOptions['hooks'] = {
-  logMethod(inputArgs, method, level) {
-    if (level >= ERROR_LOG_LEVEL) {
-      captureLog(inputArgs);
-    }
-    method.apply(this, inputArgs);
-  },
-};
 
 /** 敏感 Token 查询参数脱敏正则（预编译复用） */
 export const AUTH_QUERY_REGEX = /([?&](?:token|access_token|refresh_token)=)[^&\s]*/g;
@@ -117,8 +98,7 @@ const traceMixin: pino.LoggerOptions['mixin'] = () => {
  *   同时固定 `service`/`hostname` 与 ISO 时间，便于多进程、多副本日志归集（不再依赖易变的 pid）。
  * - 开发 / 测试：pino-pretty 彩色单行，保留终端可读性。
  *
- * 不再落盘：日志留存由容器日志驱动承担（见 deploy/app/docker-compose.yml 的 json-file 上限），
- * 异常另由 sentryHooks 上报 Sentry / GlitchTip，磁盘不再是第三出口。
+ * 不再落盘：日志留存由容器日志驱动承担（见 deploy/app/docker-compose.yml 的 json-file 上限）。
  */
 export async function createPinoLogger(customDestination?: Writable): Promise<pino.Logger> {
   if (customDestination) {
@@ -126,7 +106,6 @@ export async function createPinoLogger(customDestination?: Writable): Promise<pi
       {
         level: 'debug',
         redact: { paths: REDACT_PATHS, censor: '[redacted]' },
-        hooks: sentryHooks,
         mixin: traceMixin,
       },
       customDestination,
@@ -137,7 +116,6 @@ export async function createPinoLogger(customDestination?: Writable): Promise<pi
   const options: pino.LoggerOptions = {
     level: isProduction ? 'info' : 'debug',
     redact: { paths: REDACT_PATHS, censor: '[redacted]' },
-    hooks: sentryHooks,
     mixin: traceMixin,
     // 开发/测试走 pretty，无需 JSON 基字段（pretty 本就忽略 pid/hostname），故只喂给生产通道
     ...(isProduction

@@ -18,7 +18,6 @@ import { ExcelModule } from './common/excel/excel.module';
 import { IdempotencyModule } from './common/idempotency';
 import { MailModule } from './common/mail';
 import { MediaModule } from './common/media/media.module';
-import { LoadSheddingGuard, ResilienceModule } from './common/resilience';
 import { SearchModule } from './common/search/search.module';
 import { StorageModule } from './common/storage/storage.module';
 import { THROTTLER_STORAGE, ThrottlerStorageModule } from './common/throttler';
@@ -76,7 +75,6 @@ const isWorkerEmbedded = isTruthyEnv(process.env.WORKER_EMBEDDED);
     ExcelModule,
     IotModule,
     IdempotencyModule,
-    ResilienceModule,
     ...FEATURE_MODULES,
     RealtimeModule,
     JobsModule,
@@ -84,7 +82,6 @@ const isWorkerEmbedded = isTruthyEnv(process.env.WORKER_EMBEDDED);
     ...(isWorkerEmbedded ? [WorkerModule] : []),
   ],
   providers: [
-    { provide: APP_GUARD, useClass: LoadSheddingGuard },
     { provide: APP_GUARD, useClass: ThrottlerGuard },
     { provide: APP_GUARD, useClass: BetterAuthGuard },
     { provide: APP_GUARD, useClass: AdminPrefixGuard },

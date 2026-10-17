@@ -86,12 +86,9 @@ describe('引导期 HTTP 契约 (e2e)', () => {
     expect(response.statusCode).not.toBe(403);
   });
 
-  it('安全响应头生效且移除 X-Powered-By', async () => {
+  it('默认移除 X-Powered-By', async () => {
     const response = await app.inject({ method: 'GET', url: '/' });
 
-    expect(response.headers['x-content-type-options']).toBe('nosniff');
-    expect(response.headers['x-frame-options']).toBe('SAMEORIGIN');
-    expect(response.headers['referrer-policy']).toBeDefined();
     expect(response.headers['x-powered-by']).toBeUndefined();
   });
 });

@@ -1,6 +1,6 @@
 /**
  * 队列名全局常量 — 集中统一定义所有 BullMQ 队列名，
- * 生产者（QueuesModule）/ 消费者（WorkerModule）/ 调度（SchedulesModule）/ 面板（BullBoard）共用，
+ * 生产者（QueuesModule）/ 消费者（WorkerModule）/ 调度（SchedulesModule）共用，
  * 避免队列名散落各文件导致不一致。
  */
 

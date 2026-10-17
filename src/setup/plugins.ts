@@ -1,7 +1,6 @@
 import { mkdir } from 'node:fs/promises';
 import { join, posix } from 'node:path';
 
-import fastifyCompress from '@fastify/compress';
 import fastifyMultipart from '@fastify/multipart';
 import fastifyStatic from '@fastify/static';
 import { ConfigService } from '@nestjs/config';
@@ -44,10 +43,10 @@ export type RawBodyFastifyRequest = FastifyRequest & { rawBody?: Buffer | string
 const PUBLIC_UPLOAD_PREFIX = '/uploads/public/';
 
 /**
- * 不写入访问日志的路径前缀：API 文档与队列看板的自检流量，逐条记录只会淹没业务请求日志。
+ * 不写入访问日志的路径前缀：API 文档的自检流量，逐条记录只会淹没业务请求日志。
  * `/docs` 同时覆盖 docs-json、docs/admin 与 docs/auth。
  */
-const ACCESS_LOG_EXCLUDED_PREFIXES = [`/${ROUTES.DOCS}`, `/${ROUTES.QUEUES}`];
+const ACCESS_LOG_EXCLUDED_PREFIXES = [`/${ROUTES.DOCS}`];
 
 /** 请求路径是否命中运维面板（含 /docs-json 等以短横线派生的 JSON 端点） */
 function isOpsPanelPath(url: string): boolean {
@@ -57,13 +56,12 @@ function isOpsPanelPath(url: string): boolean {
 }
 
 /**
- * 注册 Fastify 插件（响应压缩, Static 文件服务, Multipart 文件上传）与原生全链路可观测性 Hooks。
- * 安全响应头与跨站请求防护已由框架内置能力接管（见 src/setup/middleware.ts），不再注册 @fastify/helmet。
+ * 注册 Fastify 插件（Static 文件服务, Multipart 文件上传）与原生全链路可观测性 Hooks。
+ * 安全响应头与压缩交由网关层负责，跨站请求防护已由框架内置能力接管（见 src/setup/middleware.ts）。
  *
  * 1. 原生 Hooks 早于所有 Guard 与 Interceptor 执行，100% 捕获包括 401/403/404/429/500 在内的所有流量；
  * 2. 自动透传并回写 x-request-id 响应头，并初始化全链路 RequestContext (AsyncLocalStorage)；
  * 3. 私有上传文件需 JWT 鉴权（Authorization header 或 ?token= query），/uploads/public/ 子目录保持公开。
- * 4. 响应压缩仅作用于文本类可压缩类型且超过阈值的响应；SSE、分片响应与已压缩二进制一律原样透出。
  */
 export async function registerFastifyPlugins(app: NestFastifyApplication): Promise<void> {
   type RegisterPlugin = Parameters<typeof app.register>[0];
@@ -93,7 +91,7 @@ export async function registerFastifyPlugins(app: NestFastifyApplication): Promi
   fastify.addHook('onResponse', async (request: FastifyRequest, reply: FastifyReply) => {
     const url = request.url?.split('?')[0] || '/';
 
-    // 运维面板（/docs、/queues、/logs）的自检流量不计入访问日志；4xx/5xx 仍保留，便于发现鉴权失败与面板异常
+    // 运维面板（/docs 等）的自检流量不计入访问日志；4xx/5xx 仍保留，便于发现鉴权失败与面板异常
     if (isOpsPanelPath(url) && reply.statusCode < 400) {
       return;
     }
@@ -123,24 +121,6 @@ export async function registerFastifyPlugins(app: NestFastifyApplication): Promi
 
   // 确保上传目录存在，避免 fastifyStatic 因 root 缺失而启动失败
   await mkdir(join(process.cwd(), PATHS.STORAGE_UPLOADS), { recursive: true });
-
-  // 5. 响应压缩（@fastify/compress）
-  //    必须早于 fastifyStatic 注册：插件 README 明确要求「启用 global 钩子的 @fastify/compress 先于 @fastify/static」，
-  //    否则静态资源不参与压缩协商。以下排除规则由插件内置行为保证，无需自定义类型白名单：
-  //    - SSE：默认可压缩类型正则形如 `^text\/(?!event-stream)|…`，event-stream 被排除，实时流不会被缓冲；
-  //    - 已压缩二进制：webp/jpeg/png/mp4 与 xlsx 均不匹配默认可压缩类型；
-  //    - 分片响应（206 / Content-Range）与已带 Content-Encoding 的响应直接跳过；
-  //    - 客户端可用 x-no-compression 请求头临时关闭压缩（插件内置逃生阀）；
-  //    - 已知取舍：application/octet-stream（未知扩展名文件）在插件默认正则与 mime-db 中均被标为可压缩，
-  //      且 customTypes 只能放宽不能收紧（mime-db 为兜底判定，仍会放行），按路由 compress:false 对静态资源也不适用
-  //      → 接受之：对已压缩内容仅属 CPU 浪费，无正确性问题。若要收紧，请在 Nginx/CDN 侧统一压缩策略。
-  //    不显式传 encodings：插件默认即为「服务端支持的全部编码」（br/gzip/deflate + Node 支持 zstd 时的 zstd），
-  //    显式传列表只会收窄协商范围。
-  if (config.get<boolean>('COMPRESSION_ENABLED')) {
-    await app.register(fastifyCompress as unknown as RegisterPlugin, {
-      threshold: config.get<number>('COMPRESSION_THRESHOLD_BYTES'),
-    });
-  }
 
   await app.register(fastifyStatic as unknown as RegisterPlugin, {
     root: join(process.cwd(), PATHS.STORAGE_UPLOADS),

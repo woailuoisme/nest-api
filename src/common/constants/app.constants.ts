@@ -43,7 +43,6 @@ export const ROUTES = {
   ADMIN_DOCS_JSON: 'docs-admin-json',
   AUTH_DOCS: 'docs/auth',
   AUTH_DOCS_JSON: 'docs-auth-json',
-  QUEUES: 'queues',
 } as const;
 
 /** 排除版本控制的基础设施与运维路由 */
@@ -56,7 +55,6 @@ export const EXCLUDED_ROUTES = [
   ROUTES.ADMIN_DOCS_JSON,
   ROUTES.AUTH_DOCS,
   ROUTES.AUTH_DOCS_JSON,
-  ROUTES.QUEUES,
 ] as const;
 
 /** 服务网络常量 */

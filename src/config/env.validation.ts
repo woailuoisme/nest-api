@@ -81,10 +81,6 @@ export const envSchema = z
     JWT_ACCESS_SECRET: z.string().min(16).optional(),
     JWT_REFRESH_SECRET: z.string().min(16).optional(),
 
-    BULL_BOARD_USER: z.string().optional(),
-    BULL_BOARD_PASSWORD: z.string().optional(),
-    // Sentry / GlitchTip DSN：未配置时不初始化 SDK（本地零配置可跑）
-    SENTRY_DSN: z.string().optional(),
     // OpenTelemetry：未配置 OTLP endpoint 时不初始化 SDK（traces/metrics 双信号经 otel-collector 转推 OpenObserve）
     OTEL_EXPORTER_OTLP_ENDPOINT: z.url().optional(),
     /** 追加 OTLP 导出的认证头（`key1=value1,key2=value2` 格式，collector 无需认证时留空） */
@@ -103,10 +99,6 @@ export const envSchema = z
     THROTTLE_STORAGE: z.enum(['redis', 'memory']).default('redis'),
     /** 全局 HTTP 请求超时时间（毫秒），默认 15000ms（15 秒） */
     HTTP_TIMEOUT_MS: z.coerce.number().positive().default(15_000),
-    // 是否启用响应压缩（服务端支持 br/gzip/deflate，Node 支持 zstd 时一并参与协商）。默认 true
-    COMPRESSION_ENABLED: envBoolean(true),
-    /** 响应压缩体积阈值（字节）：小于该值的响应不压缩，避免小响应上的 CPU 负收益。默认 1024 */
-    COMPRESSION_THRESHOLD_BYTES: z.coerce.number().int().nonnegative().default(1024),
     /** 优雅停机硬超时保底时间（毫秒），默认 10000ms（10 秒） */
     SHUTDOWN_TIMEOUT_MS: z.coerce.number().int().positive().default(10_000),
     /** 优雅停机下线缓冲等待时间（毫秒），收到 SIGTERM 后等待网关/K8s 摘流，默认 0ms */

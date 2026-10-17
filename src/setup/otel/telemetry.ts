@@ -1,8 +1,7 @@
 /**
  * OpenTelemetry 初始化（副作用模块）：traces + metrics 经 OTLP/HTTP+protobuf 推送 otel-collector。
  *
- * 仿 `src/setup/sentry.ts` 先导模式：main / worker 入口在 sentry 之后立即导入本模块，
- * 借助 top-level await 确保在其余业务模块（http/fastify）加载前完成探针注册。
+ * 入口级先导模式：main / worker 入口最先导入本模块，借助 top-level await 确保在其余业务模块（http/fastify）加载前完成探针注册。
  *
  * 未配置 `OTEL_EXPORTER_OTLP_ENDPOINT` 时不初始化（动态 import 均不执行）：
  * 本地与测试环境零配置可用、零依赖加载开销。
@@ -62,7 +61,7 @@ if (endpoint) {
 /**
  * 优雅关停：flush 未落盘的 spans 与 metrics。
  *
- * 失败仅写 stderr（刻意不用 pino/Sentry，避免停机期再次依赖它们）；
+ * 失败仅写 stderr（刻意不用 pino，避免停机期再次依赖）；
  * 部署期配置错误（endpoint/认证头错误）常在此暴露，不容忍盲区。
  */
 export async function shutdownTelemetry(): Promise<void> {

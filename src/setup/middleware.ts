@@ -102,9 +102,6 @@ export function setupGlobalMiddleware(app: NestFastifyApplication): void {
 
   const config = app.get(ConfigService<EnvConfig, true>);
 
-  // 框架内置安全响应头（默认值与 helmet 8 等价）。保持关闭 CSP：Scalar / Bull Board / 日志面板依赖内联脚本与外部资源
-  app.useSecurityHeaders({ contentSecurityPolicy: false });
-
   // 框架内置跨站请求防护：基于 Fetch Metadata（Sec-Fetch-Site + Origin/Host 回退）而非令牌方案。
   // 无 `Origin` / `Sec-Fetch-Site` 的服务端调用天然放行；仅浏览器发出的跨站写请求会被拒绝。
   // 微信支付回调由服务端发起（无 Origin），此处豁免仅为反向代理注入 Origin 时的兜底，属资金链路保险。

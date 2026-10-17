@@ -1,4 +1,3 @@
-import fastifyCompress from '@fastify/compress';
 import fastifyMultipart from '@fastify/multipart';
 import fastifyStatic from '@fastify/static';
 import { ConfigService } from '@nestjs/config';
@@ -43,8 +42,6 @@ describe('registerFastifyPlugins', () => {
     const mockConfigService = {
       get: vi.fn((key: string) => {
         if (key === 'UPLOAD_MAX_FILE_SIZE_BYTES') return 10 * 1024 * 1024;
-        if (key === 'COMPRESSION_ENABLED') return true;
-        if (key === 'COMPRESSION_THRESHOLD_BYTES') return 1024;
         return undefined;
       }),
     };
@@ -117,9 +114,9 @@ describe('registerFastifyPlugins', () => {
     expect(faviconReply.code).toHaveBeenCalledWith(204);
     expect(faviconReply.send).toHaveBeenCalled();
 
-    // 4. 运维面板（/docs、/queues、/logs）正常流量不写入访问日志
+    // 4. 运维面板（/docs 等）正常流量不写入访问日志
     mockLoggerService.logHttp.mockClear();
-    const opsPanelUrls = ['/docs', '/docs/admin', '/docs/auth', '/docs-json', '/docs-admin-json', '/queues'];
+    const opsPanelUrls = ['/docs', '/docs/admin', '/docs/auth', '/docs-json', '/docs-admin-json'];
     for (const url of opsPanelUrls) {
       await onResponseHook({ ...completedReq, url }, mockReply);
     }
@@ -127,9 +124,9 @@ describe('registerFastifyPlugins', () => {
 
     // 5. 运维面板的异常响应仍需记录（便于发现鉴权失败与面板异常）
     const unauthorizedReply = { ...mockReply, statusCode: 401 };
-    await onResponseHook({ ...completedReq, url: '/queues' }, unauthorizedReply);
+    await onResponseHook({ ...completedReq, url: '/docs/admin' }, unauthorizedReply);
     expect(mockLoggerService.logHttp).toHaveBeenCalledWith(
-      expect.objectContaining({ url: '/queues', statusCode: 401 }),
+      expect.objectContaining({ url: '/docs/admin', statusCode: 401 }),
     );
 
     // 6. 非运维面板路径（如 /api/v1/users 前缀相近路径）不受影响
@@ -137,28 +134,7 @@ describe('registerFastifyPlugins', () => {
     await onResponseHook({ ...completedReq, url: '/api/v1/docs-preview' }, mockReply);
     expect(mockLoggerService.logHttp).toHaveBeenCalledTimes(1);
 
-    // 7. 响应压缩：注册顺序必须早于 fastifyStatic（插件 README 要求），且只传入阈值
-    expect(registerMock.mock.calls.map((call) => call[0])).toEqual([fastifyCompress, fastifyStatic, fastifyMultipart]);
-    expect(registerMock).toHaveBeenCalledWith(fastifyCompress, { threshold: 1024 });
-  });
-
-  it('压缩开关关闭时不注册 @fastify/compress，仅保留 static 与 multipart', async () => {
-    const registerMock = vi.fn().mockResolvedValue(undefined);
-    const mockApp = {
-      get: vi.fn((token: unknown) => {
-        if (token === ConfigService) {
-          return { get: vi.fn((key: string) => (key === 'COMPRESSION_ENABLED' ? false : undefined)) };
-        }
-        if (token === PinoLoggerService) return { logHttp: vi.fn() };
-        return undefined;
-      }),
-      getHttpAdapter: () => ({ getInstance: () => ({ addHook: vi.fn(), get: vi.fn() }) }),
-      register: registerMock,
-    } as unknown as NestFastifyApplication;
-
-    await registerFastifyPlugins(mockApp);
-
-    expect(registerMock).not.toHaveBeenCalledWith(fastifyCompress, expect.anything());
+    // 7. 静态服务与文件上传插件注册
     expect(registerMock.mock.calls.map((call) => call[0])).toEqual([fastifyStatic, fastifyMultipart]);
   });
 });

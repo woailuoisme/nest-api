@@ -1,5 +1,4 @@
 import 'dotenv/config';
-import '@/setup/sentry';
 import '@/setup/otel/telemetry';
 import { NestFactory } from '@nestjs/core';
 

@@ -8,6 +8,7 @@ import { createRequestId } from './logger';
  */
 export function createFastifyAdapter(): FastifyAdapter {
   return new FastifyAdapter({
+    trustProxy: true,
     genReqId: createRequestId,
     routerOptions: {
       querystringParser: (str: string) => qs.parse(str, { allowDots: true, comma: true, depth: 5 }),

@@ -55,8 +55,8 @@ describe('Bootstrap Pipeline & Lifecycle Helpers', () => {
       timezone: 'UTC',
       isWorkerEmbedded: true,
       panels: [
-        { label: 'Swagger API Docs', url: 'http://localhost:3000/docs' },
-        { label: 'BullBoard Queues', url: 'http://localhost:3000/admin/queues' },
+        { label: 'API Docs', url: 'http://localhost:3000/docs' },
+        { label: 'Admin Docs', url: 'http://localhost:3000/docs/admin' },
       ],
     });
 
@@ -64,7 +64,7 @@ describe('Bootstrap Pipeline & Lifecycle Helpers', () => {
       '[App] Server is running: http://localhost:3000 (timezone=UTC) [Worker: active]',
     );
     expect(logSpy).toHaveBeenCalledWith(
-      '[App] Swagger API Docs: http://localhost:3000/docs | BullBoard Queues: http://localhost:3000/admin/queues',
+      '[App] API Docs: http://localhost:3000/docs | Admin Docs: http://localhost:3000/docs/admin',
     );
   });
 });
