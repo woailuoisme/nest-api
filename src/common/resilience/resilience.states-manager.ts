@@ -1,5 +1,6 @@
 import { Inject, Optional } from '@nestjs/common';
 import { type Cache, createCache } from 'cache-manager';
+
 import type { ResilienceModuleOptions } from './interfaces/index.js';
 import { MODULE_OPTIONS_TOKEN } from './resilience.module-definition.js';
 
@@ -37,7 +38,8 @@ export class ResilienceStatesManager {
       stores.push(options.store);
     }
 
-    this.cache = createCache({ stores });
+    // keyv 双副本（cache-manager 锁 keyv@5，项目用 keyv@6），运行时 API 兼容，仅类型收敛
+    this.cache = createCache({ stores: stores as never });
   }
 
   public async del(key: string): Promise<boolean> {
