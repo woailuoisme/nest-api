@@ -41,6 +41,7 @@ docs/
 
 # Docker, Infrastructure & Deployment
 deploy/
+!deploy/app/entrypoint.sh
 docker-compose.yml
 Dockerfile*
 .dockerignore
