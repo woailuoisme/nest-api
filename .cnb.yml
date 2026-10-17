@@ -20,7 +20,6 @@ main:
               --cache-to "${CACHE},mode=max,image-manifest=true,oci-mediatypes=true" \
               -f deploy/app/Dockerfile \
               -t "${REGISTRY}:latest" \
-              -t "${REGISTRY}:alpine" \
               --push .
 
 # ── 全局：手动触发 & 标签发布 ────────────────────────────────────────
