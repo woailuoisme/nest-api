@@ -28,20 +28,6 @@ $:
   # 手动触发：按 main 同一套标签快建一次镜像 -> latest, alpine
   web_trigger_amd64: *docker_build_amd64
 
-  # 手动触发：构建并推送 Helm chart
-  web_trigger_helm:
-    - docker:
-        image: alpine/helm
-      stages:
-        - name: Configuring credentials
-          script: helm registry login -u ${CNB_TOKEN_USER_NAME} -p "${CNB_TOKEN}" ${CNB_HELM_REGISTRY}
-        - name: Build Helm packages
-          script: helm package ./deploy/helm
-        - name: Publish to CNB
-          script: |
-            CHART_FILE=$(ls *.tgz | head -1)
-            helm push "${CHART_FILE}" oci://${CNB_HELM_REGISTRY}/${CNB_GROUP_SLUG_LOWERCASE}
-
   # 推送 v* 标签：构建版本化镜像（保留版本号标签供 tag_deploy.yml 固定部署）
   tag_push:
     - services:
