@@ -1,6 +1,8 @@
 import { ConfigService } from '@nestjs/config';
 import type { NestFastifyApplication } from '@nestjs/platform-fastify';
+
 import type { EnvConfig } from '@/config/env.validation';
+
 import { setupBullBoard } from './bull-board';
 import { setupApiDocumentation } from './swagger';
 

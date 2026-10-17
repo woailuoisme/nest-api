@@ -1,6 +1,7 @@
 import { InjectQueue } from '@nestjs/bullmq';
 import { Injectable } from '@nestjs/common';
 import type { Queue } from 'bullmq';
+
 import { DEMO_QUEUE } from '@/common/constants/queues';
 
 /**

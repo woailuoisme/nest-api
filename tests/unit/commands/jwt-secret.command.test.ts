@@ -1,6 +1,8 @@
 import { existsSync, mkdirSync, readFileSync, unlinkSync, writeFileSync } from 'node:fs';
 import { resolve } from 'node:path';
+
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+
 import { JwtSecretCommand } from '@/commands/jwt-secret.command';
 import { PATHS } from '@/common/constants/app.constants';
 

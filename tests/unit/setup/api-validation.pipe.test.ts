@@ -1,6 +1,7 @@
 import { UnprocessableEntityException } from '@nestjs/common';
 import { describe, expect, it } from 'vitest';
 import { z } from 'zod';
+
 import { createApiValidationPipe } from '@/setup/middleware';
 
 const TestSchema = z.object({

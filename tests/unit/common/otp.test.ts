@@ -5,6 +5,7 @@
  */
 import { range, uniq } from 'es-toolkit';
 import { describe, expect, it } from 'vitest';
+
 import { Otp } from '@/common/utils/otp.util';
 
 describe('Otp', () => {

@@ -1,6 +1,8 @@
 import * as crypto from 'node:crypto';
+
 import type { ConfigService } from '@nestjs/config';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+
 import { Role } from '@/common/constants/roles';
 import type { CurrentUserPayload } from '@/common/decorators/current-user.decorator';
 import { PresenceService } from '@/realtime/channels/presence.service';

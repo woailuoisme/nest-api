@@ -1,7 +1,9 @@
 import { promises as fs } from 'node:fs';
 import { extname } from 'node:path';
+
 import { Injectable } from '@nestjs/common';
 import { imageSize } from 'image-size';
+
 import type { ImageMetadata } from '../interfaces/media.interface';
 
 export const SUPPORTED_IMAGE_EXTS = new Set(['.jpg', '.jpeg', '.png', '.webp', '.gif', '.tiff', '.svg', '.avif']);

@@ -1,6 +1,7 @@
 import { imageSize } from 'image-size';
 import { createTestPng } from 'tests/factories/image.factory';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+
 import { calculateLogoGeometry, QrCodeService } from '@/common/media';
 import { StorageService } from '@/common/storage/storage.service';
 

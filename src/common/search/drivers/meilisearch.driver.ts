@@ -1,5 +1,6 @@
 import { Logger } from '@nestjs/common';
 import { Meilisearch } from 'meilisearch';
+
 import type {
   IndexSettings,
   SearchDriver,

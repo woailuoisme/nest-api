@@ -5,11 +5,13 @@ import { APP_GUARD } from '@nestjs/core';
 import { EventEmitterModule } from '@nestjs/event-emitter';
 import { ThrottlerGuard, ThrottlerModule, type ThrottlerStorage } from '@nestjs/throttler';
 import { I18nModule } from 'nestjs-i18n';
+
 import { isTruthyEnv } from '@/common/constants/app.constants';
 import { AccessControlGuard } from '@/common/guards/access-control.guard';
 import { AdminPrefixGuard } from '@/common/guards/admin-prefix.guard';
 import { BetterAuthGuard } from '@/common/guards/better-auth.guard';
 import { FEATURE_MODULES } from '@/features';
+
 import { CommandsModule } from './commands/commands.module';
 import { CacheModule } from './common/cache';
 import { ExcelModule } from './common/excel/excel.module';

@@ -3,7 +3,7 @@
  * Stores up to `capacity` items in FIFO order with O(1) push and lookup.
  */
 export class RingBuffer<T> {
-  private readonly buffer: Array<T | undefined>;
+  private readonly buffer: (T | undefined)[];
   private head = 0;
   private currentSize = 0;
 

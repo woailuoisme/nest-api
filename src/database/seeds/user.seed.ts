@@ -3,6 +3,7 @@ import { hashPassword } from 'better-auth/crypto';
 import { eq } from 'drizzle-orm';
 import { chunk } from 'es-toolkit';
 import { v7 as uuidv7 } from 'uuid';
+
 import { Role } from '@/common/constants/roles';
 import type { DrizzleDB } from '@/database/drizzle/drizzle.service';
 import * as schema from '@/database/drizzle/schema';

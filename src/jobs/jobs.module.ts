@@ -1,6 +1,8 @@
 import { BullModule } from '@nestjs/bullmq';
 import { Global, Module } from '@nestjs/common';
+
 import { ALL_QUEUE_NAMES } from '@/common/constants/queues';
+
 import { DemoJobs } from './demo/demo.jobs';
 import { MailJobs } from './mail/mail.jobs';
 import { MediaJobs } from './media/media.jobs';

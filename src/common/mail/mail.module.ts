@@ -1,8 +1,9 @@
 import { Global, Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
-import { MailService } from './mail.service';
+
 import { MailTemplateRenderer } from './mail-template.renderer';
 import { MAIL_TRANSPORTER, MailTransporterLifecycle, mailTransporterProvider } from './mail-transporter.provider';
+import { MailService } from './mail.service';
 
 /**
  * 全局邮件模块

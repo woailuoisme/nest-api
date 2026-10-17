@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+
 import { AdminNotificationsController } from '@/features/admin/notifications/notifications.controller';
 import type { NotificationsService } from '@/features/admin/notifications/notifications.service';
 

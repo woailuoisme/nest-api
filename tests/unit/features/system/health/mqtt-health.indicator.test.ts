@@ -1,5 +1,6 @@
 import type { HealthIndicatorService } from '@nestjs/terminus';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+
 import { MqttHealthIndicator } from '@/features/system/health/indicators/mqtt-health.indicator';
 import type { MqttService } from '@/iot';
 

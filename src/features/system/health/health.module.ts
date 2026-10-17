@@ -1,8 +1,10 @@
 import { Module } from '@nestjs/common';
 import { TerminusModule } from '@nestjs/terminus';
+
 import { MediaModule } from '@/common/media/media.module';
 import { IotModule } from '@/iot/iot.module';
 import { RealtimeModule } from '@/realtime/realtime.module';
+
 import { HealthController } from './health.controller';
 import { CentrifugoHealthIndicator } from './indicators/centrifugo-health.indicator';
 import { CircuitBreakerHealthIndicator } from './indicators/circuit-breaker-health.indicator';

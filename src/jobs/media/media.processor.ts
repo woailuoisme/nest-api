@@ -1,7 +1,9 @@
 import { Processor, WorkerHost } from '@nestjs/bullmq';
 import { Logger } from '@nestjs/common';
 import type { Job } from 'bullmq';
+
 import { MEDIA_QUEUE } from '@/common/constants/queues';
+
 import { type GenerateVariantsJobData, MediaJobName } from './media.jobs';
 
 /**

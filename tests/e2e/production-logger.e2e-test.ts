@@ -13,6 +13,7 @@
 import { Test } from '@nestjs/testing';
 import pino from 'pino';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+
 import { LoggerModule } from '@/setup/logger/logger.module';
 import { PINO_LOGGER } from '@/setup/logger/pino-logger.service';
 

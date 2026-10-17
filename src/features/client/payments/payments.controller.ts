@@ -1,11 +1,13 @@
 import { Controller, HttpCode, HttpStatus, Post, Req } from '@nestjs/common';
 import { ApiOperation, ApiTags } from '@nestjs/swagger';
 import type { FastifyRequest } from 'fastify';
+
 import { Public } from '@/common/decorators/public.decorator';
 import { BypassTransform } from '@/common/decorators/response.decorator';
 import { ApiNoContentResponse } from '@/common/decorators/swagger-response.decorator';
 import { WEPAY_HEADERS, type WepayNotifyHeaders } from '@/common/wechat/pay';
 import type { RawBodyFastifyRequest } from '@/setup/plugins';
+
 import { PaymentsService } from './payments.service';
 
 /**

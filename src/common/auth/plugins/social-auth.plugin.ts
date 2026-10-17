@@ -1,5 +1,6 @@
 import { Logger } from '@nestjs/common';
 import { anonymous, emailOTP, lastLoginMethod, magicLink, phoneNumber, username } from 'better-auth/plugins';
+
 import { authMailHandlers } from '../mail-dispatcher';
 
 const logger = new Logger('BetterAuth:SocialAuth');

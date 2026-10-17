@@ -3,6 +3,7 @@
  */
 import { Test } from '@nestjs/testing';
 import { beforeEach, describe, expect, it } from 'vitest';
+
 import { auth } from '@/common/auth/better-auth';
 import { AuthService } from '@/features/client/auth/auth.service';
 

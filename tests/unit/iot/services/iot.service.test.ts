@@ -3,6 +3,7 @@ import type { ConfigService } from '@nestjs/config';
 import type { EventEmitter2 } from '@nestjs/event-emitter';
 import type { IPublishPacket } from 'mqtt';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+
 import { IOT_EVENTS } from '@/common/events';
 import type { EnvConfig } from '@/config/env.validation';
 import {

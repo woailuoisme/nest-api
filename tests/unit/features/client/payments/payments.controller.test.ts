@@ -1,5 +1,6 @@
 import type { FastifyRequest } from 'fastify';
 import { describe, expect, it, vi } from 'vitest';
+
 import { WEPAY_HEADERS } from '@/common/wechat/pay';
 import { PaymentsController } from '@/features/client/payments/payments.controller';
 import type { PaymentsService } from '@/features/client/payments/payments.service';

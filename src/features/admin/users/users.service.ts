@@ -3,15 +3,17 @@ import { hashPassword } from 'better-auth/crypto';
 import { desc, eq } from 'drizzle-orm';
 import { pick } from 'es-toolkit';
 import { v7 as uuidv7 } from 'uuid';
+
 import { Role } from '@/common/constants/roles';
 import { PageMetaResource, PaginatedResultResource } from '@/common/dto/pagination.dto';
 import { parseSpatieQuery } from '@/common/query/spatie-query';
-import { SearchService } from '@/common/search/search.service';
 import { SearchSyncService } from '@/common/search/search-sync.service';
-import { type DrizzleDB, InjectDb } from '@/database/drizzle/drizzle.service';
+import { SearchService } from '@/common/search/search.service';
 import { paginateSpatieQuery } from '@/database/drizzle/drizzle-pagination';
+import { type DrizzleDB, InjectDb } from '@/database/drizzle/drizzle.service';
 import { account, user } from '@/database/drizzle/schema';
 import { userSearchable } from '@/database/search/user.searchable';
+
 import { CreateUserRequest, FindUsersRequest, SearchUsersRequest, UpdateUserRequest, UserEntity } from './users.dto';
 
 @Injectable()

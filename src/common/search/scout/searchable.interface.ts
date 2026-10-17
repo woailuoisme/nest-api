@@ -1,4 +1,5 @@
 import type { DrizzleDB } from '@/database/drizzle/drizzle.service';
+
 import type { IndexSettings } from '../interfaces/search.interface';
 
 /**

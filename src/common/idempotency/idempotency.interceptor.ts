@@ -8,6 +8,7 @@ import {
 import { Reflector } from '@nestjs/core';
 import type { FastifyReply, FastifyRequest } from 'fastify';
 import { catchError, concatMap, type Observable, of, throwError } from 'rxjs';
+
 import { IDEMPOTENT_KEY, type IdempotentOptions } from './idempotency.decorator';
 import { IdempotencyService } from './idempotency.service';
 

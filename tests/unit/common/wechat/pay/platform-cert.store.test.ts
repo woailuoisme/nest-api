@@ -1,6 +1,8 @@
 import { generateKeyPairSync } from 'node:crypto';
+
 import { Logger } from '@nestjs/common';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+
 import { PlatformCertificateStore } from '@/common/wechat/pay/certificates/platform-cert.store';
 import { encryptAesGcmResource } from '@/common/wechat/pay/crypto/cipher';
 

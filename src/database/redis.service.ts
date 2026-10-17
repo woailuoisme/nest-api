@@ -1,8 +1,11 @@
 import { randomUUID } from 'node:crypto';
+
 import { Inject, Injectable, Logger } from '@nestjs/common';
 import { compact, isNil } from 'es-toolkit';
 import type Redis from 'ioredis';
+
 import { INJECTION_TOKENS } from '@/common/constants/app.constants';
+
 import { UNLOCK_LUA_SCRIPT } from './lua-scripts';
 
 const REDIS_CLIENT = INJECTION_TOKENS.REDIS_CLIENT;

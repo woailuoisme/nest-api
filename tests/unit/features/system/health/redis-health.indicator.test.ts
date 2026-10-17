@@ -1,6 +1,7 @@
 import { HealthIndicatorService } from '@nestjs/terminus';
 import type Redis from 'ioredis';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+
 import { RedisHealthIndicator } from '@/features/system/health/indicators/redis-health.indicator';
 
 describe('RedisHealthIndicator', () => {

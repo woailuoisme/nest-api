@@ -1,4 +1,5 @@
 import type { KeyObject } from 'node:crypto';
+
 import { loadPublicKey } from '../crypto/verifier';
 
 /**

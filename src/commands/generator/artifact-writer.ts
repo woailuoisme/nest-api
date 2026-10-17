@@ -1,7 +1,9 @@
 import { existsSync, mkdirSync, readdirSync, readFileSync, rmdirSync, unlinkSync, writeFileSync } from 'node:fs';
 import { dirname, join, relative } from 'node:path';
+
 import { Logger } from '@nestjs/common';
 import { compact } from 'es-toolkit';
+
 import { toCamelCase, toPascalCase } from './string.utils';
 import { type RenderedArtifact, TEMPLATE_FILES, TemplateRenderer } from './template-renderer';
 import type { ModuleScope, TemplateContext } from './types';

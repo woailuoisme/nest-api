@@ -1,8 +1,9 @@
 import type { ConfigService } from '@nestjs/config';
 import type { SendMailOptions, Transporter } from 'nodemailer';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { MailService } from '@/common/mail/mail.service';
+
 import type { MailTemplateRenderer } from '@/common/mail/mail-template.renderer';
+import { MailService } from '@/common/mail/mail.service';
 import type { EnvConfig } from '@/config/env.validation';
 
 describe('MailService', () => {

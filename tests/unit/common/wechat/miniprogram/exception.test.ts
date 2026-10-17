@@ -1,5 +1,6 @@
 import { HttpStatus } from '@nestjs/common';
 import { describe, expect, it } from 'vitest';
+
 import {
   getMiniprogramErrorCategory,
   isMiniprogramError,

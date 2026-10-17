@@ -1,4 +1,5 @@
 import { Injectable, Logger, OnModuleDestroy } from '@nestjs/common';
+
 import { CircuitBreakerStatus, ResilienceEventType, TrafficPriority } from './enum/index.js';
 import { ResilienceEventBus } from './resilience.event-bus.js';
 

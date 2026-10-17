@@ -1,6 +1,8 @@
 import { monitorEventLoopDelay } from 'node:perf_hooks';
 import v8 from 'node:v8';
+
 import { Injectable, type OnModuleDestroy, type OnModuleInit } from '@nestjs/common';
+
 import { TrafficPriority } from '../enum/index.js';
 
 export interface SystemLoadMetrics {

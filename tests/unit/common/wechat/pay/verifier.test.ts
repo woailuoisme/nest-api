@@ -1,5 +1,7 @@
 import { createPublicKey, generateKeyPairSync, type KeyObject } from 'node:crypto';
+
 import { beforeAll, describe, expect, it } from 'vitest';
+
 import { signMessage } from '@/common/wechat/pay/crypto/signer';
 import {
   assertFreshTimestamp,

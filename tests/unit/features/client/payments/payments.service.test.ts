@@ -1,5 +1,6 @@
 import type { EventEmitter2 } from '@nestjs/event-emitter';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+
 import { PAYMENT_EVENTS } from '@/common/events';
 import type { IdempotencyService } from '@/common/idempotency';
 import type { WepayService } from '@/common/wechat/pay';

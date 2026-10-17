@@ -1,5 +1,6 @@
 import type { ConfigService } from '@nestjs/config';
 import { describe, expect, it, vi } from 'vitest';
+
 import { DrizzleService } from '@/database/drizzle/drizzle.service';
 
 describe('DrizzleService', () => {

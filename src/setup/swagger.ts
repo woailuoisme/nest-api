@@ -1,12 +1,15 @@
 import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
+
 import type { Type } from '@nestjs/common';
 import type { NestFastifyApplication } from '@nestjs/platform-fastify';
 import type { OpenAPIObject } from '@nestjs/swagger';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import { renderApiReference } from '@scalar/client-side-rendering';
+
 import { APP_VERSION, OPENAPI_VERSION, PATHS, ROUTES } from '@/common/constants/app.constants';
 import { ADMIN_FEATURE_MODULES, CLIENT_FEATURE_MODULES } from '@/features';
+
 import { BETTER_AUTH_SECURITY_SCHEMES, getProcessedBetterAuthOpenAPI } from './swagger/better-auth-openapi';
 import { zodStandardSchemaConverter } from './swagger/standard-schema-converter';
 

@@ -1,6 +1,7 @@
 import { ThrottlerStorageService } from '@nestjs/throttler';
 import type Redis from 'ioredis';
 import { describe, expect, it, vi } from 'vitest';
+
 import { RedisThrottlerStorage } from '@/common/throttler/redis-throttler-storage';
 import { createThrottlerStorage } from '@/common/throttler/throttler-storage.module';
 

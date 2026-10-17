@@ -1,7 +1,9 @@
 import { Injectable, Logger, Optional } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+
 import type { EnvConfig } from '@/config/env.validation';
 import { type DrizzleDB, InjectDb } from '@/database/drizzle/drizzle.service';
+
 import { MeiliSearchDriver } from './drivers/meilisearch.driver';
 import { NoopSearchDriver } from './drivers/noop.driver';
 import type {

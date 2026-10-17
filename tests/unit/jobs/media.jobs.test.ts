@@ -1,5 +1,6 @@
 import type { Queue } from 'bullmq';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+
 import { MediaJobName, MediaJobs } from '@/jobs/media/media.jobs';
 
 describe('MediaJobs', () => {

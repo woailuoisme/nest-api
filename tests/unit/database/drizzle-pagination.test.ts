@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
+
 import { paginateQuery } from '@/database/drizzle/drizzle-pagination';
 
 describe('paginateQuery', () => {

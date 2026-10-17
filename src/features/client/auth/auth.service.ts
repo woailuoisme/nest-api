@@ -1,5 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import type { FastifyReply } from 'fastify';
+
 import { auth } from '@/common/auth/better-auth';
 
 /**

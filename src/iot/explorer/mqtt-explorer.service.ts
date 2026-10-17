@@ -1,6 +1,7 @@
 import { Injectable, Logger, type OnApplicationBootstrap } from '@nestjs/common';
 import { DiscoveryService, MetadataScanner, Reflector } from '@nestjs/core';
 import type { IPublishPacket } from 'mqtt';
+
 import type { MqttParamBinding } from '../decorators/mqtt-params.decorator';
 import {
   MQTT_PARAM_METADATA,

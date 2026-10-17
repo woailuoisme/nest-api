@@ -2,9 +2,11 @@ import { Module } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { type ThrottlerStorage, ThrottlerStorageService } from '@nestjs/throttler';
 import type Redis from 'ioredis';
+
 import { INJECTION_TOKENS } from '@/common/constants/app.constants';
 import type { EnvConfig } from '@/config/env.validation';
 import { REDIS_CLIENT, RedisModule } from '@/database/redis.module';
+
 import { RedisThrottlerStorage } from './redis-throttler-storage';
 
 /** 限流存储注入令牌：由本模块提供，供 ThrottlerModule 装配消费 */

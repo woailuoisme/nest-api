@@ -1,6 +1,6 @@
-# NestForge
+nest-api <!-- rumdl-disable-line first-line-heading -->
 
-NestForge 是一个现代、开箱即用的 NestJS 12 + Fastify 5 企业级后端脚手架。
+现代、开箱即用的 NestJS 12 + Fastify 5 企业级后端脚手架。
 基于纯 ESM 架构构建，集成 Better Auth 完整认证生态、Drizzle ORM、BullMQ 异步队列、Centrifugo 实时广播中枢、MQTT 5.0 物联网总线、Meilisearch 全文搜索、imgproxy 动态媒体处理、高可用弹性治理及 Vitest 5 测试环境。
 
 ---
@@ -16,29 +16,29 @@ NestForge 是一个现代、开箱即用的 NestJS 12 + Fastify 5 企业级后�
 - 🖼️ **动态媒体处理与事务存储**：集成 imgproxy 实时动态图像渲染与 HMAC-SHA256 安全签名，纯 JS 元数据探测、矢量二维码生成，支持 Local 与 S3 双驱动及事务性存储补偿机制 (`storeWithCompensation`)。
 - 🗄️ **持久化与缓存队列**：Drizzle ORM 0.45 + PostgreSQL（多文件 Schema 与独立 DDL 审计）、Redis 分布式排他锁与穿透缓存、BullMQ 异步队列与 Bull Board 可视化看板。
 - 📄 **三合一 Scalar API 交互文档**：客户端 API (`/docs`)、管理后台 API (`/docs/admin`) 与 Better Auth 专有参考 (`/docs/auth`) 物理隔离，提供现代化、可在线调试的接口体验。
-- 🪵 **企业级极速可观测性**：原生 Pino 极速双通道流日志（控制台彩色高亮 + 文件按日滚动剥离 HTTP 噪音）、Terminus 健康检查 (`/health` 覆盖 7 大子系统探针)、Prometheus 监控指标。
-- 🛠️ **卓越开发者体验**：纯 ESM 规范、Bun 1.4.2（`packageManager` 字段固定，安装可复现）+ Node ≥ 24 运行时、SWC 极速编译、Vitest 5 单元/集成测试、k6 负载压测套件、Biome 代码检查与 Just 任务自动化。
+- 🪵 **企业级极速可观测性**：原生 Pino 极速流日志（控制台彩色高亮 + 单通道 stdout JSON）、OpenTelemetry 三信号归集（logs/metrics/traces 经 otel-collector 推送 OpenObserve，日志-链路互相关联）、Terminus 健康检查 (`/health` 覆盖 7 大子系统探针)。
+- 🛠️ **卓越开发者体验**：纯 ESM 规范、Bun 1.4.2（`packageManager` 字段固定，安装可复现）+ Node ≥ 24 运行时、SWC 极速编译、Vitest 5 单元/集成测试、k6 负载压测套件、oxlint + oxfmt 代码检查与 Just 任务自动化。
 
 ---
 
 ## 🧱 技术栈
 
-| 层次 | 选型与技术 | 说明 |
-| :--- | :--- | :--- |
-| **运行时** | Bun ≥ 1.2 + Node ≥ 24 | 纯 ESM (`"type": "module"`)，支持极速启动与执行 |
-| **核心框架** | NestJS 12 + Fastify 5 | 极速底层 HTTP 驱动，避免 Express 性能瓶颈 |
-| **持久层** | Drizzle ORM 0.45 + PostgreSQL | 多文件 Schema 模块化组织，提供独立建表 DDL |
-| **认证授权** | Better Auth 1.7+ | 14+ 插件全家桶，集成本地凭据、OAuth、Passkey 与 2FA |
-| **缓存与队列** | Redis 6+ + BullMQ | 分布式锁、穿透缓存与异步任务队列 |
-| **实时中枢** | Centrifugo 6+ | 纯粹无状态实时发布中枢，支持 WebSocket / SSE |
-| **全文搜索** | Meilisearch / Noop | Laravel Scout 风格抽象，模型属性映射与队列异步同步 |
-| **物联通信** | MQTT 5.0 (Mosquitto) | 工业物联网与遥测指令总线，声明式订阅 |
-| **媒体处理** | imgproxy + Sharp-free 工具链 | JIT 实时动态渲染、纯 JS 元数据提取、矢量二维码 |
-| **数据校验** | Zod 4 + nestjs-zod | 全链路强类型请求校验与响应过滤 |
-| **API 文档** | OpenAPI 3.1 + Scalar UI | 客户端、管理后台与认证专有三份独立隔离交互文档 |
-| **代码规范** | Biome 2 + ast-grep | 毫秒级代码格式化、Lint 与 AST 架构规则静态守卫 |
-| **测试套件** | Vitest 5 + k6 | 高速单元测试、E2E 测试与全场景性能压力测试 |
-| **任务编排** | Just (justfile) | 统一声明式命令入口，消除长参数脚本记忆成本 |
+| 层次                 | 选型与技术                    | 说明                                                |
+| :------------------- | :---------------------------- | :-------------------------------------------------- |
+| **运行时**     | Bun ≥ 1.2 + Node ≥ 24       | 纯 ESM (`"type": "module"`)，支持极速启动与执行   |
+| **核心框架**   | NestJS 12 + Fastify 5         | 极速底层 HTTP 驱动，避免 Express 性能瓶颈           |
+| **持久层**     | Drizzle ORM 0.45 + PostgreSQL | 多文件 Schema 模块化组织，提供独立建表 DDL          |
+| **认证授权**   | Better Auth 1.7+              | 14+ 插件全家桶，集成本地凭据、OAuth、Passkey 与 2FA |
+| **缓存与队列** | Redis 6+ + BullMQ             | 分布式锁、穿透缓存与异步任务队列                    |
+| **实时中枢**   | Centrifugo 6+                 | 纯粹无状态实时发布中枢，支持 WebSocket / SSE        |
+| **全文搜索**   | Meilisearch / Noop            | Laravel Scout 风格抽象，模型属性映射与队列异步同步  |
+| **物联通信**   | MQTT 5.0 (Mosquitto)          | 工业物联网与遥测指令总线，声明式订阅                |
+| **媒体处理**   | imgproxy + Sharp-free 工具链  | JIT 实时动态渲染、纯 JS 元数据提取、矢量二维码      |
+| **数据校验**   | Zod 4 + nestjs-zod            | 全链路强类型请求校验与响应过滤                      |
+| **API 文档**   | OpenAPI 3.1 + Scalar UI       | 客户端、管理后台与认证专有三份独立隔离交互文档      |
+| **代码规范**   | oxlint + oxfmt + ast-grep     | 毫秒级代码 Lint、格式化与 AST 架构规则静态守卫      |
+| **测试套件**   | Vitest 5 + k6                 | 高速单元测试、E2E 测试与全场景性能压力测试          |
+| **任务编排**   | Just (justfile)               | 统一声明式命令入口，消除长参数脚本记忆成本          |
 
 ---
 
@@ -134,16 +134,16 @@ just dev
 
 服务成功启动后，可通过以下端口与路径直接访问：
 
-| 服务 / 控制台 | 访问地址 | 默认凭据 / 说明 |
-| :--- | :--- | :--- |
-| **客户端 API 文档 (Scalar)** | `http://localhost:4300/docs` | 客户端公共业务接口与在线调试 |
+| 服务 / 控制台                        | 访问地址                             | 默认凭据 / 说明                                 |
+| :----------------------------------- | :----------------------------------- | :---------------------------------------------- |
+| **客户端 API 文档 (Scalar)**   | `http://localhost:4300/docs`       | 客户端公共业务接口与在线调试                    |
 | **管理后台 API 文档 (Scalar)** | `http://localhost:4300/docs/admin` | 管理后台自包含领域接口（带 `/v1/admin` 前缀） |
-| **Better Auth 认证 API 文档** | `http://localhost:4300/docs/auth` | 14+ 认证插件全量端点参考手册 |
-| **BullMQ 任务队列控制台** | `http://localhost:4300/queues` | 异步任务运行状态、重试与失败监控 |
-| **系统健康检查探针** | `http://localhost:4300/health` | 实时检测 DB、Redis、实时、搜索、存储等健康状态 |
-| **Prometheus 监控指标** | `http://localhost:4300/metrics` | 生产级 Prometheus 格式指标输出 |
-| **Centrifugo 实时管理控制台** | `http://localhost:8000` | 实时连接、频道订阅与广播监控 |
-| **Mailpit 本地邮件测试控制台** | `http://localhost:8025` | 捕获并直观查看系统外发的邮件模板 |
+| **Better Auth 认证 API 文档**  | `http://localhost:4300/docs/auth`  | 14+ 认证插件全量端点参考手册                    |
+| **BullMQ 任务队列控制台**      | `http://localhost:4300/queues`     | 异步任务运行状态、重试与失败监控                |
+| **系统健康检查探针**           | `http://localhost:4300/health`     | 实时检测 DB、Redis、实时、搜索、存储等健康状态  |
+| **Prometheus 监控指标**        | `http://localhost:4300/metrics`    | 生产级 Prometheus 格式指标输出                  |
+| **Centrifugo 实时管理控制台**  | `http://localhost:8000`            | 实时连接、频道订阅与广播监控                    |
+| **Mailpit 本地邮件测试控制台** | `http://localhost:8025`            | 捕获并直观查看系统外发的邮件模板                |
 
 ---
 
@@ -153,11 +153,11 @@ just dev
 
 执行 `just db-seed` 后，系统会自动装配具有代表性的初始测试账号：
 
-| 角色标识 | 邮箱 | 初始密码 | 角色说明 |
-| :--- | :--- | :--- | :--- |
-| `SUPER_ADMIN` | `admin@example.com` | `admin123456` | 超级管理员，具备全量管理与系统配置权限 |
-| `OPERATOR` | `operator@example.com` | `operator123456` | 运营管理员，具备常规业务运维与审计权限 |
-| `USER` | `user@nestforge.dev` | `password123` | 固定测试普通用户（同时会生成 100 位随机用户） |
+| 角色标识        | 邮箱                     | 初始密码           | 角色说明                                      |
+| :-------------- | :----------------------- | :----------------- | :-------------------------------------------- |
+| `SUPER_ADMIN` | `admin@example.com`    | `admin123456`    | 超级管理员，具备全量管理与系统配置权限        |
+| `OPERATOR`    | `operator@example.com` | `operator123456` | 运营管理员，具备常规业务运维与审计权限        |
+| `USER`        | `user@nestforge.dev`   | `password123`    | 固定测试普通用户（同时会生成 100 位随机用户） |
 
 ### 统一角色与细粒度权限
 
@@ -189,7 +189,7 @@ just start-worker         # 仅启动独立 Worker 消费进程
 # --- 代码质量门禁 ---
 just check                # 提交前完整检查 (fix + fmt + type + sg-lint + sg-test)
 just type                 # TypeScript 类型检查 (tsc --noEmit)
-just lint                 # Biome 静态检查
+just lint                 # oxlint 静态检查
 just fix                  # 自动修复 Lint 与格式化问题
 just sg-lint              # ast-grep 架构规则静态检查
 just sg-test              # ast-grep 规则单测 (rule-tests)

@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+
 import { RedisService } from '@/database/redis.service';
 
 describe('RedisService', () => {

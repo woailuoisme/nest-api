@@ -1,6 +1,7 @@
 import { applyDecorators, Type } from '@nestjs/common';
 import { ApiExtraModels, ApiResponse, getSchemaPath } from '@nestjs/swagger';
 import type { z } from 'zod';
+
 import {
   ApiCursorPaginatedResponseResource,
   ApiErrorDetailsResource,

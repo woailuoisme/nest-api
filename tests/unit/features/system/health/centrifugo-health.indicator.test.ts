@@ -1,5 +1,6 @@
 import type { HealthIndicatorService } from '@nestjs/terminus';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+
 import { CentrifugoHealthIndicator } from '@/features/system/health/indicators/centrifugo-health.indicator';
 import type { RealtimeService } from '@/realtime';
 

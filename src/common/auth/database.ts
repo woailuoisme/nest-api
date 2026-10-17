@@ -1,6 +1,7 @@
 import { drizzleAdapter } from '@better-auth/drizzle-adapter';
 import { drizzle } from 'drizzle-orm/postgres-js';
 import postgres from 'postgres';
+
 import * as schema from '@/database/drizzle/schema';
 
 const connectionString = process.env.DB_URL || 'postgresql://localhost:5432/nestforge';

@@ -1,5 +1,6 @@
 import { pgTable, text, timestamp, varchar } from 'drizzle-orm/pg-core';
 import { describe, expect, it } from 'vitest';
+
 import { buildSpatieConditions, parseSpatieQuery } from '@/common/query/spatie-query';
 
 const mockTable = pgTable('mock_users', {

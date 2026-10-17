@@ -1,5 +1,6 @@
 import { HealthIndicatorService } from '@nestjs/terminus';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+
 import { CircuitBreakerStatus, CircuitBreakerStrategy } from '@/common/resilience/index.js';
 import {
   CircuitBreakerHealthIndicator,

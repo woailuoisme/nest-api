@@ -2,6 +2,7 @@ import { Logger } from '@nestjs/common';
 import { ThrottlerStorageService } from '@nestjs/throttler';
 import type Redis from 'ioredis';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+
 import { RedisThrottlerStorage } from '@/common/throttler/redis-throttler-storage';
 
 /** 脚本调用入参：`[counterKey, blockKey, ttl, limit, blockDuration]` */

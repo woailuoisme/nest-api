@@ -1,9 +1,11 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { eq } from 'drizzle-orm';
+
 import { MediaService } from '@/common/media/media.service';
 import type { UploadedFile } from '@/common/storage/interfaces/upload.interface';
 import { type DrizzleDB, InjectDb } from '@/database/drizzle/drizzle.service';
 import { user } from '@/database/drizzle/schema';
+
 import { UserEntity } from './users.dto';
 
 /**

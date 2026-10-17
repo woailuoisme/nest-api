@@ -1,8 +1,10 @@
 import { Injectable, Logger, Optional } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+
 import type { EnvConfig } from '@/config/env.validation';
 import { type DrizzleDB, InjectDb } from '@/database/drizzle/drizzle.service';
 import { SearchJobs } from '@/jobs/search/search.jobs';
+
 import type { SearchableDefinition } from './scout/searchable.interface';
 import { SearchService } from './search.service';
 

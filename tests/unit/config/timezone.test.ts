@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it } from 'vitest';
+
 import { DEFAULT_TIMEZONE, isTimezoneValid, setupTimezone } from '@/config/timezone';
 
 describe('isTimezoneValid', () => {

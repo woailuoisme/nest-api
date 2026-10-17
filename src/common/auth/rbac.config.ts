@@ -1,6 +1,7 @@
 import { admin } from 'better-auth/plugins';
 import { createAccessControl } from 'better-auth/plugins/access';
 import { adminAc, defaultStatements } from 'better-auth/plugins/admin/access';
+
 import { Role } from '@/common/constants/roles';
 
 /**

@@ -1,5 +1,6 @@
 import { type CanActivate, type ExecutionContext, Injectable } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
+
 import { Permission } from '@/common/constants/permissions';
 import { ROLE_PERMISSIONS } from '@/common/constants/role-permissions';
 import { Role } from '@/common/constants/roles';

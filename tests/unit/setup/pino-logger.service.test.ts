@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
+
 import { PinoLoggerService } from '@/setup/logger/pino-logger.service';
 
 describe('PinoLoggerService', () => {

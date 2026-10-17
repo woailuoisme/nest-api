@@ -1,4 +1,5 @@
 import { Logger } from '@nestjs/common';
+
 import { ResilienceEventType } from '../enum/index.js';
 import { CircuitOpenedException, TimeoutException } from '../exceptions/index.js';
 import { ResilienceEventBus } from '../resilience.event-bus.js';

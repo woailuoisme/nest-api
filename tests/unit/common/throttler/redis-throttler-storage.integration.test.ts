@@ -9,10 +9,12 @@
  */
 import { randomUUID } from 'node:crypto';
 import { existsSync, readFileSync } from 'node:fs';
+
 import { ThrottlerStorageService } from '@nestjs/throttler';
 import { parse } from 'dotenv';
 import Redis from 'ioredis';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+
 import { RedisThrottlerStorage } from '@/common/throttler/redis-throttler-storage';
 
 const envFile = existsSync('.env') ? parse(readFileSync('.env')) : {};

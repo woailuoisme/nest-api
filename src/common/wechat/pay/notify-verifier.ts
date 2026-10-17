@@ -1,4 +1,5 @@
 import type { KeyObject } from 'node:crypto';
+
 import { decryptAesGcmResource } from './crypto/cipher';
 import { assertFreshTimestamp, buildVerifyMessage, verifyMessage } from './crypto/verifier';
 import type {

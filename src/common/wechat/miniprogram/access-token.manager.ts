@@ -1,5 +1,7 @@
 import { setTimeout as sleep } from 'node:timers/promises';
+
 import type { Logger } from '@nestjs/common';
+
 import type { MiniprogramTokenCache, MiniprogramTokenFetcher } from './drivers/miniprogram-driver.interface';
 import {
   MINIPROGRAM_ACCESS_TOKEN_CACHE_NAMESPACE,

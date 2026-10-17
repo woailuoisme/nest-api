@@ -1,5 +1,7 @@
 import { performance } from 'node:perf_hooks';
+
 import { catchError, finalize, from, Observable, of, switchMap, tap, throwError } from 'rxjs';
+
 import { BaseCommand } from '../commands/index.js';
 import { CircuitBreakerStatus, ResilienceEventType } from '../enum/index.js';
 import { CircuitOpenedException } from '../exceptions/index.js';
@@ -49,13 +51,13 @@ export class CircuitBreakerStrategy extends Strategy<CircuitBreakerOptions> {
 
   private static readonly activeStrategies = new Set<CircuitBreakerStrategy>();
 
-  public static getStats(): Array<{
+  public static getStats(): {
     name: string;
     status: CircuitBreakerStatus;
     stateName: string;
     failureRate: number;
     totalCalls: number;
-  }> {
+  }[] {
     return Array.from(CircuitBreakerStrategy.activeStrategies).map((s) => {
       const metrics = s.getMetrics();
       return {

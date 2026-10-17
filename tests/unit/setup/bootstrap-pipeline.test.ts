@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
+
 import { createFastifyAdapter } from '@/setup/adapter';
 import { isAppShuttingDown, setAppShuttingDown, setupShutdownHooks, setupWorkerShutdownHooks } from '@/setup/lifecycle';
 import { PinoLoggerService } from '@/setup/logger';

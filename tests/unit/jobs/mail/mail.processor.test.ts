@@ -1,5 +1,6 @@
 import type { Job } from 'bullmq';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+
 import type { MailService } from '@/common/mail/mail.service';
 import { type MailJobData, MailJobName } from '@/jobs/mail/mail.jobs';
 import { MailProcessor } from '@/jobs/mail/mail.processor';

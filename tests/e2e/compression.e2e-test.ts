@@ -14,9 +14,11 @@
 import { randomBytes } from 'node:crypto';
 import { mkdir, rm, rmdir, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
+
 import { FastifyAdapter, type NestFastifyApplication } from '@nestjs/platform-fastify';
 import { Test, type TestingModule } from '@nestjs/testing';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+
 import { AppModule } from '@/app.module';
 import { PATHS } from '@/common/constants/app.constants';
 import { setupGlobalMiddleware } from '@/setup/middleware';

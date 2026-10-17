@@ -2,7 +2,9 @@ import { All, Controller, Req, Res } from '@nestjs/common';
 import { ApiExcludeController, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { fromNodeHeaders } from 'better-auth/node';
 import type { FastifyReply, FastifyRequest } from 'fastify';
+
 import { Public } from '@/common/decorators/public.decorator';
+
 import { AuthService } from './auth.service';
 
 @ApiExcludeController()

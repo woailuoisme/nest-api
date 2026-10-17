@@ -1,5 +1,6 @@
 import type { Logger } from '@nestjs/common';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+
 import { buildSessionSignature } from '@/common/wechat/miniprogram/crypto/session-signature';
 import { RealMiniprogramDriver } from '@/common/wechat/miniprogram/drivers/real.driver';
 import { MiniprogramException } from '@/common/wechat/miniprogram/miniprogram.exception';

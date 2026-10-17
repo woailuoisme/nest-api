@@ -1,5 +1,6 @@
 import type { ConfigService } from '@nestjs/config';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+
 import { MeiliSearchDriver } from '@/common/search/drivers/meilisearch.driver';
 import { NoopSearchDriver } from '@/common/search/drivers/noop.driver';
 import { ScoutSearchBuilder } from '@/common/search/scout/scout-builder';

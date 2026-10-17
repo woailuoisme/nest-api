@@ -1,5 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { type HealthIndicatorResult, HealthIndicatorService } from '@nestjs/terminus';
+
 import { CircuitBreakerStatus, CircuitBreakerStrategy } from '@/common/resilience';
 
 export type CircuitBreakerHealthStat = ReturnType<typeof CircuitBreakerStrategy.getStats>[number];

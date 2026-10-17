@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+
 import { envSchema } from '@/config/env.validation';
 
 /** 构造通过校验所需的最小配置，overrides 覆盖待测字段 */

@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
+
 import type { SearchDriver, SearchResult } from '@/common/search/interfaces/search.interface';
 import { ScoutSearchBuilder } from '@/common/search/scout/scout-builder';
 import type { SearchableDefinition } from '@/common/search/scout/searchable.interface';

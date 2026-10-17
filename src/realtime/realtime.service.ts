@@ -1,5 +1,7 @@
 import { BadRequestException, ForbiddenException, Inject, Injectable } from '@nestjs/common';
+
 import type { CurrentUserPayload } from '@/common/decorators/current-user.decorator';
+
 import { ChannelManager } from './channels/channel-manager.service';
 import type {
   RealtimeEnvelope,

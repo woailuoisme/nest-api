@@ -1,5 +1,6 @@
 import type { HealthIndicatorService } from '@nestjs/terminus';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+
 import type { SearchService } from '@/common/search/search.service';
 import { SearchHealthIndicator } from '@/features/system/health/indicators/search-health.indicator';
 

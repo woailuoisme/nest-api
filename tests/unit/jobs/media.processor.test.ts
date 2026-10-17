@@ -1,6 +1,7 @@
 import { Logger } from '@nestjs/common';
 import type { Job } from 'bullmq';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+
 import { type GenerateVariantsJobData, MediaJobName } from '@/jobs/media/media.jobs';
 import { MediaProcessor } from '@/jobs/media/media.processor';
 

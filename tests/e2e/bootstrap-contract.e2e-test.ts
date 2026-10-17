@@ -13,6 +13,7 @@
 import { FastifyAdapter, type NestFastifyApplication } from '@nestjs/platform-fastify';
 import { Test, type TestingModule } from '@nestjs/testing';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+
 import { AppModule } from '@/app.module';
 import { setupGlobalMiddleware } from '@/setup/middleware';
 

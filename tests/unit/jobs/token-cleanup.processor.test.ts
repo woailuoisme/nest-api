@@ -1,6 +1,7 @@
 import type { Job } from 'bullmq';
 import { createMockDrizzleDb } from 'tests/mocks/drizzle.mock';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+
 import type { DrizzleDB } from '@/database/drizzle/drizzle.service';
 import * as schema from '@/database/drizzle/schema';
 import { type TokenCleanupJobData, TokenCleanupJobName } from '@/jobs/token-cleanup/token-cleanup.jobs';

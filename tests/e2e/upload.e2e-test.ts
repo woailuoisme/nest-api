@@ -8,6 +8,7 @@
  */
 import { promises as fs } from 'node:fs';
 import { join } from 'node:path';
+
 import fastifyMultipart from '@fastify/multipart';
 import {
   Controller,
@@ -21,6 +22,7 @@ import { FastifyAdapter, type NestFastifyApplication } from '@nestjs/platform-fa
 import { FileInterceptor, FileStreamInterceptor, FilesInterceptor } from '@nestjs/platform-fastify/multipart';
 import { Test, TestingModule } from '@nestjs/testing';
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
+
 import { PATHS } from '@/common/constants/app.constants';
 import { MediaModule } from '@/common/media/media.module';
 import { MediaService } from '@/common/media/media.service';

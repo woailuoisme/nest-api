@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+
 import { PresenceService } from '@/realtime/channels/presence.service';
 import type { PresenceMember } from '@/realtime/channels/presence.types';
 import type { CentrifugoTransport } from '@/realtime/transports/centrifugo.transport';

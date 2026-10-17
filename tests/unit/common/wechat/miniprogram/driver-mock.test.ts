@@ -1,5 +1,6 @@
 import type { Logger } from '@nestjs/common';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+
 import { MockMiniprogramDriver } from '@/common/wechat/miniprogram/drivers/mock.driver';
 import { MiniprogramException } from '@/common/wechat/miniprogram/miniprogram.exception';
 

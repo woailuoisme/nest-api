@@ -7,6 +7,7 @@ import { Logger } from '@nestjs/common';
 import type { ConfigService } from '@nestjs/config';
 import type { Queue } from 'bullmq';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+
 import type { EnvConfig } from '@/config/env.validation';
 import { TokenCleanupJobName } from '@/jobs/token-cleanup/token-cleanup.jobs';
 import { TokenCleanupSchedule } from '@/schedules/token-cleanup.schedule';

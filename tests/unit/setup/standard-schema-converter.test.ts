@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { z } from 'zod';
+
 import { zodStandardSchemaConverter } from '@/setup/swagger/standard-schema-converter';
 
 /** 以 Zod schema 调用转换器并取回 JSON Schema 属性表（非 Zod 入参场景由专门用例覆盖） */

@@ -1,5 +1,7 @@
 import type { KeyObject } from 'node:crypto';
+
 import type { Logger } from '@nestjs/common';
+
 import { decryptAesGcmResource } from '../crypto/cipher';
 import { loadPublicKey } from '../crypto/verifier';
 import {
@@ -13,7 +15,7 @@ export type SignedGetRequest = (path: string, query?: Record<string, string>) =>
 
 /** `/v3/certificates` 应答结构 */
 interface PlatformCertificatesResponse {
-  data?: Array<{
+  data?: {
     serial_no: string;
     effective_time?: string;
     expire_time?: string;
@@ -23,7 +25,7 @@ interface PlatformCertificatesResponse {
       associated_data?: string;
       ciphertext: string;
     };
-  }>;
+  }[];
 }
 
 /** 平台证书缓存项 */

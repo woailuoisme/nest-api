@@ -1,10 +1,12 @@
 import { createReadStream, promises as fs } from 'node:fs';
 import { join } from 'node:path';
 import { Readable } from 'node:stream';
+
 import { PayloadTooLargeException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { createTestPng } from 'tests/factories/image.factory';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+
 import { PATHS } from '@/common/constants/app.constants';
 import { THUMBNAIL_PRESETS } from '@/common/media/interfaces/media.interface';
 import { MediaService } from '@/common/media/media.service';

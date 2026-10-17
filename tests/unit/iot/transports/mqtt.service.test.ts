@@ -1,6 +1,8 @@
 import { EventEmitter } from 'node:events';
+
 import type { IPublishPacket, MqttClient } from 'mqtt';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+
 import { type MqttOptions, MqttService } from '@/iot';
 
 interface MockMqttClient {

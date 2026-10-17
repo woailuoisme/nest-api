@@ -1,5 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { OnEvent } from '@nestjs/event-emitter';
+
 import { Role } from '@/common/constants/roles';
 import type { CurrentUserPayload } from '@/common/decorators/current-user.decorator';
 import {
@@ -10,6 +11,7 @@ import {
   type IotTelemetryReceivedEvent,
 } from '@/common/events';
 import type { NotificationBroadcastEvent, NotificationSentEvent } from '@/common/events/notification.event';
+
 import { REALTIME_CHANNELS } from './channels/realtime-channels.service';
 import type {
   CentrifugoProxyResponseDto,

@@ -1,7 +1,9 @@
 import { createHmac } from 'node:crypto';
+
 import { describe, expect, it } from 'vitest';
-import type { ImgproxyConfig } from '@/common/media/imgproxy/imgproxy.interface';
+
 import { ImgproxyBuilder } from '@/common/media/imgproxy/imgproxy-builder';
+import type { ImgproxyConfig } from '@/common/media/imgproxy/imgproxy.interface';
 
 describe('ImgproxyBuilder', () => {
   const dummyConfig: ImgproxyConfig = {

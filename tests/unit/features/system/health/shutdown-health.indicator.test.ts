@@ -1,5 +1,6 @@
 import { HealthIndicatorService } from '@nestjs/terminus';
 import { beforeEach, describe, expect, it } from 'vitest';
+
 import { ShutdownHealthIndicator } from '@/features/system/health/indicators/shutdown-health.indicator';
 import { setAppShuttingDown } from '@/setup/lifecycle';
 

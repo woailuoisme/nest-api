@@ -1,6 +1,8 @@
 import { Injectable, Logger } from '@nestjs/common';
+
 import { Role } from '@/common/constants/roles';
 import type { CurrentUserPayload } from '@/common/decorators/current-user.decorator';
+
 import type { ChannelAuthorizer, ChannelAuthResult, CompiledChannelRule } from './channel.types';
 
 /**

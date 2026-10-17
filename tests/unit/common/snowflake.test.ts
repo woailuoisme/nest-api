@@ -5,6 +5,7 @@
  */
 import { range, uniq } from 'es-toolkit';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+
 import { Snowflake } from '@/common/utils/snowflake.util';
 
 // EPOCH = 2024-01-01 ≈ 1704067200000，mock 时间需在 epoch 之后避免 BigInt 负数

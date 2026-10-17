@@ -1,6 +1,7 @@
 import { BullModule } from '@nestjs/bullmq';
 import { Module } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
+
 import { ALL_QUEUE_NAMES } from '@/common/constants/queues';
 import { MailModule } from '@/common/mail';
 import { MediaModule } from '@/common/media/media.module';

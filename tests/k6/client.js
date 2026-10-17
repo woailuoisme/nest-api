@@ -1,5 +1,6 @@
 import http from 'k6/http';
 import { Rate, Trend } from 'k6/metrics';
+
 import { buildUrl, ENV } from './config.js';
 
 /**

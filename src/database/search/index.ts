@@ -1,4 +1,5 @@
 import type { SearchableDefinition } from '@/common/search/scout/searchable.interface';
+
 import { userSearchable } from './user.searchable';
 
 export * from './user.searchable';

@@ -2,8 +2,10 @@ import { existsSync, readdirSync } from 'node:fs';
 import type { IncomingMessage } from 'node:http';
 import { join } from 'node:path';
 import { Writable } from 'node:stream';
+
 import pino from 'pino';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+
 import { createPinoLogger, createRequestId, extractIp, REDACT_PATHS, redactUrl } from '@/setup/logger';
 
 /**

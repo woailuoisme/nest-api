@@ -1,7 +1,7 @@
 import 'dotenv/config';
-
 import { drizzle, type PostgresJsDatabase } from 'drizzle-orm/postgres-js';
 import postgres from 'postgres';
+
 import * as schema from '@/database/drizzle/schema';
 
 import { description as adminDesc, run as seedAdmins } from './admin.seed';

@@ -14,6 +14,7 @@
  * ```
  */
 import { randomInt } from 'node:crypto';
+
 import { OTP } from '@/common/constants/app.constants';
 
 /**

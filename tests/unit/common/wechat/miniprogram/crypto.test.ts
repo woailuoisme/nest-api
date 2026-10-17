@@ -1,5 +1,7 @@
 import { createCipheriv, createHmac, randomBytes } from 'node:crypto';
+
 import { describe, expect, it } from 'vitest';
+
 import { decryptUserData } from '@/common/wechat/miniprogram/crypto/aes-cbc';
 import { buildSessionSignature } from '@/common/wechat/miniprogram/crypto/session-signature';
 import { MiniprogramException } from '@/common/wechat/miniprogram/miniprogram.exception';

@@ -1,5 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { Command, CommandRunner, Option } from 'nest-commander';
+
 import { SearchService } from '@/common/search/search.service';
 import { type DrizzleDB, InjectDb } from '@/database/drizzle/drizzle.service';
 import { SEARCHABLE_REGISTRY } from '@/database/search';

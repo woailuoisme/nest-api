@@ -10,6 +10,7 @@ import { Reflector } from '@nestjs/core';
 import { isAPIError } from 'better-auth/api';
 import { fromNodeHeaders } from 'better-auth/node';
 import type { FastifyRequest } from 'fastify';
+
 import { auth } from '@/common/auth/better-auth';
 import type { Role } from '@/common/constants/roles';
 import type { CurrentUserPayload } from '@/common/decorators/current-user.decorator';

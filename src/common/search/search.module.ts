@@ -1,6 +1,7 @@
 import { Global, Module } from '@nestjs/common';
-import { SearchService } from './search.service';
+
 import { SearchSyncService } from './search-sync.service';
+import { SearchService } from './search.service';
 
 /**
  * 全局搜索引擎模块

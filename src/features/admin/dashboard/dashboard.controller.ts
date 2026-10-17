@@ -1,5 +1,6 @@
 import { Controller, Get } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
+
 import type { SystemMetricPayload } from './dashboard.dto';
 import { DashboardService } from './dashboard.service';
 

@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+
 import { NoopSearchDriver } from '@/common/search/drivers/noop.driver';
 
 describe('NoopSearchDriver', () => {

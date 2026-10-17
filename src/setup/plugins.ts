@@ -1,5 +1,6 @@
 import { mkdir } from 'node:fs/promises';
 import { join, posix } from 'node:path';
+
 import fastifyCompress from '@fastify/compress';
 import fastifyMultipart from '@fastify/multipart';
 import fastifyStatic from '@fastify/static';
@@ -7,10 +8,12 @@ import { ConfigService } from '@nestjs/config';
 import type { NestFastifyApplication } from '@nestjs/platform-fastify';
 import { fromNodeHeaders } from 'better-auth/node';
 import type { FastifyReply, FastifyRequest } from 'fastify';
+
 import { auth } from '@/common/auth/better-auth';
 import { PATHS, ROUTES } from '@/common/constants/app.constants';
 import { RequestContext } from '@/common/context';
 import { extractIp, PinoLoggerService } from '@/setup/logger';
+
 import { isAppShuttingDown } from './lifecycle';
 
 /** 仅暴露所需 Hook 与路由 API 的最小 Fastify 接口（规避 platform-fastify 嵌套 fastify 类型差异） */

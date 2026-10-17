@@ -4,6 +4,7 @@ import { Reflector } from '@nestjs/core';
 import type { FastifyReply } from 'fastify';
 import { firstValueFrom, of } from 'rxjs';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+
 import {
   BypassLoadShedding,
   Critical,

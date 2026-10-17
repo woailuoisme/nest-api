@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+
 import { MediaCompensationManager } from '@/common/media/managers/compensation.manager';
 import type { StorageDriver } from '@/common/storage/interfaces/storage.interface';
 import type { StorageService } from '@/common/storage/storage.service';

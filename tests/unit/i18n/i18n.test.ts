@@ -1,6 +1,7 @@
 import { Test } from '@nestjs/testing';
 import { I18nModule, I18nService } from 'nestjs-i18n';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+
 import { createI18nModuleConfig } from '@/i18n/i18n.config';
 import type { I18nPath, I18nTranslations } from '@/i18n/i18n.generated';
 

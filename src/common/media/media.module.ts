@@ -1,5 +1,7 @@
 import { Module } from '@nestjs/common';
+
 import { StorageModule } from '@/common/storage/storage.module';
+
 import { ImgproxyService } from './imgproxy/imgproxy.service';
 import { MediaCompensationManager } from './managers/compensation.manager';
 import { MediaService } from './media.service';

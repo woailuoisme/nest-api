@@ -3,8 +3,10 @@ import { CacheModule as NestCacheModule } from '@nestjs/cache-manager';
 import { Global, Module } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import Keyv from 'keyv';
+
 import type { EnvConfig } from '@/config/env.validation';
 import { RedisModule } from '@/database/redis.module';
+
 import { CACHE_L1_STORE, DEFAULT_CACHE_TTL_MS, DEFAULT_L1_TTL_MS } from './cache.constants.js';
 import { CacheService } from './cache.service.js';
 

@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+
 import { MeiliSearchDriver } from '@/common/search/drivers/meilisearch.driver';
 
 describe('MeiliSearchDriver', () => {

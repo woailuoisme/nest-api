@@ -1,5 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { Command, CommandRunner, Option } from 'nest-commander';
+
 import { CrudGeneratorService } from './crud-generator.service';
 import type { CommandOptions } from './types';
 

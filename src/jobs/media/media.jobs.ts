@@ -1,6 +1,7 @@
 import { InjectQueue } from '@nestjs/bullmq';
 import { Injectable } from '@nestjs/common';
 import type { Job, Queue } from 'bullmq';
+
 import { MEDIA_QUEUE } from '@/common/constants/queues';
 import type { ImageResizeOptions } from '@/common/media/interfaces/media.interface';
 

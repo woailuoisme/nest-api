@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { DiscoveryModule } from '@nestjs/core';
 import { connect } from 'mqtt';
+
 import { MqttExplorerService } from './explorer/mqtt-explorer.service';
 import { IotController } from './iot.controller';
 import { IotCommandService } from './services/iot-command.service';

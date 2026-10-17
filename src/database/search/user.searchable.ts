@@ -1,4 +1,5 @@
 import { asc, gt, inArray } from 'drizzle-orm';
+
 import type { SearchableDefinition } from '@/common/search/scout/searchable.interface';
 import type { DrizzleDB } from '@/database/drizzle/drizzle.service';
 import { user } from '@/database/drizzle/schema';

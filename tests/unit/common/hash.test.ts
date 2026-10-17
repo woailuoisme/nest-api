@@ -4,6 +4,7 @@
  * 覆盖：argon2id 密码哈希/验证、sha256 摘要
  */
 import { describe, expect, it } from 'vitest';
+
 import { Hash, sha256 } from '@/common/utils/hash.util';
 
 describe('Hash', () => {

@@ -1,5 +1,7 @@
 import { Injectable } from '@nestjs/common';
+
 import { RealtimeService } from '@/realtime';
+
 import type { AlertMetricPayload, BusinessMetricPayload, SystemMetricPayload } from './dashboard.dto';
 
 /**

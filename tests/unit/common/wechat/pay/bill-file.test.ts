@@ -1,6 +1,8 @@
 import { createHash } from 'node:crypto';
 import { gzipSync } from 'node:zlib';
+
 import { describe, expect, it } from 'vitest';
+
 import { decompressBillFile, verifyBillFileHash } from '@/common/wechat/pay/bill-file';
 import { WepayException } from '@/common/wechat/pay/wepay.exception';
 

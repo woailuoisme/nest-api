@@ -1,7 +1,8 @@
 import { Injectable, Logger, type OnApplicationBootstrap } from '@nestjs/common';
 import { DiscoveryService, MetadataScanner, Reflector } from '@nestjs/core';
-import type { ChannelAuthorizer } from './channel.types';
+
 import { ChannelManager } from './channel-manager.service';
+import type { ChannelAuthorizer } from './channel.types';
 import { CHANNEL_AUTH_METADATA, type ChannelAuthMetadata } from './decorators/channel-auth.decorator';
 
 /**

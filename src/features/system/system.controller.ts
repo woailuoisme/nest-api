@@ -1,5 +1,6 @@
 import { Controller, Get, VERSION_NEUTRAL } from '@nestjs/common';
 import { ApiExcludeController } from '@nestjs/swagger';
+
 import { APP_VERSION } from '@/common/constants/app.constants';
 import { Public } from '@/common/decorators/public.decorator';
 

@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+
 import { decryptAesGcmResource, encryptAesGcmResource } from '@/common/wechat/pay/crypto/cipher';
 
 /** 32 字节 APIv3 密钥 */

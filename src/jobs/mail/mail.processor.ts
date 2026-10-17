@@ -1,8 +1,10 @@
 import { Processor, WorkerHost } from '@nestjs/bullmq';
 import { Logger } from '@nestjs/common';
 import type { Job } from 'bullmq';
+
 import { MAIL_QUEUE } from '@/common/constants/queues';
 import { MailService } from '@/common/mail';
+
 import { type MailJobData, MailJobName } from './mail.jobs';
 
 /** 邮件队列消费者 — 纯路由：按 job.name 分发至全局 MailService 领域发信门面 */

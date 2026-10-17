@@ -1,10 +1,12 @@
 import { EventEmitter } from 'node:events';
+
 import { type CallHandler, type ExecutionContext, RequestTimeoutException } from '@nestjs/common';
 import { ROUTE_ARGS_METADATA } from '@nestjs/common/constants.js';
 import type { Reflector } from '@nestjs/core';
 import { NEVER, of, timer } from 'rxjs';
 import { map } from 'rxjs/operators';
 import { describe, expect, it, vi } from 'vitest';
+
 import { RequestContext } from '@/common/context';
 import { REQUEST_SIGNAL_SYMBOL, ReqSignal } from '@/common/decorators/req-signal.decorator';
 import {

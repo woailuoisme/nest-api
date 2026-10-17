@@ -1,9 +1,11 @@
 import { Body, Controller, Get, HttpCode, HttpStatus, Post, Query, Req } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import type { FastifyRequest } from 'fastify';
+
 import { CurrentUser, type CurrentUserPayload } from '@/common/decorators/current-user.decorator';
 import { Public } from '@/common/decorators/public.decorator';
 import { ApiSuccessResponse } from '@/common/decorators/swagger-response.decorator';
+
 import { RealtimeChannelsService } from './channels/realtime-channels.service';
 import {
   CentrifugoProxyResponseDto,

@@ -1,8 +1,10 @@
 import { Global, Inject, Logger, Module, type OnApplicationShutdown } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import Redis from 'ioredis';
+
 import { INJECTION_TOKENS, REDIS_MAX_RETRIES } from '@/common/constants/app.constants';
 import type { EnvConfig } from '@/config/env.validation';
+
 import { RedisService } from './redis.service';
 
 export const REDIS_CLIENT = INJECTION_TOKENS.REDIS_CLIENT;

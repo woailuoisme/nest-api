@@ -2,6 +2,7 @@ import type { Cache } from 'cache-manager';
 import type Redis from 'ioredis';
 import type Keyv from 'keyv';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+
 import {
   CACHE_INVALIDATE_CHANNEL,
   DEFAULT_CACHE_TTL_MS,

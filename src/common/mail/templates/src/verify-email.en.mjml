@@ -11,9 +11,16 @@
       <mj-column>
         <mj-text font-size="20px" font-weight="bold" color="#1F2937">Verify your email</mj-text>
         <mj-text font-size="14px" color="#4B5563" line-height="1.6">
-          Hi {{name}}, thanks for signing up for NestForge. Click the button below to verify your email:
+          Hi {{ name }}, thanks for signing up for NestForge. Click the button below to verify your email:
         </mj-text>
-        <mj-button background-color="#4F46E5" color="#FFFFFF" href="{{{link}}}" border-radius="6px" font-size="14px" padding="12px 24px">
+        <mj-button
+          background-color="#4F46E5"
+          color="#FFFFFF"
+          href="{{{link}}}"
+          border-radius="6px"
+          font-size="14px"
+          padding="12px 24px"
+        >
           Verify email
         </mj-button>
         <mj-text font-size="12px" color="#9CA3AF" line-height="1.6">

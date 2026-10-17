@@ -1,5 +1,6 @@
 import type { Logger } from '@nestjs/common';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+
 import { AccessTokenManager, MemoryMiniprogramTokenCache } from '@/common/wechat/miniprogram/access-token.manager';
 import type { MiniprogramTokenCache } from '@/common/wechat/miniprogram/drivers/miniprogram-driver.interface';
 import { MiniprogramException } from '@/common/wechat/miniprogram/miniprogram.exception';

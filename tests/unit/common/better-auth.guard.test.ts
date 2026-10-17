@@ -3,6 +3,7 @@ import { ServiceUnavailableException, UnauthorizedException } from '@nestjs/comm
 import { Reflector } from '@nestjs/core';
 import { APIError } from 'better-auth/api';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+
 import { auth } from '@/common/auth/better-auth';
 import { IS_PUBLIC_KEY } from '@/common/decorators/public.decorator';
 import { BetterAuthGuard } from '@/common/guards/better-auth.guard';

@@ -1,5 +1,7 @@
 import v8 from 'node:v8';
+
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+
 import { calculateJitteredRetryAfter, SystemLoadSampler, TrafficPriority } from '@/common/resilience';
 
 describe('SystemLoadSampler (系统运行时负载采样器)', () => {

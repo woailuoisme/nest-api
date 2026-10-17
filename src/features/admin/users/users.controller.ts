@@ -13,6 +13,7 @@ import {
   SerializeOptions,
 } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
+
 import { Permission } from '@/common/constants/permissions';
 import { Permissions } from '@/common/decorators/permissions.decorator';
 import {
@@ -22,6 +23,7 @@ import {
 } from '@/common/decorators/swagger-response.decorator';
 import type { PaginatedResultResource } from '@/common/dto/pagination.dto';
 import { Idempotent } from '@/common/idempotency';
+
 import {
   type ChangeRoleRequest,
   ChangeRoleSchema,

@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+
 import { parseMeilisearchDsn } from '@/common/search/utils/dsn.parser';
 
 describe('Meilisearch DSN Parser', () => {

@@ -32,7 +32,7 @@ export function escapeTsString(str: string): string {
   return str.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
 }
 
-/** 构建 @ApiProperty / @ApiPropertyOptional 装饰器字符串（多行格式，避免 biome line-width） */
+/** 构建 @ApiProperty / @ApiPropertyOptional 装饰器字符串（多行格式，避免 oxfmt line-width） */
 export function buildApiProperty(name: string, description: string, tsType: string, isOptional: boolean): string {
   const decorator = isOptional ? '@ApiPropertyOptional' : '@ApiProperty';
   const nullable = isOptional ? '\n    nullable: true,' : '';

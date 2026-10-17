@@ -2,6 +2,7 @@ import { InjectQueue } from '@nestjs/bullmq';
 import { Injectable, Logger, type OnApplicationBootstrap } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import type { Queue } from 'bullmq';
+
 import { APP_ENV_VALUES } from '@/common/constants/app.constants';
 import { DEMO_QUEUE } from '@/common/constants/queues';
 import type { EnvConfig } from '@/config/env.validation';

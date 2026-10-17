@@ -4,6 +4,7 @@
  * 覆盖：各单位换算、纯数字、大小写、非法输入
  */
 import { describe, expect, it } from 'vitest';
+
 import { parseDuration } from '@/common/utils/duration.util';
 
 describe('parseDuration()', () => {

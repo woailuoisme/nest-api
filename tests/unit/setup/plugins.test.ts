@@ -4,6 +4,7 @@ import fastifyStatic from '@fastify/static';
 import { ConfigService } from '@nestjs/config';
 import type { NestFastifyApplication } from '@nestjs/platform-fastify';
 import { describe, expect, it, vi } from 'vitest';
+
 import { PinoLoggerService } from '@/setup/logger/pino-logger.service';
 import { registerFastifyPlugins } from '@/setup/plugins';
 

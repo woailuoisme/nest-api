@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+
 import * as schema from '@/database/drizzle/schema';
 import { media } from '@/database/drizzle/schema/media.schema';
 import { notifications } from '@/database/drizzle/schema/notifications.schema';

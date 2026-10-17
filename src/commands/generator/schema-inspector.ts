@@ -1,4 +1,5 @@
 import { readFileSync } from 'node:fs';
+
 import { DRIZZLE_TO_FIELD_TYPE, SYSTEM_FIELDS } from './field-mappings';
 import type { FieldDef } from './types';
 

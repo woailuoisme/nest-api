@@ -1,5 +1,6 @@
 import { createTestPng } from 'tests/factories/image.factory';
 import { beforeEach, describe, expect, it } from 'vitest';
+
 import { ImageProcessor } from '@/common/media/processors/image.processor';
 
 describe('ImageProcessor', () => {

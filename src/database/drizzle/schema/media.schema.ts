@@ -14,7 +14,9 @@ export const media = pgTable(
   'media',
   {
     id: bigint('id', { mode: 'number' }).primaryKey().generatedAlwaysAsIdentity(),
-    uuid: uuid('uuid').notNull().default(sql`uuidv7()`),
+    uuid: uuid('uuid')
+      .notNull()
+      .default(sql`uuidv7()`),
     modelType: varchar('model_type', { length: 255 }).notNull(),
     modelId: uuid('model_id').notNull(),
     collectionName: varchar('collection_name', { length: 255 }).notNull().default('default'),

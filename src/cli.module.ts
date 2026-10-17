@@ -2,7 +2,9 @@ import { BullModule } from '@nestjs/bullmq';
 import { Module } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { EventEmitterModule } from '@nestjs/event-emitter';
+
 import { FEATURE_MODULES } from '@/features';
+
 import { CommandsModule } from './commands/commands.module';
 import { MediaModule } from './common/media/media.module';
 import { ResilienceModule } from './common/resilience';

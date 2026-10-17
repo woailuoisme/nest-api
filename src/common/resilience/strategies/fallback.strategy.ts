@@ -1,4 +1,5 @@
 import { catchError, Observable, of } from 'rxjs';
+
 import { BaseCommand } from '../commands/index.js';
 import { FallbackOptions } from '../interfaces/index.js';
 import { Strategy } from './base.strategy.js';

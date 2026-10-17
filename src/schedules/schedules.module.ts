@@ -1,6 +1,8 @@
 import { BullModule } from '@nestjs/bullmq';
 import { Module } from '@nestjs/common';
+
 import { DEMO_QUEUE, TOKEN_CLEANUP_QUEUE } from '@/common/constants/queues';
+
 import { DemoSchedule } from './demo.schedule';
 import { TokenCleanupSchedule } from './token-cleanup.schedule';
 

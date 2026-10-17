@@ -1,8 +1,10 @@
 import { Processor, WorkerHost } from '@nestjs/bullmq';
 import { Logger } from '@nestjs/common';
 import type { Job } from 'bullmq';
+
 import { SEARCH_QUEUE } from '@/common/constants/queues';
 import { SearchService } from '@/common/search/search.service';
+
 import { type SearchDeleteJobData, type SearchIndexJobData, SearchJobName } from './search.jobs';
 
 /**

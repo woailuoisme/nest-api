@@ -1,6 +1,8 @@
 import { createInterface } from 'node:readline';
+
 import { Injectable, Logger } from '@nestjs/common';
 import { Command, CommandRunner, Option } from 'nest-commander';
+
 import { type DrizzleDB, InjectDb } from '@/database/drizzle/drizzle.service';
 import { seedDatabase } from '@/database/seeds';
 

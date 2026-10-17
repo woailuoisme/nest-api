@@ -1,5 +1,7 @@
 import { PassThrough } from 'node:stream';
+
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+
 import { createPinoLogger } from '@/setup/logger/logger.config';
 
 const captureException = vi.fn();

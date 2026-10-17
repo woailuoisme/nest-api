@@ -8,8 +8,8 @@
 
 - 运行时: Bun ≥ 1.2 + Node ≥ 24，纯 ESM（`"type": "module"`）
 - 框架: NestJS 12 + Fastify 5（非 Express）· ORM: Drizzle 0.45（PostgreSQL 多文件 schema）· 校验: Zod 4 · Redis + BullMQ
-- 构建: SWC（`resolveFully`），类型检查 `tsc --noEmit` · 测试: Vitest 5 · Lint/格式: Biome 2 · 任务: Just
-- 工具库: es-toolkit（唯一首选，严禁 Lodash）· 日志: 原生 Pino（stdout 单通道，异常经 Sentry 上报）
+- 构建: SWC（`resolveFully`），类型检查 `tsc --noEmit` · 测试: Vitest 5 · Lint: oxlint · 格式: oxfmt · 任务: Just
+- 工具库: es-toolkit（唯一首选，严禁 Lodash）· 日志: 原生 Pino（stdout 单通道，异常经 Sentry 上报）· 可观测: OpenTelemetry（traces/metrics → otel-collector → OpenObserve）
 
 ## 常用命令
 
@@ -19,9 +19,9 @@ just dev-all      # 开发模式 (双进程并发 + watch)
 just start-embedded # 生产模式 (单进程内嵌 Worker)
 just build        # 构建到 dist/
 just type         # tsc --noEmit 类型检查
-just lint         # biome check src
-just fix          # biome --write (src tests)
-just fmt          # biome format --write
+just lint         # oxlint 静态检查 (src tests)
+just fix          # oxlint --fix + oxfmt (src tests)
+just fmt          # oxfmt 格式化
 just sg-lint      # ast-grep 架构规则静态检查
 just sg-test      # ast-grep 规则单测 (rule-tests)
 just outline <path> # 查看文件或目录的紧凑 AST 结构大纲
@@ -124,7 +124,8 @@ src/
 │   └── *.schedule.ts      # 每个定时任务一个文件，挂入 SchedulesModule
 ├── workers/        # 独立 Worker 进程 (worker.main.ts)：只消费队列
 ├── setup/          # Fastify 插件、中间件、Swagger/Scalar UI
-│   └── logger/     # 原生 PinoLoggerService + LoggerModule + 日志流配置
+│   ├── logger/     # 原生 PinoLoggerService + LoggerModule + 日志流配置
+│   └── otel/       # OpenTelemetry NodeSDK 初始化 (traces + metrics → OTLP)
 ├── app.module.ts   # 主模块
 ├── cli.module.ts   # CLI 入口模块
 ├── cli.ts          # CLI bootstrap
@@ -147,7 +148,7 @@ tests/
 
 ### 路径别名
 
-`@/*` → `./src/*` (tsconfig + vitest + biome 均已配置)。优先用别名导入。
+`@/*` → `./src/*` (tsconfig + vitest + oxlint 均已配置)。优先用别名导入。
 
 ### 模块组织
 
@@ -174,7 +175,7 @@ tests/
   - **Realtime (Centrifugo)**: `REALTIME_URL="centrifugo://api-key:hmac-secret@host:port/api?tls=false"`
   - **Search (Meilisearch)**: `SEARCH_URL="meilisearch://masterKey@localhost:7700"`（未配置时默认使用 `noop` 空驱动降级，配置后推导为 `SEARCH_DRIVER=meilisearch`）
   - **Imgproxy**: `IMGPROXY_URL="imgproxy://key:salt@host:port?publicUrl=..."`（支持 HMAC-SHA256 安全签名与多驱动映射）
-  - **MQTT (Mosquitto/EMQX)**: `MQTT_URL="mqtt://admin:password@localhost:1883?clientId=nest-forge"`（工业物联网通信与遥测总线）
+  - **MQTT (Mosquitto/EMQX)**: `MQTT_URL="mqtt://admin:password@localhost:1883?clientId=nest-api"`（工业物联网通信与遥测总线）
 - **安全相关 env**：
   - `COOKIE_SECRET`（≥32 字符，可选）：配置后启用框架内置 Cookie（`setCookie(..., { signed: true })` / `@SignedCookies()`）；未配置则不启用，不预置弱默认密钥。由主进程在引导期直接读取 `process.env`（早于 ConfigModule 生效）。
   - `TRUSTED_ORIGINS`（逗号分隔，可选）：内置 CSRF 额外信任的浏览器来源（`scheme://host[:port]`）。同源请求与 http(s) 服务端调用无需配置；独立域名前端需显式列出，`APP_URL` / `BETTER_AUTH_URL` / `PASSKEY_ORIGIN` 会自动纳入信任列表。
@@ -218,8 +219,9 @@ BullMQ 队列由 `AuthModule → MailJobs` 依赖，CLI 模块也需 `BullModule
 
 ## 编码规范
 
-- **格式**: Biome 强制 single quote / semicolon / 2-space / 120 列 / LF / es5 trailing comma。
-- **import 排序**: `assist.actions.source.organizeImports: on`，`just fix` 会自动整理，提交前必须跑。
+- **格式**: oxfmt 强制 single quote / semicolon / 2-space / 120 列 / LF / all trailing comma（`.oxfmtrc.json`）。
+- **import 排序**: oxfmt `sortImports: true`，`just fix` 会自动整理，提交前必须跑。
+- **Lint**: oxlint（`.oxlintrc.json`，correctness 类目 + 手选规则；测试文件与 CLI/seeds 豁免见 overrides）。
 - **装饰器**: `experimentalDecorators` + `emitDecoratorMetadata` 已启用。
 - **校验与输出契约 (Nest 12 原生 Standard Schema)**：
   - 请求校验走框架原生通道：路由参数装饰器携带 `schema`（`@Body({ schema: CreateUserSchema })` / `@Query({ schema: FindUsersSchema })` / `@Param(name, { schema })`），由全局 `StandardSchemaValidationPipe` 执行；失败统一 422 + `{ code: 'VALIDATION_FAILED', message, fields, errors }` 信封（`createApiValidationPipe()`，`src/setup/middleware.ts`）。
@@ -230,10 +232,10 @@ BullMQ 队列由 `AuthModule → MailJobs` 依赖，CLI 模块也需 `BullModule
   - 路径参数：非 schema 场景沿用内置管道（`ParseUUIDPipe` 等）；领域标识用显式 schema（如 IoT 的 `DeviceIdSchema`），不要假设 UUID。
 - **日志**: 业务服务、控制器与基础设施使用注入的 `Logger` (Pino)，严禁在业务逻辑中使用 `console.log`（CLI / Seeder 终端输出除外）。
   - **原生极速架构**: 彻底消除 `nestjs-pino` / `pino-http` 额外包装层，基于原生 `@Global()` `LoggerModule` 与 `PinoLoggerService` 实现。
-  - **单通道 stdout**: 生产输出单行 JSON（带 `service`/`hostname` 基字段与 ISO 时间，便于多进程 / 多副本归集），开发 / 测试输出 `pino-pretty` 彩色单行。**不落盘**：日志留存交容器日志驱动（`deploy/app/docker-compose.yml` 的 `json-file` 上限，分离 `worker` 拓扑需复用同一 `logging` 块），异常另经 `sentryHooks`（level ≥ 50）上报 Sentry / GlitchTip。
+  - **单通道 stdout**: 生产输出单行 JSON（带 `service`/`hostname` 基字段与 ISO 时间，便于多进程 / 多副本归集），开发 / 测试输出 `pino-pretty` 彩色单行。**不落盘**：日志留存交容器日志驱动（`deploy/app/docker-compose.yml` 的 `json-file` 上限，分离 `worker` 拓扑需复用同一 `logging` 块），异常另经 `sentryHooks`（level ≥ 50）上报 Sentry / GlitchTip；Pino `mixin` 注入 `trace_id`/`span_id`（无活动 span 零开销），otel-collector `filelog` 采集容器 stdout 后三信号在 OpenObserve 内互相关联。
   - **依赖形态约束**: `pino-pretty` 属 devDependencies（生产镜像 `bun install --production` 不含它），故**必须动态导入**（`await import('pino-pretty')`）；任何对 devDependency 的静态导入都会让生产进程启动即崩，`tests/unit/setup/logger.config.test.ts` 已加回归锁。
   - **框架噪音过滤**: `SILENT_BOOTSTRAP_CONTEXTS` 自动静默 `InstanceLoader`、`RoutesResolver`、`RouterExplorer` 和 `NestApplication` 的 `INFO` 级别日常输出，WARN / ERROR 异常无损放行。
-  - **APM 选型**: 未接入 `@nestjs/observe`（供应商型 APM agent，需外部凭证与 SaaS 采集端），既有自托管链路（`x-request-id` + Pino + ResilienceMetrics + Terminus）保持不变。理由与按需 opt-in 方式见 `docs/adr/0001-observability-keep-native-pino.md`。
+  - **APM 选型**: 不接入 `@nestjs/observe`（供应商型 APM agent，需外部凭证与 SaaS 采集端），走标准 OpenTelemetry 自托管链路：`src/setup/otel/telemetry.ts`（副作用模块，main/worker 先导）按官方标准 env（`OTEL_EXPORTER_OTLP_ENDPOINT` 等）初始化 NodeSDK，traces + metrics 经 OTLP/HTTP+protobuf 推 otel-collector；**未配置 endpoint 时零初始化**（动态 import 均不执行）。纯 ESM 约束：require-hook 类探针（ioredis/pg）不生效，HTTP server spans 由 `@fastify/otel`（diagnostics-channel，`registerOnInitialization: true` 自动挂接全部 Fastify 实例）承担，出站 fetch 由 undici 探针承担；`@sentry/node` 在 OTel 启用时以 `skipOpenTelemetrySetup: true` 让渡 TracerProvider 只做错误告警。优雅关停经 `shutdownTelemetry()` flush。
 - **分层异常处理 (Tiered Exception Handling)**:
   - **Controller 层**: 严禁写任何 `try-catch`，所有错误 100% 冒泡交由全局过滤器。
   - **Service 层 (常规)**: 默认不写 `try-catch` 包裹正常业务，业务校验失败直接直抛标准异常 (`NotFoundException` / `BadRequestException` 等)。
@@ -260,14 +262,14 @@ BullMQ 队列由 `AuthModule → MailJobs` 依赖，CLI 模块也需 `BullModule
 
 ### 高性能与高可用基础设施
 
-- **全链路可观测性**: 请求追踪 `x-request-id` 下沉 Fastify Hook，耗时用 `reply.elapsedTime`，覆盖含 401/403/404/429/500 的所有流量。
+- **全链路可观测性**: 请求追踪 `x-request-id` 下沉 Fastify Hook，耗时用 `reply.elapsedTime`，覆盖含 401/403/404/429/500 的所有流量；三信号（logs/metrics/traces）经 `deploy/otelcol/` 统一出口推送外部 OpenObserve（`OO_ENDPOINT` / `OO_AUTH` 见 `deploy/.env.example`）。
 - **`RedisService`**: `withLock('lock:key', ttlMs, fn)` 分布式排他锁 + `remember` 读写穿透缓存，保证多 Pod 下 Cron 幂等与防击穿。
 - **事务性媒体存储**: `storeWithCompensation` 自动处理「写盘 → 落库 → 失败回滚清理 → 成功旧图回收」，支持 Local/S3 双向 URL/Path 映射。
 - **CRUD 生成器三层解耦**: `SchemaInspector`（AST 反解）/ `TemplateRenderer`（纯内存变换）/ `ArtifactWriter`（安全写盘 + AdminModule 幂等注册）。
 
 ## Git 工作流
 
-- **Lefthook pre-commit** (`lefthook.yml`): 并行跑 biome (含 `--write` 自动修复并 `stage_fixed`)
+- **Lefthook pre-commit** (`lefthook.yml`): 并行跑 oxlint (`--fix`) + oxfmt (均 `stage_fixed`)
   - helm lint + `tsc --noEmit`。
 - 提交前本地跑 `just check` 可提前发现绝大部分问题。
 - `*.log`、`storage/*/` 内容、`.env`、`*.ini` (除 example) 均被 `.gitignore` 忽略；`storage/*/` 通过 `.gitignore` 占位文件保留目录结构。

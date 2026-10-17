@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+
 import { escapeTsString, pluralize, toCamelCase, toPascalCase, toSnakeCase } from '@/commands/generator/string.utils';
 
 describe('string.utils（CRUD 生成器命名转换契约）', () => {

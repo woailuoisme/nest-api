@@ -1,6 +1,7 @@
 import { FastifyAdapter, type NestFastifyApplication } from '@nestjs/platform-fastify';
 import { Test } from '@nestjs/testing';
 import { describe, expect, it } from 'vitest';
+
 import { AppModule } from '@/app.module';
 import { setupApiDocumentation } from '@/setup/swagger';
 

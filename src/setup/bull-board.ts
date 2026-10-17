@@ -6,6 +6,7 @@ import { ConfigService } from '@nestjs/config';
 import type { NestFastifyApplication } from '@nestjs/platform-fastify';
 import type { Queue } from 'bullmq';
 import type { FastifyReply, FastifyRequest } from 'fastify';
+
 import { isProductionEnv } from '@/common/constants/app.constants';
 import { DEMO_QUEUE, MAIL_QUEUE, MEDIA_QUEUE, TOKEN_CLEANUP_QUEUE } from '@/common/constants/queues';
 import { matchesBasicAuth } from '@/common/utils/basic-auth.util';

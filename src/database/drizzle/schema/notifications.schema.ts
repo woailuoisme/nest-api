@@ -15,7 +15,9 @@ import { index, jsonb, pgTable, timestamp, uuid, varchar } from 'drizzle-orm/pg-
 export const notifications = pgTable(
   'notifications',
   {
-    id: uuid('id').primaryKey().default(sql`uuidv7()`),
+    id: uuid('id')
+      .primaryKey()
+      .default(sql`uuidv7()`),
     type: varchar('type', { length: 255 }).notNull(),
     notifiableType: varchar('notifiable_type', { length: 255 }).notNull(),
     notifiableId: uuid('notifiable_id').notNull(),

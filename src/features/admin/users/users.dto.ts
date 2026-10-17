@@ -1,5 +1,6 @@
 import { ApiProperty } from '@nestjs/swagger';
 import { z } from 'zod';
+
 import { Role } from '@/common/constants/roles';
 import { PageOptionsSchema, paginatedEnvelopeSchema } from '@/common/dto/pagination.dto';
 

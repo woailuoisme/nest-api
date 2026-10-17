@@ -1,5 +1,7 @@
 import { keyBy } from 'es-toolkit';
+
 import type { DrizzleDB } from '@/database/drizzle/drizzle.service';
+
 import type { SearchDriver, SearchParams, SearchResult } from '../interfaces/search.interface';
 import type { SearchableDefinition } from './searchable.interface';
 

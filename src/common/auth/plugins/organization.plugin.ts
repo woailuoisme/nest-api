@@ -1,4 +1,5 @@
 import { organization } from 'better-auth/plugins';
+
 import { authMailHandlers } from '../mail-dispatcher';
 
 /**

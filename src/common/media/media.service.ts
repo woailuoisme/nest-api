@@ -1,7 +1,9 @@
 import { extname } from 'node:path';
+
 import { BadRequestException, Injectable, Logger, Optional } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { isEmptyObject } from 'es-toolkit';
+
 import type { StorageDriver } from '@/common/storage/interfaces/storage.interface';
 import {
   getUploadContent,
@@ -11,8 +13,9 @@ import {
 } from '@/common/storage/interfaces/upload.interface';
 import { StorageService } from '@/common/storage/storage.service';
 import { MediaJobs } from '@/jobs/media/media.jobs';
-import { ImgproxyService } from './imgproxy/imgproxy.service';
+
 import { ImgproxyBuilder } from './imgproxy/imgproxy-builder';
+import { ImgproxyService } from './imgproxy/imgproxy.service';
 import type {
   ImageMetadata,
   MediaCleanupOptions,

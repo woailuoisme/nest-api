@@ -1,4 +1,5 @@
 import { SetMetadata } from '@nestjs/common';
+
 import { MQTT_SUBSCRIBE_METADATA, type MqttSubscribeOptions } from '../transports/interfaces/mqtt.interface';
 
 /**

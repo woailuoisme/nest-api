@@ -1,6 +1,7 @@
 import { type FactoryProvider, Inject, Injectable, type OnApplicationShutdown } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import nodemailer, { type Transporter } from 'nodemailer';
+
 import { INJECTION_TOKENS } from '@/common/constants/app.constants';
 import type { EnvConfig } from '@/config/env.validation';
 

@@ -1,5 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { type HealthIndicatorResult, HealthIndicatorService } from '@nestjs/terminus';
+
 import { MqttService } from '@/iot';
 
 /**

@@ -6,6 +6,7 @@
 import { Logger } from '@nestjs/common';
 import type { Job } from 'bullmq';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+
 import { type DemoJobData, DemoJobName } from '@/jobs/demo/demo.jobs';
 import { DemoProcessor } from '@/jobs/demo/demo.processor';
 

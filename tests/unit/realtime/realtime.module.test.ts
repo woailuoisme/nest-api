@@ -2,14 +2,15 @@ import { Global, Module } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { Test, type TestingModule } from '@nestjs/testing';
 import { beforeEach, describe, expect, it } from 'vitest';
+
 import { ChannelExplorerService } from '@/realtime/channels/channel-explorer.service';
 import { ChannelManager } from '@/realtime/channels/channel-manager.service';
 import { PresenceService } from '@/realtime/channels/presence.service';
 import { RealtimeChannelsService } from '@/realtime/channels/realtime-channels.service';
+import { RealtimeEventsService } from '@/realtime/realtime-events.service';
 import { RealtimeController } from '@/realtime/realtime.controller';
 import { RealtimeModule } from '@/realtime/realtime.module';
 import { RealtimeService } from '@/realtime/realtime.service';
-import { RealtimeEventsService } from '@/realtime/realtime-events.service';
 import { CentrifugoTransport } from '@/realtime/transports/centrifugo.transport';
 import { REALTIME_PRIMARY_TRANSPORT } from '@/realtime/transports/realtime-transport.interface';
 

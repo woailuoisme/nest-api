@@ -1,6 +1,7 @@
 import { InjectQueue } from '@nestjs/bullmq';
 import { Injectable } from '@nestjs/common';
 import type { Job, JobsOptions, Queue } from 'bullmq';
+
 import { SEARCH_QUEUE } from '@/common/constants/queues';
 
 /** 搜索任务统一重试与保留策略：指数退避 3 次；成功保留 100 条、失败保留 500 条便于排障 */

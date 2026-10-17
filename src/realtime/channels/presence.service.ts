@@ -1,4 +1,5 @@
 import { Injectable, Optional } from '@nestjs/common';
+
 import { CentrifugoTransport } from '../transports/centrifugo.transport';
 import { DEFAULT_PRESENCE_TTL_SECONDS, type PresenceMember, type PresenceMemberInfo } from './presence.types';
 

@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+
 import { parseMqttDsn } from '@/iot';
 
 describe('MQTT 5.0 DSN 解析器 (parseMqttDsn)', () => {

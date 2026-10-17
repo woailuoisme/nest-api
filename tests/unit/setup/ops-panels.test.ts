@@ -1,6 +1,7 @@
 import { ConfigService } from '@nestjs/config';
 import type { NestFastifyApplication } from '@nestjs/platform-fastify';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+
 import { setupBullBoard } from '@/setup/bull-board';
 import { registerOpsPanels } from '@/setup/ops-panels';
 import { setupApiDocumentation } from '@/setup/swagger';

@@ -1,9 +1,12 @@
 import { randomUUID } from 'node:crypto';
 import { promises as fs } from 'node:fs';
+
 import { Injectable, Optional } from '@nestjs/common';
 import { clamp } from 'es-toolkit';
 import * as QRCode from 'qrcode';
+
 import type { StorageService } from '@/common/storage/storage.service';
+
 import type {
   QrCodeErrorCorrectionLevel,
   QrCodeOptions,

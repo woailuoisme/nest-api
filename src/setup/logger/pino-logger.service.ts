@@ -101,7 +101,7 @@ export class PinoLoggerService implements LoggerService {
     appUrl: string;
     timezone: string;
     isWorkerEmbedded?: boolean;
-    panels: Array<{ label: string; url: string }>;
+    panels: { label: string; url: string }[];
   }): void {
     const workerTag = params.isWorkerEmbedded ? ' [Worker: active]' : '';
     this.log(`[App] Server is running: ${params.appUrl} (timezone=${params.timezone})${workerTag}`);

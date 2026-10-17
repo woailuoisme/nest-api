@@ -1,6 +1,7 @@
 import { Inject, Injectable, Logger } from '@nestjs/common';
 import { type ThrottlerStorage, ThrottlerStorageService } from '@nestjs/throttler';
 import type Redis from 'ioredis';
+
 import { INJECTION_TOKENS } from '@/common/constants/app.constants';
 import { THROTTLE_INCREMENT_LUA_SCRIPT } from '@/database/lua-scripts';
 

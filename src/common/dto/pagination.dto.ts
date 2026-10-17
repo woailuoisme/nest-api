@@ -1,5 +1,6 @@
 import { ApiProperty } from '@nestjs/swagger';
 import { z } from 'zod';
+
 import { PAGINATION } from '@/common/constants/app.constants';
 
 export const PageSizeSchema = z.coerce

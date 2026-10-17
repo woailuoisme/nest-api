@@ -1,5 +1,6 @@
 import type { PathItemObject, PathsObject, ReferenceObject, SchemaObject } from '@nestjs/swagger';
 import { compact } from 'es-toolkit';
+
 import { auth } from '@/common/auth/better-auth';
 
 /** 中文 Tag 元数据定义 */

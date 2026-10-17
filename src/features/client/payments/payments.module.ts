@@ -1,6 +1,8 @@
 import { Module } from '@nestjs/common';
+
 import { IdempotencyModule } from '@/common/idempotency';
 import { WepayModule } from '@/common/wechat/pay';
+
 import { PaymentsController } from './payments.controller';
 import { PaymentsService } from './payments.service';
 

@@ -1,4 +1,4 @@
-# nest-forge 的 justfile
+# nest-api 的 justfile
 # 运行 `just --list` 查看可用命令。
 
 set shell := ["bash", "-uc"]
@@ -57,7 +57,7 @@ type:
 
 # 代码 Lint
 lint:
-    bun x biome check src
+    bun x oxlint src tests
 
 # 运行 ast-grep 结构架构 Lint
 sg-lint *args='':
@@ -75,13 +75,14 @@ outline *args='':
 check-deprecated:
     node scripts/check-deprecated.ts
 
-# 自动修复 Lint 与格式化
+# 自动修复 Lint 并格式化
 fix:
-     bun x biome check --write --no-errors-on-unmatched src tests
+    bun x oxlint --fix src tests
+    bun x oxfmt src tests
 
-# 使用 Biome 格式化代码
+# 使用 oxfmt 格式化代码
 fmt:
-    bun x biome format --write --no-errors-on-unmatched src tests
+    bun x oxfmt src tests
 
 # 运行单元测试
 test *args='':

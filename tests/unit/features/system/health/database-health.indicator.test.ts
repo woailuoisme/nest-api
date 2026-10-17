@@ -1,5 +1,6 @@
 import { HealthIndicatorService } from '@nestjs/terminus';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+
 import type { DrizzleDB } from '@/database/drizzle/drizzle.service';
 import { DatabaseHealthIndicator } from '@/features/system/health/indicators/database-health.indicator';
 

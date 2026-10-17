@@ -1,10 +1,11 @@
 import type { FastifyRequest } from 'fastify';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+
 import { Role } from '@/common/constants/roles';
 import type { CurrentUserPayload } from '@/common/decorators/current-user.decorator';
 import type { RealtimeChannelsService } from '@/realtime/channels/realtime-channels.service';
-import { RealtimeController } from '@/realtime/realtime.controller';
 import type { RealtimeEventsService } from '@/realtime/realtime-events.service';
+import { RealtimeController } from '@/realtime/realtime.controller';
 
 describe('RealtimeController', () => {
   let controller: RealtimeController;

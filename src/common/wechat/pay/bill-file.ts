@@ -1,5 +1,6 @@
 import { createHash } from 'node:crypto';
 import { gunzipSync } from 'node:zlib';
+
 import { WepayException } from './wepay.exception';
 
 /** 官方固定使用的账单摘要算法 */

@@ -1,11 +1,14 @@
 import { randomUUID } from 'node:crypto';
+
 import { CACHE_MANAGER } from '@nestjs/cache-manager';
 import { Inject, Injectable, Logger, type OnModuleDestroy, type OnModuleInit, Optional } from '@nestjs/common';
 import type { Cache } from 'cache-manager';
 import { isNil } from 'es-toolkit';
 import type Redis from 'ioredis';
 import type Keyv from 'keyv';
+
 import { INJECTION_TOKENS } from '@/common/constants/app.constants';
+
 import {
   CACHE_INVALIDATE_CHANNEL,
   CACHE_L1_STORE,

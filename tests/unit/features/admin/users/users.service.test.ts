@@ -8,10 +8,11 @@ import { Test } from '@nestjs/testing';
 import { range } from 'es-toolkit';
 import { createMockDrizzleDb } from 'tests/mocks/drizzle.mock';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+
 import { Role } from '@/common/constants/roles';
 import { SearchService, SearchSyncService } from '@/common/search';
-import { DRIZZLE_DB } from '@/database/drizzle/drizzle.service';
 import { paginateQuery, paginateSpatieQuery } from '@/database/drizzle/drizzle-pagination';
+import { DRIZZLE_DB } from '@/database/drizzle/drizzle.service';
 import { UserEntity } from '@/features/admin/users/users.dto';
 import { UsersService } from '@/features/admin/users/users.service';
 

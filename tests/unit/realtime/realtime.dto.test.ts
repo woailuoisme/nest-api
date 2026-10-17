@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+
 import { CentrifugoProxySubscribeSchema, RealtimeSubscribeSchema } from '@/realtime/dto/realtime.dto';
 
 describe('RealtimeSubscribeDto & Schema', () => {

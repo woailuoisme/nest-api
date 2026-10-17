@@ -8,6 +8,7 @@ import { NotFoundException } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 import { createMockDrizzleDb } from 'tests/mocks/drizzle.mock';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+
 import { MediaService } from '@/common/media/media.service';
 import type { UploadedFile } from '@/common/storage/interfaces/upload.interface';
 import { DRIZZLE_DB } from '@/database/drizzle/drizzle.service';

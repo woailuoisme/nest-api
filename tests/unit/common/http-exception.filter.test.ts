@@ -5,6 +5,7 @@ import {
   UnprocessableEntityException,
 } from '@nestjs/common';
 import { describe, expect, it } from 'vitest';
+
 import { HttpExceptionFilter, resolveErrorEnvelope } from '@/common/filters/http-exception.filter';
 
 /** 共享 mock host 工厂：捕获过滤器写入的 statusCode 与响应体 */

@@ -1,5 +1,6 @@
 import type { EventEmitter2 } from '@nestjs/event-emitter';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+
 import { NotificationsService } from '@/features/admin/notifications/notifications.service';
 
 describe('NotificationsService', () => {

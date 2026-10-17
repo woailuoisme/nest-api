@@ -1,4 +1,5 @@
 import { SetMetadata } from '@nestjs/common';
+
 import { TrafficPriority } from '../enum/index.js';
 
 /** 豁免负载脱落元数据 Key */

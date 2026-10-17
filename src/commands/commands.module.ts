@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 import { DiscoveryModule } from '@nestjs/core';
+
 import { DbSeedCommand } from './db-seed.command';
 import { CrudGenerateCommand } from './generator/crud-generate.command';
 import { CrudGeneratorService } from './generator/crud-generator.service';

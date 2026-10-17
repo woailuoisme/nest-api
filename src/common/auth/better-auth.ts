@@ -1,4 +1,5 @@
 import { betterAuth } from 'better-auth';
+
 import { authDatabaseAdapter } from './database';
 import { authMailHandlers, setBetterAuthMailDispatcher } from './mail-dispatcher';
 import { getAuthPlugins } from './plugins';

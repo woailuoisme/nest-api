@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+
 import { RealtimeChannel, RealtimeNamespace } from '@/realtime/channels/channel.constants';
 
 describe('RealtimeChannel 命名空间频道工厂', () => {

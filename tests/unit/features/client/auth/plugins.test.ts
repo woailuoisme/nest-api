@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+
 import { auth } from '@/common/auth/better-auth';
 import { passkey, passkeyRelations, user, userRelations } from '@/database/drizzle/schema';
 

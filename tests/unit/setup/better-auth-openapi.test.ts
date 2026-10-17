@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+
 import {
   BETTER_AUTH_SECURITY_SCHEMES,
   BETTER_AUTH_TAG_MAP,

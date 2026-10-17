@@ -1,9 +1,14 @@
 pre-commit:
   parallel: true
   jobs:
-    - name: biome
-      glob: "*.{js,ts,cjs,mjs,json,jsonc}"
-      run: bun x biome check --write --no-errors-on-unmatched {staged_files}
+    - name: oxlint
+      glob: "*.{js,ts,cjs,mjs}"
+      run: bun x oxlint --fix {staged_files}
+      stage_fixed: true
+
+    - name: oxfmt
+      glob: "*.{js,ts,cjs,mjs}"
+      run: bun x oxfmt {staged_files}
       stage_fixed: true
 
     - name: ast-grep
@@ -13,6 +18,9 @@ pre-commit:
     - name: helm
       glob: "deploy/helm/**/{*.yaml,*.tpl,Chart.yaml}"
       run: helm lint ./deploy/helm
+
+    - name: gitleaks
+      run: gitleaks protect --staged --verbose
 
     - run: bun x tsc --noEmit
     # - run: bun x vitest run

@@ -1,4 +1,5 @@
 import { Module } from '@nestjs/common';
+
 import { LoadSheddingGuard } from './guards/index.js';
 import { ResilienceEventBus } from './resilience.event-bus.js';
 import { ResilienceFactory } from './resilience.factory.js';

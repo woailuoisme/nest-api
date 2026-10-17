@@ -1,6 +1,7 @@
 import type { ConfigService } from '@nestjs/config';
 import nodemailer, { type Transporter } from 'nodemailer';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+
 import {
   MAIL_TRANSPORTER,
   MailTransporterLifecycle,

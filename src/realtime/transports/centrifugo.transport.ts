@@ -1,8 +1,11 @@
 import * as crypto from 'node:crypto';
+
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+
 import type { CurrentUserPayload } from '@/common/decorators/current-user.decorator';
 import type { EnvConfig } from '@/config/env.validation';
+
 import { RealtimeChannel } from '../channels/channel.constants';
 import type { RealtimeEnvelope } from '../dto/realtime.dto';
 import type { RealtimeTransport } from './realtime-transport.interface';
@@ -291,7 +294,7 @@ export class CentrifugoTransport implements RealtimeTransport {
    * 批量发布广播事件（调度 Centrifugo 官方 batch HTTP API）
    * 单次 HTTP 往返向多个频道/用户分发消息，极大降低网络 IO 与 CPU 开销
    */
-  async batchPublish(publications: Array<{ channel: string; data: unknown }>): Promise<void> {
+  async batchPublish(publications: { channel: string; data: unknown }[]): Promise<void> {
     if (!this.config || publications.length === 0) {
       return;
     }

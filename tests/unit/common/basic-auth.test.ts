@@ -4,6 +4,7 @@
  * 覆盖：合法凭据、密码含冒号、缺失/畸形请求头、时序安全比较
  */
 import { describe, expect, it } from 'vitest';
+
 import { matchesBasicAuth, safeEqual } from '@/common/utils/basic-auth.util';
 
 /** 构造 Basic Authorization 头 */

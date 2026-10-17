@@ -1,4 +1,5 @@
 import { Global, Module } from '@nestjs/common';
+
 import { createPinoLogger } from './logger.config';
 import { PINO_LOGGER, PinoLoggerService } from './pino-logger.service';
 

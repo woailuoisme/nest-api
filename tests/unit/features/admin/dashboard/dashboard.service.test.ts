@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+
 import { DashboardService } from '@/features/admin/dashboard/dashboard.service';
 import type { RealtimeService } from '@/realtime';
 

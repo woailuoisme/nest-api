@@ -1,4 +1,5 @@
 import { check, sleep } from 'k6';
+
 import {
   flowSuccessRate,
   generateMockUser,

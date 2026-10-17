@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+
 import { MailTemplateRenderer } from '@/common/mail/mail-template.renderer';
 
 /**

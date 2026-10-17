@@ -1,8 +1,10 @@
 import type { ServerResponse } from 'node:http';
+
 import { type ArgumentsHost, Catch, type ExceptionFilter, HttpException, HttpStatus, Logger } from '@nestjs/common';
 import { isEmptyObject } from 'es-toolkit';
 import type { FastifyReply, FastifyRequest } from 'fastify';
 import { I18nContext } from 'nestjs-i18n';
+
 import { calculateJitteredRetryAfter, isLoadShedError } from '@/common/resilience';
 import type { I18nPath } from '@/i18n';
 

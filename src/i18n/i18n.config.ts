@@ -1,7 +1,9 @@
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
+
 import type { I18nOptions } from 'nestjs-i18n';
 import { AcceptLanguageResolver, HeaderResolver, QueryResolver } from 'nestjs-i18n';
+
 import { I18N, isProductionEnv } from '@/common/constants/app.constants';
 
 const currentDir = import.meta.dirname ?? dirname(fileURLToPath(import.meta.url));

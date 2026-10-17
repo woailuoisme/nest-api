@@ -1,4 +1,5 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
+
 import { CursorPageMetaResource, PageMetaResource } from './pagination.dto';
 
 export class ApiResponseResource<T = unknown> {

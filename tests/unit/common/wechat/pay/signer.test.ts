@@ -1,5 +1,7 @@
 import { createPublicKey, generateKeyPairSync, type KeyObject } from 'node:crypto';
+
 import { beforeAll, describe, expect, it } from 'vitest';
+
 import { WEPAY_SIGN_TYPE } from '@/common/wechat/pay';
 import {
   buildAuthorizationHeader,

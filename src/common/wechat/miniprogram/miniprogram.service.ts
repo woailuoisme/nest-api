@@ -1,8 +1,10 @@
 import { Injectable, Logger, type OnModuleInit } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+
 import { isProductionEnv } from '@/common/constants/app.constants';
 import type { EnvConfig } from '@/config/env.validation';
 import { RedisService } from '@/database/redis.service';
+
 import { type DecryptUserDataOptions, decryptUserData, type WechatDecryptedData } from './crypto/aes-cbc';
 import type { IMiniprogramDriver } from './drivers/miniprogram-driver.interface';
 import { MockMiniprogramDriver } from './drivers/mock.driver';

@@ -1,6 +1,7 @@
 import { and, asc, desc, eq, gte, ilike, inArray, lte, or, type SQL } from 'drizzle-orm';
 import type { PgColumn, PgTable } from 'drizzle-orm/pg-core';
 import { clamp } from 'es-toolkit';
+
 import { PAGINATION } from '@/common/constants/app.constants';
 
 /** 区间过滤后缀 → Drizzle 比较算子（filter[createdAtAfter]/[createdAtMin] → gte；[Before]/[Max] → lte） */
@@ -17,7 +18,7 @@ export interface ParsedSpatieQuery {
   pageSize: number;
   search?: string;
   filters: Record<string, string>;
-  sorts: Array<{ field: string; direction: 'asc' | 'desc' }>;
+  sorts: { field: string; direction: 'asc' | 'desc' }[];
 }
 
 export interface SpatieMappingOptions<_TTable extends PgTable = PgTable> {
@@ -67,7 +68,7 @@ export function parseSpatieQuery(rawQuery: Record<string, unknown> = {}): Parsed
   }
 
   // 处理 sort 表达式 (如 sort=-createdAt,name)
-  const sorts: Array<{ field: string; direction: 'asc' | 'desc' }> = [];
+  const sorts: { field: string; direction: 'asc' | 'desc' }[] = [];
   const rawSort = typeof rawQuery.sort === 'string' ? rawQuery.sort : undefined;
   if (rawSort) {
     const parts = rawSort

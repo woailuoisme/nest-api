@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto';
+
 import {
   Inject,
   Injectable,
@@ -10,6 +11,7 @@ import {
 } from '@nestjs/common';
 import { isNotNil, pickBy } from 'es-toolkit';
 import type { IClientPublishOptions, IPublishPacket, MqttClient } from 'mqtt';
+
 import {
   MQTT_CLIENT_TOKEN,
   MQTT_OPTIONS_TOKEN,

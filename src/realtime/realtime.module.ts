@@ -1,12 +1,13 @@
 import { Module } from '@nestjs/common';
 import { DiscoveryModule } from '@nestjs/core';
+
 import { ChannelExplorerService } from './channels/channel-explorer.service';
 import { ChannelManager } from './channels/channel-manager.service';
 import { PresenceService } from './channels/presence.service';
 import { RealtimeChannelsService } from './channels/realtime-channels.service';
+import { RealtimeEventsService } from './realtime-events.service';
 import { RealtimeController } from './realtime.controller';
 import { RealtimeService } from './realtime.service';
-import { RealtimeEventsService } from './realtime-events.service';
 import { CentrifugoTransport } from './transports/centrifugo.transport';
 import { REALTIME_PRIMARY_TRANSPORT } from './transports/realtime-transport.interface';
 

@@ -1,6 +1,7 @@
 import { ConfigService } from '@nestjs/config';
 import type { NestFastifyApplication } from '@nestjs/platform-fastify';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+
 import { setupBullBoard } from '@/setup/bull-board';
 
 describe('setupBullBoard 生产环境访问门禁', () => {

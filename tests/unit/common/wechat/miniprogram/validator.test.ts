@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+
 import { MiniprogramException } from '@/common/wechat/miniprogram/miniprogram.exception';
 import {
   assertJsCode,

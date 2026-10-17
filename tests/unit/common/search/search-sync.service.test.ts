@@ -1,8 +1,9 @@
 import type { ConfigService } from '@nestjs/config';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+
 import type { SearchableDefinition } from '@/common/search/scout/searchable.interface';
-import type { SearchService } from '@/common/search/search.service';
 import { SearchSyncService } from '@/common/search/search-sync.service';
+import type { SearchService } from '@/common/search/search.service';
 import type { EnvConfig } from '@/config/env.validation';
 import type { DrizzleDB } from '@/database/drizzle/drizzle.service';
 import type { SearchJobs } from '@/jobs/search/search.jobs';

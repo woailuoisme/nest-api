@@ -1,5 +1,6 @@
 import { Injectable, Optional } from '@nestjs/common';
 import { type HealthIndicatorResult, HealthIndicatorService } from '@nestjs/terminus';
+
 import { ImgproxyService } from '@/common/media/imgproxy/imgproxy.service';
 
 /**

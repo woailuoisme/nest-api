@@ -1,8 +1,10 @@
 import { Module, type OnModuleInit } from '@nestjs/common';
+
 import { setBetterAuthMailDispatcher } from '@/common/auth/better-auth';
 import { BetterAuthGuard } from '@/common/guards/better-auth.guard';
 import { JobsModule } from '@/jobs/jobs.module';
 import { MailJobs } from '@/jobs/mail/mail.jobs';
+
 import { AuthController } from './auth.controller';
 import { AuthService } from './auth.service';
 

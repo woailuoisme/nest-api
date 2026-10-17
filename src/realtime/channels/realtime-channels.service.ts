@@ -1,5 +1,7 @@
 import { Injectable } from '@nestjs/common';
+
 import type { CurrentUserPayload } from '@/common/decorators/current-user.decorator';
+
 import type { RealtimeChannelInfoDto } from '../dto/realtime.dto';
 import { ChannelAuth } from './decorators/channel-auth.decorator';
 

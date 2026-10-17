@@ -1,5 +1,6 @@
 import { SwaggerModule } from '@nestjs/swagger';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+
 import { ROUTES } from '@/common/constants/app.constants';
 import { setupApiDocumentation } from '@/setup/swagger';
 

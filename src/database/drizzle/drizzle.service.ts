@@ -2,7 +2,9 @@ import { Inject, Injectable, Logger, type OnApplicationShutdown } from '@nestjs/
 import { ConfigService } from '@nestjs/config';
 import { drizzle, type PostgresJsDatabase } from 'drizzle-orm/postgres-js';
 import postgres from 'postgres';
+
 import type { EnvConfig } from '@/config/env.validation';
+
 import * as schema from './schema';
 
 /** 连接池默认配置（最佳实践值，不暴露为用户可配 env） */

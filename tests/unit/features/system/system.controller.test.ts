@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+
 import { APP_VERSION } from '@/common/constants/app.constants';
 import { SystemController } from '@/features/system/system.controller';
 

@@ -10,6 +10,7 @@ import { ConfigService } from '@nestjs/config';
 import { Reflector } from '@nestjs/core';
 import type { NestFastifyApplication } from '@nestjs/platform-fastify';
 import type { FastifyRequest } from 'fastify';
+
 import { HttpExceptionFilter } from '@/common/filters/http-exception.filter';
 import { IdempotencyInterceptor } from '@/common/idempotency';
 import { TimeoutInterceptor } from '@/common/interceptors/timeout.interceptor';
@@ -23,7 +24,7 @@ const WEPAY_NOTIFY_SUFFIX = '/payments/wepay/notify';
 /** Standard Schema issue 的最小结构（结构化声明，避免直接依赖传递依赖 `@standard-schema/spec` 的类型） */
 type ValidationIssue = {
   readonly message: string;
-  readonly path?: ReadonlyArray<PropertyKey | { readonly key: PropertyKey }>;
+  readonly path?: readonly (PropertyKey | { readonly key: PropertyKey })[];
 };
 
 /** 将 Standard Schema 校验 issues 聚合为 `字段路径 -> 文案数组` 映射（无路径的归入 `root`） */
@@ -68,7 +69,7 @@ export function createApiValidationPipe(): StandardSchemaValidationPipe {
  * 故非法值跳过（宁缺勿滥：未被信任的来源只会被拒绝，不会放行），但逐条 warn —
  * 否则「非空却解析失败」的配置只会表现为前端 403，排查成本极高。
  */
-function resolveTrustedOrigins(values: Array<string | undefined>, logger = new Logger('TrustedOrigins')): string[] {
+function resolveTrustedOrigins(values: (string | undefined)[], logger = new Logger('TrustedOrigins')): string[] {
   const origins = new Set<string>();
   for (const value of values) {
     for (const candidate of (value ?? '').split(',')) {

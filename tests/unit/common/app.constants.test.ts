@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+
 import { APP_ENV_VALUES, isProductionEnv, PATHS } from '@/common/constants/app.constants';
 
 describe('PATHS Constants', () => {

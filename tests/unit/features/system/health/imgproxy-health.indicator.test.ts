@@ -1,5 +1,6 @@
 import type { HealthIndicatorService } from '@nestjs/terminus';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+
 import type { ImgproxyService } from '@/common/media/imgproxy/imgproxy.service';
 import { ImgproxyHealthIndicator } from '@/features/system/health/indicators/imgproxy-health.indicator';
 

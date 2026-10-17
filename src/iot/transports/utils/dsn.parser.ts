@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto';
+
 import type { MqttOptions } from '../interfaces/mqtt.interface';
 
 /**
@@ -6,7 +7,7 @@ import type { MqttOptions } from '../interfaces/mqtt.interface';
  *
  * 支持协议：mqtt://, mqtts://, tcp://, ssl://, ws://, wss://
  * 示例：
- *   mqtt://admin:secret@localhost:1883?clientId=nest-forge&clean=true&keepalive=60
+ *   mqtt://admin:secret@localhost:1883?clientId=nest-api&clean=true&keepalive=60
  */
 export function parseMqttDsn(dsn: string): MqttOptions {
   if (!dsn || typeof dsn !== 'string') {

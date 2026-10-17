@@ -1,8 +1,9 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+
 import { parseImgproxyDsn } from './dsn.parser';
-import type { ImgproxyConfig } from './imgproxy.interface';
 import { ImgproxyBuilder } from './imgproxy-builder';
+import type { ImgproxyConfig } from './imgproxy.interface';
 
 /**
  * 从 STORAGE_S3_URL 中解析 bucket 名称（如 s3://key:secret@endpoint:port/bucket）

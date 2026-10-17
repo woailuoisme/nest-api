@@ -1,5 +1,7 @@
 import { createHash } from 'node:crypto';
+
 import type { Logger } from '@nestjs/common';
+
 import { buildSessionSignature } from '../crypto/session-signature';
 import type {
   Code2SessionResult,

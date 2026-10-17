@@ -1,6 +1,8 @@
 import { createHmac, timingSafeEqual } from 'node:crypto';
+
 import { Injectable, Logger, ServiceUnavailableException, UnauthorizedException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+
 import type { EnvConfig } from '@/config/env.validation';
 
 /** 设备凭证校验失败统一文案：绝不区分「设备不存在」与「密钥错误」 */

@@ -1,8 +1,10 @@
 import { Inject, Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import type { SendMailOptions, SentMessageInfo, Transporter } from 'nodemailer';
+
 import type { EnvConfig } from '@/config/env.validation';
 import { type MailJobData, MailJobName, type MailLocale } from '@/jobs/mail/mail.jobs';
+
 import { MailTemplateRenderer } from './mail-template.renderer';
 import { MAIL_TRANSPORTER } from './mail-transporter.provider';
 

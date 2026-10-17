@@ -1,4 +1,5 @@
 import type { NestFastifyApplication } from '@nestjs/platform-fastify';
+
 import { setupGlobalMiddleware } from './middleware';
 import { type MountedPanel, registerOpsPanels } from './ops-panels';
 import { registerFastifyPlugins } from './plugins';
