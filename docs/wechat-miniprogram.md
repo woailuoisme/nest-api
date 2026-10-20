@@ -59,7 +59,7 @@ flowchart TD
 | `MINIPROGRAM_APPID` 与 `MINIPROGRAM_APPSECRET` 齐备 | `real` |
 | 其余情况 | `mock` |
 
-> **生产保护**：`APP_ENV=production` 且推导结果为 `mock` 时，应用**直接阻断启动**。小程序接口一旦静默降级为 mock，线上会拿到假 openid、假手机号与假小程序码，属于难以察觉的数据污染，故按 fail-fast 处理。
+> **注意**：`APP_ENV=production` 且推导结果为 `mock` 时应用可正常启动，但接口返回假 openid、假手机号与假小程序码（运行时仅输出 warn 日志）。生产部署前务必配齐 `MINIPROGRAM_APPID / MINIPROGRAM_APPSECRET` 或显式 `MINIPROGRAM_DRIVER=real`。
 
 ### 2.2 变量清单
 

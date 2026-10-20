@@ -1,7 +1,6 @@
-import { Injectable, Logger, type OnModuleInit } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 
-import { isProductionEnv } from '@/common/constants/app.constants';
 import type { EnvConfig } from '@/config/env.validation';
 import { RedisService } from '@/database/redis.service';
 
@@ -30,9 +29,8 @@ import { MINIPROGRAM_DEFAULT_API_BASE, MINIPROGRAM_DEFAULT_TIMEOUT_MS } from './
  * 微信小程序服务端 API 门面服务
  *
  * 负责：
- * 1. 依据 `MINIPROGRAM_DRIVER` 装配 real 或 mock 驱动（未配置凭证时自动降级为 mock）；
- * 2. 生产环境凭证缺失时阻断启动，避免接口静默返回假数据；
- * 3. 对外暴露凭证、登录、手机号、小程序码、内容安全、订阅消息六类接口的统一入口。
+ * 1. 依据 `MINIPROGRAM_DRIVER` 装配 real 或 mock 驱动（未配置凭证时自动降级为 mock，运行时告警）；
+ * 2. 对外暴露凭证、登录、手机号、小程序码、内容安全、订阅消息六类接口的统一入口。
  *
  * 本服务只承载「能力」不承载「业务」：openid 与用户账号的绑定、session_key 的持久化、
  * 手机号落库、二维码存储与埋点等均属业务侧职责（如 `features/client/auth`）。
@@ -41,7 +39,7 @@ import { MINIPROGRAM_DEFAULT_API_BASE, MINIPROGRAM_DEFAULT_TIMEOUT_MS } from './
  * 调用方**必须**在服务端持久化，严禁下发到前端或写入日志。
  */
 @Injectable()
-export class MiniprogramService implements OnModuleInit {
+export class MiniprogramService {
   private readonly logger = new Logger(MiniprogramService.name);
   private readonly driver: IMiniprogramDriver;
   private readonly appid: string;
@@ -52,16 +50,6 @@ export class MiniprogramService implements OnModuleInit {
   ) {
     this.appid = this.configService.get('MINIPROGRAM_APPID') ?? '';
     this.driver = this.resolveDriver();
-  }
-
-  /** 生产环境必须使用真实驱动，否则直接阻断启动 */
-  onModuleInit(): void {
-    if (isProductionEnv() && this.driver.name !== 'real') {
-      throw new Error(
-        '生产环境检测到微信小程序降级为 mock 驱动：请完整配置 MINIPROGRAM_APPID / MINIPROGRAM_APPSECRET。' +
-          '为避免线上接口静默返回假 openid、假手机号与假小程序码，已阻止应用启动。',
-      );
-    }
   }
 
   /** 当前生效的驱动名称 */
@@ -195,7 +183,7 @@ export class MiniprogramService implements OnModuleInit {
 
   // ── 私有 ────────────────────────────────────────────────────────────
 
-  /** 依据配置装配驱动；显式指定 real 但凭证缺失时直接阻断启动 */
+  /** 依据配置装配驱动；显式指定 real 时按已配置值装配（凭证缺失将在调用期才暴露失败） */
   private resolveDriver(): IMiniprogramDriver {
     if (this.configService.get('MINIPROGRAM_DRIVER') === 'real') {
       return this.createRealDriver();

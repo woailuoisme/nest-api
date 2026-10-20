@@ -1,12 +1,13 @@
 # 应用镜像构建与启动编排 (api + worker)
 # 附属中间件 (centrifugo / meilisearch / imgproxy / mosquitto / otelcol) 由 deploy/docker-compose.yml include 本文件聚合。
-# 环境变量：容器栈统一读 deploy/.env（service hostname DSN）；根 .env 仅本地开发使用，二者勿混。
+# 环境变量：容器栈统一读 .env.production；根 .env 仅本地开发使用，二者勿混。
 x-app: &app
   build: .
   image: nest-api:latest
+  pull_policy: build
   restart: unless-stopped
   env_file:
-    - deploy/.env
+    - .env.production
   networks:
     - backend
   # 日志留存与轮转：应用不写文件日志（仅 stdout JSON），由 Docker 日志驱动承担保留与切割；

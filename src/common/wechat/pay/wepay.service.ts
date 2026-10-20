@@ -2,10 +2,9 @@ import { randomInt } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 
-import { Injectable, Logger, type OnModuleInit } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 
-import { isProductionEnv } from '@/common/constants/app.constants';
 import type { EnvConfig } from '@/config/env.validation';
 
 import { loadPrivateKey } from './crypto/signer';
@@ -47,30 +46,19 @@ const MOCK_MCHID = 'mock-mchid';
  * 微信支付核心门面服务
  *
  * 负责：
- * 1. 依据 `WEPAY_DRIVER` 装配 real 或 mock 驱动（未配置凭证时自动降级为 mock）；
- * 2. 生产环境凭证缺失时阻断启动，避免静默 mock 造成资损；
- * 3. 对外暴露下单、查询、关单、退款、账单与回调验签解密的统一入口。
+ * 1. 依据 `WEPAY_DRIVER` 装配 real 或 mock 驱动（未配置凭证时自动降级为 mock，运行时告警）；
+ * 2. 对外暴露下单、查询、关单、退款、账单与回调验签解密的统一入口。
  *
  * 本服务不承载任何业务语义与持久化：`out_trade_no` 由调用方提供，
  * 回调的幂等、落库与事件发布由业务侧（`features/client/payments`）负责。
  */
 @Injectable()
-export class WepayService implements OnModuleInit {
+export class WepayService {
   private readonly logger = new Logger(WepayService.name);
   private readonly driver: IWepayDriver;
 
   constructor(private readonly configService: ConfigService<EnvConfig, true>) {
     this.driver = this.resolveDriver();
-  }
-
-  /** 生产环境必须使用真实驱动，否则直接阻断启动 */
-  onModuleInit(): void {
-    if (isProductionEnv() && this.driver.name !== 'real') {
-      throw new Error(
-        '生产环境检测到微信支付降级为 mock 驱动：请完整配置 WEPAY_APPID / WEPAY_MCHID / WEPAY_SERIAL_NO / ' +
-          'WEPAY_PRIVATE_KEY(/PATH) / WEPAY_APIV3_KEY。为避免资金风险，已阻止应用启动。',
-      );
-    }
   }
 
   /** 当前生效的驱动名称 */

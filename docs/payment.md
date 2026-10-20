@@ -51,7 +51,7 @@ flowchart TD
 | `WEPAY_APPID` + `WEPAY_MCHID` + `WEPAY_SERIAL_NO` + `WEPAY_APIV3_KEY` + （`WEPAY_PRIVATE_KEY` 或 `WEPAY_PRIVATE_KEY_PATH`）齐备 | `real` |
 | 其余情况 | `mock` |
 
-> **生产保护**：`APP_ENV=production` 且推导结果为 `mock` 时，应用**直接阻断启动**并提示缺失项，避免静默降级造成资金风险。
+> **注意**：`APP_ENV=production` 且推导结果为 `mock` 时应用可正常启动，但支付接口不会产生真实交易（运行时仅输出 warn 日志）。生产部署前务必配齐 `WEPAY_*` 凭证或显式 `WEPAY_DRIVER=real`。
 
 ### 2.2 变量清单
 
