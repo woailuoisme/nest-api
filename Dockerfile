@@ -66,11 +66,11 @@ ENV NODE_ENV=production \
   APP_ENV=production \
   PORT=4300 \
   HOST=0.0.0.0 \
-  WORKER_EMBEDDED=true
+  WORKER_EMBEDDED=false
 
 # 1. 注入 init 进程与统一调度脚本
 COPY --from=prod-deps /sbin/tini /sbin/tini
-COPY --chmod=755 deploy/app/entrypoint.sh /usr/local/bin/entrypoint.sh
+COPY --chmod=755 entrypoint.sh /usr/local/bin/entrypoint.sh
 
 # 2. CIS 安全基线：核心代码与依赖保持 root:root 只读属主，防范 RCE 篡改；仅存储目录赋予应用用户写权限
 COPY --from=prod-deps /app/node_modules ./node_modules

@@ -18,7 +18,7 @@ main:
               --platform linux/amd64 \
               --cache-from "${CACHE}" \
               --cache-to "${CACHE},mode=max,image-manifest=true,oci-mediatypes=true" \
-              -f deploy/app/Dockerfile \
+              -f Dockerfile \
               -t "${REGISTRY}:latest" \
               --push .
 
@@ -43,7 +43,7 @@ $:
               --platform linux/amd64,linux/arm64 \
               --cache-from "${CACHE}" \
               --cache-to "${CACHE},mode=max,image-manifest=true,oci-mediatypes=true" \
-              -f deploy/app/Dockerfile \
+              -f Dockerfile \
               -t "${REGISTRY}:${VERSION}" \
               -t "${REGISTRY}:latest" \
               --push .

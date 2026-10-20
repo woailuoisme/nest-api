@@ -98,7 +98,7 @@ const traceMixin: pino.LoggerOptions['mixin'] = () => {
  *   同时固定 `service`/`hostname` 与 ISO 时间，便于多进程、多副本日志归集（不再依赖易变的 pid）。
  * - 开发 / 测试：pino-pretty 彩色单行，保留终端可读性。
  *
- * 不再落盘：日志留存由容器日志驱动承担（见 deploy/app/docker-compose.yml 的 json-file 上限）。
+ * 不再落盘：日志留存由容器日志驱动承担（见 docker-compose.yml 的 json-file 上限）。
  */
 export async function createPinoLogger(customDestination?: Writable): Promise<pino.Logger> {
   if (customDestination) {

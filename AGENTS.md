@@ -231,7 +231,7 @@ BullMQ 队列由 `AuthModule → MailJobs` 依赖，CLI 模块也需 `BullModule
   - 路径参数：非 schema 场景沿用内置管道（`ParseUUIDPipe` 等）；领域标识用显式 schema（如 IoT 的 `DeviceIdSchema`），不要假设 UUID。
 - **日志**: 业务服务、控制器与基础设施使用注入的 `Logger` (Pino)，严禁在业务逻辑中使用 `console.log`（CLI / Seeder 终端输出除外）。
   - **原生极速架构**: 彻底消除 `nestjs-pino` / `pino-http` 额外包装层，基于原生 `@Global()` `LoggerModule` 与 `PinoLoggerService` 实现。
-  - **单通道 stdout**: 生产输出单行 JSON（带 `service`/`hostname` 基字段与 ISO 时间，便于多进程 / 多副本归集），开发 / 测试输出 `pino-pretty` 彩色单行。**不落盘**：日志留存交容器日志驱动（`deploy/app/docker-compose.yml` 的 `json-file` 上限，分离 `worker` 拓扑需复用同一 `logging` 块）；Pino `mixin` 注入 `trace_id`/`span_id`（无活动 span 零开销），otel-collector `filelog` 采集容器 stdout 后三信号在 OpenObserve 内互相关联。
+  - **单通道 stdout**: 生产输出单行 JSON（带 `service`/`hostname` 基字段与 ISO 时间，便于多进程 / 多副本归集），开发 / 测试输出 `pino-pretty` 彩色单行。**不落盘**：日志留存交容器日志驱动（根 `docker-compose.yml` 的 `json-file` 上限，`api` 与 `worker` 服务复用 `x-app` 锚点同一 `logging` 块）；Pino `mixin` 注入 `trace_id`/`span_id`（无活动 span 零开销），otel-collector `filelog` 采集容器 stdout 后三信号在 OpenObserve 内互相关联。
   - **依赖形态约束**: `pino-pretty` 属 devDependencies（生产镜像 `bun install --production` 不含它），故**必须动态导入**（`await import('pino-pretty')`）；任何对 devDependency 的静态导入都会让生产进程启动即崩，`tests/unit/setup/logger.config.test.ts` 已加回归锁。
   - **框架噪音过滤**: `SILENT_BOOTSTRAP_CONTEXTS` 自动静默 `InstanceLoader`、`RoutesResolver`、`RouterExplorer` 和 `NestApplication` 的 `INFO` 级别日常输出，WARN / ERROR 异常无损放行。
   - **APM 选型**: 不接入 `@nestjs/observe`（供应商型 APM agent，需外部凭证与 SaaS 采集端），走标准 OpenTelemetry 自托管链路：`src/setup/otel/telemetry.ts`（副作用模块，main/worker 先导）按官方标准 env（`OTEL_EXPORTER_OTLP_ENDPOINT` 等）初始化 NodeSDK，traces + metrics 经 OTLP/HTTP+protobuf 推 otel-collector；**未配置 endpoint 时零初始化**（动态 import 均不执行）。纯 ESM 约束：require-hook 类探针（ioredis/pg）不生效，HTTP server spans 由 `@fastify/otel`（diagnostics-channel，`registerOnInitialization: true` 自动挂接全部 Fastify 实例）承担，出站 fetch 由 undici 探针承担。优雅关停经 `shutdownTelemetry()` flush。
@@ -277,7 +277,7 @@ BullMQ 队列由 `AuthModule → MailJobs` 依赖，CLI 模块也需 `BullModule
 
 - **`.env`**: 本地开发，不入库。
 - **`secret.ini`**: 部署用 VPS/SSH 凭据，`scripts/sync-secrets.sh` 同步到 GitHub Secrets (见 `secret.example.ini`)。
-- **Docker**: `deploy/app/Dockerfile` 多阶段构建 (oven/bun:1.4-alpine)，生产镜像不含源码与 devDeps（**故运行时代码不得静态导入 devDependency**），`CMD ["bun", "run", "dist/main.js"]`；交付编排配置集中收敛于 `deploy/`（`deploy/docker-compose.yml` 以 `include:` 汇入 `app/`、`centrifugo/`、`imgproxy/`、`meilisearch/`、`mosquitto/`）。
+- **Docker**: 根目录 `Dockerfile` 多阶段构建 (oven/bun:1.4-alpine)，生产镜像不含源码与 devDeps（**故运行时代码不得静态导入 devDependency**），`entrypoint.sh` 分发 `api` / `worker` / `cli` 子命令，镜像默认 `WORKER_EMBEDDED=false`；交付编排：根 `docker-compose.yml` 以 `x-app: &app` 锚点 + `build: .` 启动 `api` 与 `worker` 双服务，`deploy/docker-compose.yml` 以 `include: ../docker-compose.yml` 汇入并聚合 `centrifugo/`、`imgproxy/`、`meilisearch/`、`mosquitto/`、`otelcol/`。容器栈环境变量统一读 `deploy/.env`（service hostname DSN），根 `.env` 仅本地开发。
 
 ## 易踩坑
 
