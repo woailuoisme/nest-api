@@ -183,7 +183,7 @@ export class MiniprogramService {
 
   // ── 私有 ────────────────────────────────────────────────────────────
 
-  /** 依据配置装配驱动；显式指定 real 时按已配置值装配（凭证缺失将在调用期才暴露失败） */
+  /** 依据配置装配驱动；显式指定 real 但凭证缺失时启动即抛，避免运行期才发现配置缺失 */
   private resolveDriver(): IMiniprogramDriver {
     if (this.configService.get('MINIPROGRAM_DRIVER') === 'real') {
       return this.createRealDriver();
@@ -198,10 +198,15 @@ export class MiniprogramService {
    * 在结构上即满足驱动所需的缓存契约，使多 Pod 共享同一凭证并避免并发击穿。
    */
   private createRealDriver(): IMiniprogramDriver {
+    const appid = this.configService.get('MINIPROGRAM_APPID') ?? '';
+    const appSecret = this.configService.get('MINIPROGRAM_APPSECRET') ?? '';
+    if (!appid || !appSecret) {
+      throw new Error('微信小程序驱动显式指定为 real，但 MINIPROGRAM_APPID / MINIPROGRAM_APPSECRET 未完整配置');
+    }
     this.logger.log('微信小程序驱动：real');
     return new RealMiniprogramDriver({
-      appid: this.configService.get('MINIPROGRAM_APPID') ?? '',
-      appSecret: this.configService.get('MINIPROGRAM_APPSECRET') ?? '',
+      appid,
+      appSecret,
       apiBase: this.configService.get('MINIPROGRAM_API_BASE') || MINIPROGRAM_DEFAULT_API_BASE,
       timeoutMs: this.configService.get('MINIPROGRAM_TIMEOUT_MS') || MINIPROGRAM_DEFAULT_TIMEOUT_MS,
       tokenCache: this.redisService,
