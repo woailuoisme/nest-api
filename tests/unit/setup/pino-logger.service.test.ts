@@ -188,7 +188,7 @@ describe('PinoLoggerService', () => {
       expect(() => {
         service.logHttp({
           method: 'GET',
-          url: '/health',
+          url: '/readyz',
           statusCode: 200,
           duration: 1.2,
           ip: '127.0.0.1',

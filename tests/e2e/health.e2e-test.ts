@@ -21,7 +21,7 @@ const stubIndicator = (health: Record<string, unknown>) => ({
   isHealthy: vi.fn().mockResolvedValue(health),
 });
 
-/** /health 与 /health/readiness 聚合结果中必须出现的全部探针键（与 HealthController.readinessIndicators 严格对齐） */
+/** /readyz 聚合结果中必须出现的全部探针键（与 HealthController.readinessIndicators 严格对齐） */
 const AGGREGATED_INDICATORS = [
   'database',
   'redis',
@@ -67,7 +67,7 @@ describe('HealthController (e2e)', () => {
       .compile();
 
     app = moduleFixture.createNestApplication<NestFastifyApplication>(new FastifyAdapter());
-    // 复刻 src/setup/middleware.ts 的全局异常过滤器：/health 的 503 响应形状由它决定，
+    // 复刻 src/setup/middleware.ts 的全局异常过滤器：/readyz 的 503 响应形状由它决定，
     // 不挂过滤器只会验证框架原始载荷，测试将假绿（透出规则见 isHealthReportBody）
     app.useGlobalFilters(new HttpExceptionFilter(Boolean(moduleFixture.get(ConfigService).get('APP_DEBUG'))));
     await app.init();
@@ -86,39 +86,51 @@ describe('HealthController (e2e)', () => {
     return { statusCode: response.statusCode, body: JSON.parse(response.payload) };
   }
 
-  /** 断言聚合结果包含全部探针键（/health 与 /health/readiness 契约一致） */
+  /** 断言聚合结果包含全部探针键（/readyz 契约） */
   function expectAllIndicators(info: Record<string, unknown>): void {
     for (const indicator of AGGREGATED_INDICATORS) {
       expect(info).toHaveProperty(indicator);
     }
   }
 
-  it('/health (GET)', async () => {
-    const { statusCode, body } = await getJson('/health');
+  it('/livez (GET) 应返回 200 与纯文本 ok', async () => {
+    const response = await app.inject({ method: 'GET', url: '/livez' });
+    expect(response.statusCode).toBe(200);
+    expect(response.payload).toBe('ok');
+    expect(response.headers['content-type']).toContain('text/plain');
+  });
+
+  it('/livez 必须豁免全局限流 (@SkipThrottle)，连续高频请求不应触发 429 Too Many Requests', async () => {
+    // 默认限流上限为 100 次/分钟，高频连续调用必须全量返回 200，绝不触发 429
+    const requests = Array.from({ length: 120 }, () => app.inject({ method: 'GET', url: '/livez' }));
+    const responses = await Promise.all(requests);
+    const has429 = responses.some((res) => res.statusCode === 429);
+    expect(has429).toBe(false);
+    expect(responses.every((res) => res.statusCode === 200 && res.payload === 'ok')).toBe(true);
+  });
+
+  it('/readyz (GET) 应返回 200 与包含全量依赖指标的 Terminus 健康报告', async () => {
+    const { statusCode, body } = await getJson('/readyz');
     expect(statusCode).toBe(200);
     expect(body.status).toBe('ok');
     expectAllIndicators(body.info);
   });
 
-  it('/health/liveness (GET)', async () => {
-    const { statusCode, body } = await getJson('/health/liveness');
-    expect(statusCode).toBe(200);
-    expect(body.status).toBe('ok');
-    expect(body.info).toHaveProperty('memory_heap');
-    expect(body.info).toHaveProperty('memory_rss');
+  it('旧版 /health 端点应已彻底废除并返回 404', async () => {
+    const healthRes = await app.inject({ method: 'GET', url: '/health' });
+    expect(healthRes.statusCode).toBe(404);
+
+    const readinessRes = await app.inject({ method: 'GET', url: '/health/readiness' });
+    expect(readinessRes.statusCode).toBe(404);
+
+    const livenessRes = await app.inject({ method: 'GET', url: '/health/liveness' });
+    expect(livenessRes.statusCode).toBe(404);
   });
 
-  it('/health/readiness (GET)', async () => {
-    const { statusCode, body } = await getJson('/health/readiness');
-    expect(statusCode).toBe(200);
-    expect(body.status).toBe('ok');
-    expectAllIndicators(body.info);
-  });
-
-  it('/health/readiness 在应用优雅停机期间应返回 503 Service Unavailable 并指示 shutdown down，而 liveness 保持 200', async () => {
+  it('/readyz 在应用优雅停机期间应返回 503 Service Unavailable 并指示 shutdown down，而 /livez 保持 200 ok', async () => {
     setAppShuttingDown(true);
     try {
-      const { statusCode, body } = await getJson('/health/readiness');
+      const { statusCode, body } = await getJson('/readyz');
       expect(statusCode).toBe(503);
       expect(body.status).toBe('error');
       expect(body.error).toHaveProperty('shutdown');
@@ -128,8 +140,9 @@ describe('HealthController (e2e)', () => {
       expect(body.info).toHaveProperty('database');
 
       // 验证在停机期间 Liveness 依然保持健康 (200 OK)，防止 K8s 强杀 Pod
-      const { statusCode: livenessStatus } = await getJson('/health/liveness');
-      expect(livenessStatus).toBe(200);
+      const livezResponse = await app.inject({ method: 'GET', url: '/livez' });
+      expect(livezResponse.statusCode).toBe(200);
+      expect(livezResponse.payload).toBe('ok');
     } finally {
       setAppShuttingDown(false);
     }

@@ -16,7 +16,7 @@
 - 🖼️ **动态媒体处理与事务存储**：集成 imgproxy JIT 实时动态渲染与 HMAC-SHA256 签名，纯 JS 元数据探测、矢量二维码，支持 Local 与 S3 双驱动及补偿性事务存储 (`storeWithCompensation`)。
 - 🗄️ **持久化与缓存队列**：Drizzle ORM 0.45 + PostgreSQL 18（原生 `uuidv7()`、多文件 Schema）、Redis 分布式锁与穿透缓存、BullMQ 异步队列与 Bull Board 可视化看板。
 - 📄 **三合一 Scalar API 交互文档**：客户端 API (`/docs`)、管理后台 API (`/docs/admin`) 与 Better Auth 专有参考 (`/docs/auth`) 物理隔离并支持在线调试。
-- 🪵 **企业级极速可观测性**：原生 Pino 极速流日志、OpenTelemetry 三信号归集（logs/metrics/traces → OpenObserve）、Terminus 7 大子系统健康检查探针 (`/health`)。
+- 🪵 **企业级极速可观测性**：原生 Pino 极速流日志、OpenTelemetry 三信号归集（logs/metrics/traces → OpenObserve）、Terminus 基础设施就绪探针 (`/readyz`) 与云原生存活探针 (`/livez`)。
 - 🛠️ **卓越开发者体验**：纯 ESM 规范、Bun 1.4.2 + Node ≥ 24、SWC 极速编译、Vitest 5 单元/集成测试、k6 负载基准测试、oxlint + oxfmt 代码检查与 Just 任务自动化。
 
 ---
@@ -133,7 +133,8 @@ just dev
 | **客户端 API 文档 (Scalar)** | `http://localhost:4300/docs` | 客户端公共业务接口与在线调试 |
 | **管理后台 API 文档 (Scalar)** | `http://localhost:4300/docs/admin` | 管理后台自包含领域接口（带 `/v1/admin` 前缀） |
 | **Better Auth 认证 API 文档** | `http://localhost:4300/docs/auth` | 14+ 认证插件全量端点参考手册 |
-| **系统健康检查探针** | `http://localhost:4300/health` | 实时检测 DB、Redis、实时、搜索、存储等健康状态 |
+| **云原生就绪探针 (Readiness)** | `http://localhost:4300/readyz` | 实时检测 DB、Redis、实时、搜索、存储等依赖健康与停机状态 |
+| **云原生存活探针 (Liveness)** | `http://localhost:4300/livez` | 快速返回 200 ok，用于容器/Pod 存活检测 |
 | **Prometheus 监控指标** | `http://localhost:4300/metrics` | 生产级 Prometheus 格式指标输出 |
 | **Centrifugo 实时管理控制台** | `http://localhost:8000` | 实时连接、频道订阅与广播监控 |
 | **Mailpit 本地邮件测试控制台** | `http://localhost:8025` | 捕获并直观查看系统外发的邮件模板 |

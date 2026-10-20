@@ -1,8 +1,10 @@
-import { Controller, Get, VERSION_NEUTRAL } from '@nestjs/common';
+import { Controller, Get, Header, VERSION_NEUTRAL } from '@nestjs/common';
 import { ApiExcludeController } from '@nestjs/swagger';
-import { DiskHealthIndicator, HealthCheck, HealthCheckService, MemoryHealthIndicator } from '@nestjs/terminus';
+import { HealthCheck, HealthCheckService } from '@nestjs/terminus';
+import { SkipThrottle } from '@nestjs/throttler';
 
 import { Public } from '@/common/decorators/public.decorator';
+import { BypassTransform } from '@/common/decorators/response.decorator';
 
 import { CentrifugoHealthIndicator } from './indicators/centrifugo-health.indicator';
 import { DatabaseHealthIndicator } from './indicators/database-health.indicator';
@@ -15,18 +17,17 @@ import { ShutdownHealthIndicator } from './indicators/shutdown-health.indicator'
 import { StorageHealthIndicator } from './indicators/storage-health.indicator';
 import { WepayHealthIndicator } from './indicators/wepay-health.indicator';
 
-/** V8 堆内存上限 (500MB)：监控 JavaScript 堆对象分配，防范 JS 层面内存泄漏 */
-const MEMORY_HEAP_THRESHOLD_BYTES = 500 * 1024 * 1024;
-
-/** 进程常驻物理内存上限 (1GB)：涵盖 V8 堆、JIT 代码缓存、网络缓冲区以及 C++ 原生扩展内存，防范容器 OOM */
-const MEMORY_RSS_THRESHOLD_BYTES = 1024 * 1024 * 1024;
-
-/** 根目录磁盘空间使用率报警阈值 (90%)：超过该水位标记为不健康 */
-const DISK_THRESHOLD_PERCENT = 0.9;
-
+/**
+ * 云原生系统健康探针控制器：
+ * - `GET /livez`：云原生存活探针 (Liveness Probe)，纯文本 `ok`，极速响应，零外部 I/O
+ * - `GET /readyz`：云原生就绪探针 (Readiness Probe)，检测 DB、Redis、存储等全量基础设施依赖及优雅停机状态
+ *
+ * ⚠️ 基础设施健康探针必须显式 @SkipThrottle()，防止高频 Kubelet 轮询或 wrk 压测误触 429 导致 Pod 重启或摘流。
+ */
 @ApiExcludeController()
 @Public()
-@Controller({ path: 'health', version: VERSION_NEUTRAL })
+@SkipThrottle()
+@Controller({ version: VERSION_NEUTRAL })
 export class HealthController {
   constructor(
     private readonly health: HealthCheckService,
@@ -40,8 +41,6 @@ export class HealthController {
     private readonly wepayIndicator: WepayHealthIndicator,
     private readonly miniprogramIndicator: MiniprogramHealthIndicator,
     private readonly shutdownIndicator: ShutdownHealthIndicator,
-    private readonly memory: MemoryHealthIndicator,
-    private readonly disk: DiskHealthIndicator,
   ) {}
 
   private get readinessIndicators() {
@@ -59,29 +58,24 @@ export class HealthController {
     ];
   }
 
-  private get livenessIndicators() {
-    return [
-      () => this.memory.checkHeap('memory_heap', MEMORY_HEAP_THRESHOLD_BYTES),
-      () => this.memory.checkRSS('memory_rss', MEMORY_RSS_THRESHOLD_BYTES),
-      () => this.disk.checkStorage('disk', { path: '/', thresholdPercent: DISK_THRESHOLD_PERCENT }),
-    ];
+  /**
+   * 云原生存活探针 (Liveness Probe)：
+   * 仅验证进程存活与 HTTP 事件循环可调度，不依赖任何外部系统。失败时触发 Pod 重启。
+   */
+  @Get('livez')
+  @BypassTransform()
+  @Header('Content-Type', 'text/plain')
+  checkLivez(): string {
+    return 'ok';
   }
 
-  @Get()
+  /**
+   * 云原生就绪探针 (Readiness Probe)：
+   * 聚合验证所有关键基础设施的连通性与可用性。失败时仅自负载均衡或 Service 摘流，不杀死进程。
+   */
+  @Get('readyz')
   @HealthCheck()
-  check() {
-    return this.health.check([...this.readinessIndicators, ...this.livenessIndicators]);
-  }
-
-  @Get('liveness')
-  @HealthCheck()
-  checkLiveness() {
-    return this.health.check(this.livenessIndicators);
-  }
-
-  @Get('readiness')
-  @HealthCheck()
-  checkReadiness() {
+  checkReadyz() {
     return this.health.check(this.readinessIndicators);
   }
 }

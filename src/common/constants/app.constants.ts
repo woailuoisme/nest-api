@@ -36,7 +36,8 @@ export const PATHS = {
 
 /** API 路由常量 */
 export const ROUTES = {
-  HEALTH: 'health',
+  READYZ: 'readyz',
+  LIVEZ: 'livez',
   DOCS: 'docs',
   DOCS_JSON: 'docs-json',
   ADMIN_DOCS: 'docs/admin',
@@ -48,7 +49,8 @@ export const ROUTES = {
 /** 排除版本控制的基础设施与运维路由 */
 export const EXCLUDED_ROUTES = [
   '/',
-  ROUTES.HEALTH,
+  ROUTES.READYZ,
+  ROUTES.LIVEZ,
   ROUTES.DOCS,
   ROUTES.DOCS_JSON,
   ROUTES.ADMIN_DOCS,

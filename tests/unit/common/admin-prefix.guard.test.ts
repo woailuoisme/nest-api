@@ -41,7 +41,8 @@ describe('AdminPrefixGuard', () => {
     it('普通业务路径无论角色与登录态如何均放行', () => {
       expect(guard.canActivate(createContext('/users/me'))).toBe(true);
       expect(guard.canActivate(createContext('/users/me', Role.USER))).toBe(true);
-      expect(guard.canActivate(createContext('/health'))).toBe(true);
+      expect(guard.canActivate(createContext('/readyz'))).toBe(true);
+      expect(guard.canActivate(createContext('/livez'))).toBe(true);
     });
 
     it('形似前缀的路径（/admin-panel）不误伤，无登录态也放行', () => {

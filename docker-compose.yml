@@ -1,0 +1,36 @@
+services:
+  api:
+    build:
+      context: ../..
+      dockerfile: deploy/app/Dockerfile
+    image: nest-api:latest
+    container_name: nestforge-api
+    restart: unless-stopped
+    ports:
+      - "${PORT:-4300}:4300"
+    env_file:
+      - ../.env
+    networks:
+      - backend
+    # 日志留存与轮转：应用不再写文件日志（仅 stdout JSON），由 Docker 日志驱动承担保留与切割；
+    # max-size 10m × max-file 3 即约 30MB 上限，替代原先 pino-roll 的 14 天保留。
+    # 注意：本服务默认 WORKER_EMBEDDED=true（单容器）。若改用分离拓扑（justfile `start-worker` /
+    # `start-all` 起独立 worker 进程），worker 容器必须复用同一 logging 块，否则其日志无上限。
+    # 云原生探针规范：
+    # - 容器级存活检测 (Liveness)：探测 /livez (纯文本 ok，仅检测进程与事件循环调度)
+    # - 业务网关就绪路由 (Readiness / K8s)：探测 /readyz (检测 DB/Redis/存储等关键依赖可用性)
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:4300/livez || exit 1"]
+      interval: 10s
+      timeout: 3s
+      retries: 3
+      start_period: 5s
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+networks:
+  backend:
+    external: true

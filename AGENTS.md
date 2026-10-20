@@ -76,7 +76,7 @@ src/database/
 │   ├── drizzle.module.ts  # @Global() Drizzle 模块
 │   └── drizzle.service.ts # postgres.js + drizzle 客户端
 ├── search/         # Laravel Scout 风格模型全文索引定义 (index.ts, user.searchable.ts)
-└── seeds/          # 种子数据 (admin.seed.ts, user.seed.ts, index.ts)
+└── seeds/          # 种子数据 (auth.seed.ts, notifications.seed.ts, index.ts)
 src/
 ├── common/         # 全局 Filter/Guard/Interceptor/Pipe/Decorator/DTO/utils
 │   ├── constants/  # PATHS、NETWORK、Role、Permission 等常量

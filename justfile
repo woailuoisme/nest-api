@@ -107,6 +107,9 @@ k6 scenario='smoke' *args='':
 k6-docker scenario='smoke' *args='':
     docker run --rm -i -e BASE_URL="http://host.docker.internal:4300" -v "$(pwd)/tests/k6:/scripts:ro" -v "$(pwd)/storage/logs:/storage/logs" grafana/k6 run /scripts/scenarios/{{scenario}}.js {{args}}
 
+bench path="/livez" *args="":
+    wrk -t4 -c200 -d30s --latency {{args}} "http://localhost:${APP_PORT:-4300}{{path}}"
+
 # ----------------------------------------
 # 数据库与迁移 (Drizzle)
 # ----------------------------------------
@@ -179,44 +182,3 @@ cmd *args='--help':
 cli *args='--help':
     node dist/cli.js {{args}}
 
-# ----------------------------------------
-# 容器编排与基础设施
-# ----------------------------------------
-
-# 启动全栈 Docker 容器集群 (API + 实时 + 基础设施)
-docker-up *args='':
-    docker network create backend 2>/dev/null || true
-    docker compose -f deploy/docker-compose.yml --env-file deploy/.env up -d {{args}}
-
-# 停止全栈 Docker 容器集群
-docker-down *args='':
-    docker compose -f deploy/docker-compose.yml --env-file deploy/.env down {{args}}
-
-# 启动 Centrifugo 独立实时服务容器
-realtime:
-    docker network create backend 2>/dev/null || true
-    docker compose -f deploy/centrifugo/docker-compose.yml --env-file deploy/.env up -d realtime
-
-# 停止 Centrifugo 独立实时服务容器
-realtime-down:
-    docker compose -f deploy/centrifugo/docker-compose.yml --env-file deploy/.env stop realtime
-
-# 检查 Centrifugo 健康状态
-realtime-health:
-    curl -fsS http://localhost:8000/health || exit 1
-
-# 生成/更新 Mosquitto 凭据
-mqtt-passwd *args='':
-    docker run --rm -v "{{justfile_directory()}}/deploy/mosquitto/config/credentials:/creds" eclipse-mosquitto:2.1-alpine mosquitto_passwd {{args}}
-
-# 初始化 Mosquitto ACL 规则文件
-mqtt-acl:
-    cp deploy/mosquitto/config/acl.example deploy/mosquitto/config/credentials/acl.txt
-
-# Lint Helm chart
-helm-lint:
-    helm lint ./deploy/helm
-
-# 校验并试运行 Helm chart
-helm-install *args='--dry-run':
-    helm upgrade --install nestforge ./deploy/helm {{args}}

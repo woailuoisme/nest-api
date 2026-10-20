@@ -23,7 +23,7 @@ const REDIS_LOGGER = new Logger('Redis');
           lazyConnect: true,
         });
 
-        // 真实连接事件：lazyConnect=true，首次触发连接（如 /health ping）时才连
+        // 真实连接事件：lazyConnect=true，首次触发连接（如 /readyz ping）时才连
         client.on('connect', () => REDIS_LOGGER.log('Redis client connected'));
         client.on('reconnecting', () => REDIS_LOGGER.warn('Redis reconnecting'));
         client.on('close', () => REDIS_LOGGER.log('Redis client disconnected'));

@@ -267,7 +267,7 @@ await this.miniprogram.sendSubscribeMessage({
 
 ### 健康检查
 
-`GET /health`（readiness）包含 `miniprogram` 指标，**仅做本地校验**（驱动类型与凭证齐全度），**不发起任何外部请求** —— 避免探针按频率消耗凭证配额。未配置凭证时以 `state: 'degraded'` 上报，不触发 503 误杀。
+`GET /readyz`（就绪探针）包含 `miniprogram` 指标，**仅做本地校验**（驱动类型与凭证齐全度），**不发起任何外部请求** —— 避免探针按频率消耗凭证配额。未配置凭证时以 `state: 'degraded'` 上报，不触发 503 误杀。
 
 ### 单元测试
 

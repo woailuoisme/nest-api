@@ -133,7 +133,7 @@ describe('HttpExceptionFilter 集成', () => {
 
   it('健康探针报告（Terminus 载荷）应原样透出，不被统一信封丢弃逐探针明细', () => {
     const filter = new HttpExceptionFilter(false);
-    const { host, state } = createMockHost('/health/readiness');
+    const { host, state } = createMockHost('/readyz');
 
     const healthReport = {
       status: 'error',

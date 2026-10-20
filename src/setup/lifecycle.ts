@@ -62,7 +62,7 @@ function registerShutdownSignals(handle: (signal: string) => Promise<void>): voi
  * 配置主应用进程优雅停机生命周期（Node 24 + Fastify 5 原生三阶段编排与超时保底）
  *
  * 阶段一：流量下线缓冲 (Deregistration Delay)
- * - 标记 isShuttingDown = true，使 /health/readiness 就绪探针立即报 503
+ * - 标记 isShuttingDown = true，使 /readyz 就绪探针立即报 503
  * - 等待 SHUTDOWN_DRAIN_DELAY_MS（供 Ingress / K8s iptables 摘除本 Pod 流量）
  *
  * 阶段二：HTTP 连接排干 (Connection Draining)

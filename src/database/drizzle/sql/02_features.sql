@@ -88,7 +88,7 @@ CREATE TABLE IF NOT EXISTS "notifications" (
     "id" uuid PRIMARY KEY DEFAULT uuidv7(),
     "type" varchar(255) NOT NULL,
     "notifiable_type" varchar(255) NOT NULL,
-    "notifiable_id" bigint NOT NULL,
+    "notifiable_id" uuid NOT NULL,
     "data" jsonb NOT NULL,
     "read_at" timestamp with time zone,
     "created_at" timestamp with time zone NOT NULL DEFAULT now(),

@@ -18,7 +18,7 @@ import { handleSummaryGenerator } from './reporter.js';
  * 核心确定性业务流水线 (Deterministic Core Workflow)
  * ==============================================================================
  * 每个虚拟用户 (VU) 顺序模拟真实用户行为：
- * 1. 探针连通：检查服务就绪状态 (GET /health)
+ * 1. 探针连通：检查服务就绪状态 (GET /readyz)
  * 2. 身份验证：通过 Bearer Token 访问个人中心 (GET /users/me)
  * 3. 核心查询：分页获取用户列表数据 (GET /users?page=1&pageSize=10)
  * 4. 可选写链路：新用户注册与 Argon2 慢哈希 (默认关闭，避免掩盖 I/O 真实瓶颈)
@@ -28,9 +28,9 @@ export function runWorkflow(setupData, options = {}) {
   const client = new HttpClient({ token: setupData?.token });
   let workflowOk = true;
 
-  // 1. 无状态健康检查探针
-  const healthRes = client.get(buildUrl('/health', false), {
-    name: 'GET /health',
+  // 1. 无状态就绪探针 (Readiness Probe)
+  const healthRes = client.get(buildUrl('/readyz', false), {
+    name: 'GET /readyz',
     metric: healthDuration,
   });
   const healthOk = check(healthRes, {
