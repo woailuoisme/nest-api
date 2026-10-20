@@ -22,12 +22,10 @@ just type         # tsc --noEmit 类型检查
 just lint         # oxlint 静态检查 (src tests)
 just fix          # oxlint --fix + oxfmt (src tests)
 just fmt          # oxfmt 格式化
-just sg-lint      # ast-grep 架构规则静态检查
-just sg-test      # ast-grep 规则单测 (rule-tests)
 just outline <path> # 查看文件或目录的紧凑 AST 结构大纲
 just check-deprecated # 一键全库扫描已废弃 (@deprecated) 的第三方/原生函数
 just secret-check     # gitleaks 密钥与敏感凭据泄漏静态扫描
-just check        # fix + fmt + type + secret-check + sg-lint + sg-test + i18n-check (提交前完整检查)
+just check        # fix + fmt + type + secret-check + i18n-check (提交前完整检查)
 just test         # 单元测试
 just test-e2e     # E2E 测试
 just test-cov     # 单测 + 覆盖率
@@ -315,9 +313,8 @@ BullMQ 队列由 `AuthModule → MailJobs` 依赖，CLI 模块也需 `BullModule
 
 - **定位**: `rg "pattern" src -C 3` / `fd -e ts "service"` 全文与符号查找。
 - **结构透视**: 200+ 行大文件严禁直接全量 read，先用 `just outline <path>`（单文件签名）、`just outline <path> --items exports`（导出契约）、`just outline <path> --type class --match ".*Controller"`（过滤类）获取紧凑结构。
-- **架构规则**: `rules/` 维护强约束架构规则（Controller 禁 try-catch、业务禁 console、严禁 Express 等）；`just sg-lint` 扫描、`just sg-test` 运行规则单测。
-- **结构化批量重构**: 对 import/装饰器等有语法结构的重复改动，先写规则 `ast-grep run -r <rule-id> --inline <file>` 验证，再 `-U` 全量应用。
-- **验证**: 改动前 `rg` 定位所有关联位置防漏改；改动后 `just check`（fix + fmt + type + sg-lint + sg-test）。
+- **结构化批量重构**: 对 import/装饰器等有语法结构的重复改动，用 `ast-grep run -p <pattern> --rewrite <replacement> --update-all <path>` 先以 stdin 验证再全量应用。
+- **验证**: 改动前 `rg` 定位所有关联位置防漏改；改动后 `just check`（fix + fmt + type + i18n-check）。
 
 ## Agent skills
 

@@ -11,10 +11,6 @@ pre-commit:
       run: bun x oxfmt {staged_files}
       stage_fixed: true
 
-    - name: ast-grep
-      glob: "src/**/*.ts"
-      run: ast-grep scan {staged_files}
-
     - name: helm
       glob: "deploy/helm/**/{*.yaml,*.tpl,Chart.yaml}"
       run: helm lint ./deploy/helm

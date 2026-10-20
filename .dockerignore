@@ -58,9 +58,6 @@ lefthook.yml
 .oxlintrc.json
 .hadolint.yaml
 biome.jsonc
-sgconfig.yml
-rules/
-rule-tests/
 
 # System / OS Files
 .DS_Store

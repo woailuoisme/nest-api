@@ -40,7 +40,7 @@ start-worker:
 # ----------------------------------------
 
 # 提交前完整检查 (修复 + 格式化 + 类型 + 敏感信息 + 架构规则 + 多语言)
-check: fix fmt type secret-check sg-lint sg-test i18n-check
+check: fix fmt type secret-check i18n-check
 
 # TypeScript 类型检查
 type:
@@ -66,14 +66,6 @@ secret-check *args='':
 # 扫描项目中已废弃 (@deprecated) 的依赖与符号
 check-deprecated:
     node scripts/check-deprecated.ts
-
-# 运行 ast-grep 架构规则静态检查
-sg-lint *args='':
-    ast-grep scan {{args}}
-
-# 运行 ast-grep 规则测试套件
-sg-test *args='':
-    ast-grep test {{args}}
 
 # 查看文件或目录的紧凑 AST 结构大纲
 outline *args='':

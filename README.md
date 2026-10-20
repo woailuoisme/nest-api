@@ -36,7 +36,7 @@
 | **媒体处理** | imgproxy + Sharp-free 工具链 | JIT 实时动态渲染、纯 JS 元数据提取、矢量二维码 |
 | **数据校验** | Zod 4 + Standard Schema | Nest 12 原生 Standard Schema 校验通道与白名单序列化 |
 | **API 文档** | OpenAPI 3.1 + Scalar UI | 客户端、管理后台与认证专有三份独立隔离交互文档 |
-| **代码质量** | oxlint + oxfmt + ast-grep + Gitleaks | 毫秒级 Lint、代码格式化、AST 架构守卫与凭据泄漏防护 |
+| **代码质量** | oxlint + oxfmt + Gitleaks | 毫秒级 Lint、代码格式化与凭据泄漏防护 |
 | **测试套件** | Vitest 5 + k6 | 高速单元测试、E2E 测试与全场景性能压力测试 |
 | **任务编排** | Just (justfile) | 统一声明式命令入口，消除长参数脚本记忆成本 |
 
@@ -182,15 +182,13 @@ just start-embedded       # 启动生产模式 (内嵌 Worker，单进程)
 just start-worker         # 仅启动独立 Worker 消费进程
 
 # --- 质量与门禁 ---
-just check                # 提交前完整检查 (fix + fmt + type + secret-check + sg-lint + sg-test)
+just check                # 提交前完整检查 (fix + fmt + type + secret-check + i18n-check)
 just type                 # TypeScript 类型检查 (tsc --noEmit)
 just lint                 # oxlint 静态检查
 just fix                  # 自动修复 Lint 与格式化问题
 just fmt                  # oxfmt 代码格式化
 just secret-check         # 扫描潜在密钥与敏感凭据泄漏 (gitleaks)
 just check-deprecated     # 扫描项目中已废弃 (@deprecated) 的依赖与符号
-just sg-lint              # ast-grep 架构规则静态检查
-just sg-test              # ast-grep 规则单测 (rule-tests)
 just outline <path>       # 查看文件或目录的紧凑 AST 结构大纲
 
 # --- 测试与基准压测 ---
