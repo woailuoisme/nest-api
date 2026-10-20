@@ -1,0 +1,59 @@
+# 手动触发的 VPS 部署（与构建解耦：先由 build.yml 构建镜像，再按需部署指定标签）
+name: Deploy to VPS
+
+on:
+  workflow_dispatch:
+    inputs:
+      image_tag:
+        description: 'Image tag to deploy (e.g. latest, sha-xxxx, v1.2.3)'
+        required: false
+        default: 'latest'
+        type: string
+
+concurrency:
+  group: deploy-vps
+  cancel-in-progress: false
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}
+
+jobs:
+  deploy:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+
+    steps:
+      - name: Deploy to VPS
+        uses: appleboy/ssh-action@v1
+        with:
+          host: ${{ secrets.SERVER_HOST }}
+          username: ${{ secrets.SERVER_USER }}
+          key: ${{ secrets.SERVER_SSH_KEY }}
+          envs: IMAGE_TAG
+          script: |
+            set -e
+
+            cd /opt/myapp
+
+            echo "[1/5] Logging in to GHCR..."
+            echo "$GITHUB_TOKEN_FOR_PULL" | docker login ghcr.io -u "$GITHUB_ACTOR" --password-stdin
+
+            echo "[2/5] Target image: ${REGISTRY}/${IMAGE_NAME}:${IMAGE_TAG}..."
+
+            echo "[3/5] Pulling image..."
+            docker compose -f docker-compose.prod.yml pull api
+
+            echo "[4/5] Deploying with health check waiting..."
+            docker compose -f docker-compose.prod.yml up -d --wait api
+
+            echo "[5/5] Cleaning unused old images..."
+            docker image prune -f
+
+            echo "==> Deployment finished successfully!"
+        env:
+          IMAGE_TAG: ${{ inputs.image_tag || 'latest' }}
+          GITHUB_TOKEN_FOR_PULL: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_ACTOR: ${{ github.actor }}
+          REGISTRY: ${{ env.REGISTRY }}
+          IMAGE_NAME: ${{ env.IMAGE_NAME }}
