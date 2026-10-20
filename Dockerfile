@@ -18,8 +18,10 @@ FROM oven/bun:${BUN_VERSION} AS prod-deps
 WORKDIR /app
 
 COPY package.json bun.lock* bunfig.toml* ./
+# --omit=peer：Bun 会把生产依赖声明的 optional peers（typescript/vitest/tsx 等 devDeps）一并装入，
+# 必须显式剔除，否则生产镜像泄漏 ~100MB 开发工具链
 RUN --mount=type=cache,id=bun-cache,target=/root/.bun/install/cache \
-  bun install --production --frozen-lockfile --ignore-scripts
+  bun install --production --omit=peer --frozen-lockfile --ignore-scripts
 
 # 依赖剪裁：原生深度剔除静态非运行时资产（文档、测试、类型与源码映射），零外部网络依赖与多架构兼容
 RUN set -eux; \
@@ -64,7 +66,7 @@ LABEL org.opencontainers.image.title="Nest API" \
 # 生产环境契约规范
 ENV NODE_ENV=production \
   APP_ENV=production \
-  PORT=4300 \
+  PORT=4400 \
   HOST=0.0.0.0 \
   WORKER_EMBEDDED=false
 
@@ -80,7 +82,7 @@ COPY --from=prod-deps --chown=bun:bun /app/storage ./storage
 
 USER bun
 
-EXPOSE 4300
+EXPOSE 4400
 
 # 配置优雅停机信号，经由 tini 传递至 NestJS 触发 shutdown hooks 与连接池释放
 STOPSIGNAL SIGTERM
