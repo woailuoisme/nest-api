@@ -22,7 +22,6 @@ tests/.tmp/
 .env.local
 .env.*.local
 !.env.example
-!docker/.env.example
 secret.ini
 secret*.ini
 *.ini
