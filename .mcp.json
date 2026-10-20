@@ -2,7 +2,17 @@
   "mcpServers": {
     "codegraph": {
       "command": "codegraph",
-      "args": ["serve", "--mcp"]
+      "args": [
+        "serve",
+        "--mcp"
+      ]
     }
+  },
+  "dbx": {
+    "command": "npx",
+    "args": [
+      "-y",
+      "@dbx-app/mcp-server"
+    ]
   }
 }
