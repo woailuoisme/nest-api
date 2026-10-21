@@ -1,10 +1,13 @@
 import 'dotenv/config';
+// 必须早于其余 import：CLI 也承载长驻进程（serve / worker），探针需先于业务模块注册
+import './setup/otel/telemetry';
 import type { LoggerService } from '@nestjs/common';
 import { CommandFactory, type CommanderOptionsType } from 'nest-commander';
 
 import { createPinoLogger, PinoLoggerService } from '@/setup/logger';
 
 import { CliModule } from './cli.module';
+import { isProcessCommand, ProcessCommandsModule } from './commands/process-commands.module';
 import { setupTimezone } from './config/timezone';
 
 /** 仅在 TTY 且未声明 NO_COLOR 时着色（管道/重定向输出保持纯文本） */
@@ -84,7 +87,13 @@ class CliLogger implements LoggerService {
 
 async function bootstrap() {
   setupTimezone();
-  await CommandFactory.run(CliModule, {
+
+  // 长驻进程命令以最小模块为根：CliModule 的依赖图会与引导体创建的应用图各留一份 DB / Redis / BullMQ，
+  // 而一次性命令（route:list / db:seed 等）仍需 CliModule 提供完整业务图
+  const [verb] = process.argv.slice(2);
+  const rootModule = isProcessCommand(verb) ? ProcessCommandsModule : CliModule;
+
+  await CommandFactory.run(rootModule, {
     logger: new CliLogger(new PinoLoggerService(await createPinoLogger())),
     helpConfiguration,
   });

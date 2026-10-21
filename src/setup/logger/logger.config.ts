@@ -92,7 +92,10 @@ export function redactUrl(url?: string): string {
  * 采集端需要 `service` 字段区分来源。独立 worker 的入口是 `dist/workers/worker.main.js`（见 justfile `worker` / 容器 verb `worker`）。
  */
 export function resolveServiceName(): string {
-  return basename(process.argv[1] ?? '').startsWith('worker.main') ? 'worker' : 'api';
+  const entry = basename(process.argv[1] ?? '');
+  // CLI 长驻进程（cli.js worker）与独立 worker 入口同等对待，
+  // 否则采集端会把队列进程误标为 api，service 维度聚合失真
+  return entry.startsWith('worker.main') || process.argv[2] === 'worker' ? 'worker' : 'api';
 }
 
 /**

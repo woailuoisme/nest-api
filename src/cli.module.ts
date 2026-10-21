@@ -6,6 +6,7 @@ import { EventEmitterModule } from '@nestjs/event-emitter';
 import { FEATURE_MODULES } from '@/features';
 
 import { CommandsModule } from './commands/commands.module';
+import { ProcessCommandsModule } from './commands/process-commands.module';
 import { MediaModule } from './common/media/media.module';
 import { SearchModule } from './common/search/search.module';
 import { StorageModule } from './common/storage/storage.module';
@@ -39,6 +40,8 @@ import { RealtimeModule } from './realtime/realtime.module';
     RealtimeModule,
     JobsModule,
     CommandsModule,
+    // 仅为 `cli --help` 列出 serve / worker；实际执行走 cli.ts 选定的最小根模块
+    ProcessCommandsModule,
   ],
 })
 export class CliModule {}

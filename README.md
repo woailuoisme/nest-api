@@ -180,6 +180,8 @@ just dev
 | `worker` | `just worker` | `command: ["worker"]` | 消费队列与定时任务，不提供 HTTP |
 | `cli` | `just cli <命令>` | `command: ["cli", "<命令>"]` | 一次性 CLI，如 `route:list` / `db:seed` |
 
+> 长驻进程也可经 CLI 前门启动：`just cli serve` 等同容器 `api`（别名 `server`），`just cli worker` 等同 `worker`。两者与 `main.ts` / `workers/worker.main.ts` 共用 `src/bootstrap/` 的引导体，行为与优雅停机语义一致。
+
 ```bash
 # --- 开发与运行 ---
 just dev                  # 开发模式 (API + Worker 双进程 + SWC Watch)

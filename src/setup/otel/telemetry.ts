@@ -1,7 +1,7 @@
 /**
  * OpenTelemetry 初始化（副作用模块）：traces + metrics 经 OTLP/HTTP+protobuf 推送 otel-collector。
  *
- * 入口级先导模式：main / worker 入口最先导入本模块，借助 top-level await 确保在其余业务模块（http/fastify）加载前完成探针注册。
+ * 入口级先导模式：main / worker / cli 入口最先导入本模块，借助 top-level await 确保在其余业务模块（http/fastify）加载前完成探针注册。
  *
  * 未配置 `OTEL_EXPORTER_OTLP_ENDPOINT` 时不初始化（动态 import 均不执行）：
  * 本地与测试环境零配置可用、零依赖加载开销。

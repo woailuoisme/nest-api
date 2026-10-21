@@ -18,6 +18,8 @@ just dev          # 开发模式 (API + Worker 双进程 + watch)
 just build        # 构建到 dist/
 just api          # 生产构建仅 HTTP API (容器 verb: api)
 just worker       # 生产构建独立 Worker 进程 (容器 verb: worker)
+just cli serve    # 经 CLI 前门启动 HTTP API（与 just api 同一引导体，别名 server）
+just cli worker   # 经 CLI 前门启动队列 Worker（与 just worker 同一引导体）
 just type         # tsc --noEmit 类型检查
 just lint         # oxlint 静态检查 (src tests)
 just fix          # oxlint --fix + oxfmt (src tests)

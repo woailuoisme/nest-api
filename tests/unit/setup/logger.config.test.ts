@@ -173,6 +173,28 @@ describe('logger.config', () => {
       }
     });
 
+    it('CLI 长驻进程按 verb 判定角色：cli worker → worker，cli serve → api', async () => {
+      vi.stubEnv('APP_ENV', 'production');
+      const originalEntry = process.argv[1];
+      const originalVerb = process.argv[2];
+      process.argv[1] = '/app/dist/cli.js';
+
+      try {
+        process.argv[2] = 'worker';
+        expect(getChindings(await createPinoLogger())).toContain('"service":"worker"');
+
+        process.argv[2] = 'serve';
+        expect(getChindings(await createPinoLogger())).toContain('"service":"api"');
+      } finally {
+        process.argv[1] = originalEntry;
+        if (originalVerb === undefined) {
+          delete process.argv[2];
+        } else {
+          process.argv[2] = originalVerb;
+        }
+      }
+    });
+
     it('生产启动不依赖 pino-pretty：模块缺失时仍能创建 logger（守住「不得静态导入 devDependency」）', async () => {
       vi.resetModules();
       // 模拟生产镜像（`bun install --production` 不含 devDeps）：只有静态导入才会在此炸掉
