@@ -3,6 +3,7 @@ import { z } from 'zod';
 export const NotificationTypeSchema = z.enum(['info', 'warning', 'success', 'error']);
 export type NotificationType = z.infer<typeof NotificationTypeSchema>;
 
+// strict: 未知字段当前静默丢弃（z.object strip）；新增写接口应改用 z.strictObject
 export const SendNotificationSchema = z.object({
   userId: z.string().min(1).describe('接收通知的目标用户 ID'),
   title: z.string().trim().min(1).max(100).describe('通知标题'),

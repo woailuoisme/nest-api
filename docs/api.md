@@ -8,10 +8,10 @@
 
 API 统一采用 **URI 路径版本控制**，传输格式固定为 `application/json`（编码 `UTF-8`）。
 
-| 环境                         | API Base URL                              | 描述                      |
-| :--------------------------- | :---------------------------------------- | :------------------------ |
-| **测试环境 (Staging)** | `https://staging-api.example.com/v1`      | 集成测试与 QA 验收        |
-| **生产环境 (Prod)**    | `https://api.example.com/v1`              | 线上生产环境 (强制 HTTPS) |
+| 环境                   | API Base URL                         | 描述                      |
+| :--------------------- | :----------------------------------- | :------------------------ |
+| **测试环境 (Staging)** | `https://staging-api.example.com/v1` | 集成测试与 QA 验收        |
+| **生产环境 (Prod)**    | `https://api.example.com/v1`         | 线上生产环境 (强制 HTTPS) |
 
 > **协议规范与深度接入指南**：
 >
@@ -100,14 +100,14 @@ Authorization: Bearer <your_access_token>
 
 ### 3.2 标准请求头
 
-| 请求头                        | 必需 | 描述                                                  | 示例                           |
-| :---------------------------- | :--: | :---------------------------------------------------- | :----------------------------- |
-| **`Content-Type`**    | 是 | 请求体媒体类型                                        | `application/json`           |
-| **`Accept`**          | 是 | 客户端期望的响应格式                                  | `application/json`           |
-| **`Authorization`**   | 条件 | 访问受保护资源的 Bearer Token                         | `Bearer eyJhbGci...`         |
-| **`x-request-id`**    | 否 | 全链路追踪 ID（若未提供，网关自动生成并回写响应头）   | `req_019572d4a6c878b18cf0`   |
-| **`Idempotency-Key`** | 条件 | 非幂等写操作防重放并发唯一键（推荐 UUIDv7 / ULID）    | `019572d4-a6c8-78b1-8cf0-281b94c032a1` |
-| **`If-Match`**        | 条件 | 条件更新控制：携带前序 ETag 防并发覆写（防丢失更新）  | `W/"019572d4a6c878b1"`        |
+| 请求头                | 必需 | 描述                                                 | 示例                                   |
+| :-------------------- | :--: | :--------------------------------------------------- | :------------------------------------- |
+| **`Content-Type`**    |  是  | 请求体媒体类型                                       | `application/json`                     |
+| **`Accept`**          |  是  | 客户端期望的响应格式                                 | `application/json`                     |
+| **`Authorization`**   | 条件 | 访问受保护资源的 Bearer Token                        | `Bearer eyJhbGci...`                   |
+| **`x-request-id`**    |  否  | 全链路追踪 ID（若未提供，网关自动生成并回写响应头）  | `req_019572d4a6c878b18cf0`             |
+| **`Idempotency-Key`** | 条件 | 非幂等写操作防重放并发唯一键（推荐 UUIDv7 / ULID）   | `019572d4-a6c8-78b1-8cf0-281b94c032a1` |
+| **`If-Match`**        | 条件 | 条件更新控制：携带前序 ETag 防并发覆写（防丢失更新） | `W/"019572d4a6c878b1"`                 |
 
 ### 3.3 幂等性保障机制 (Honouring an Idempotency Key)
 
@@ -147,31 +147,31 @@ Authorization: Bearer <your_access_token>
 
 ### 4.1 HTTP 动词语义
 
-| 方法 | 语义 | 幂等性 | 成功返回 | 典型场景 |
-| :---: | :--- | :---: | :---: | :--- |
-| **`GET`** | 获取单个资源或列表 | 幂等 | `200 OK` | 读取详情、分页查询 |
-| **`POST`** | 创建新资源或执行非 CRUD 操作 | 非幂等 | `201 Created` / `202 Accepted` / `200 OK` | 创建实体、提交认证、异步长任务 |
-| **`PUT`** | 全量覆盖替换目标资源 | 幂等 | `200 OK` | 完整替换目标配置 |
-| **`PATCH`** | 局部修改目标资源属性 | 视实现而定 | `200 OK` | 局部更新字段、变更状态 |
-| **`DELETE`** | 销毁或注销目标资源 | 幂等 | `204 No Content` / `200 OK` | 删除资源、解绑关联 |
+|     方法     | 语义                         |   幂等性   |                 成功返回                  | 典型场景                       |
+| :----------: | :--------------------------- | :--------: | :---------------------------------------: | :----------------------------- |
+|  **`GET`**   | 获取单个资源或列表           |    幂等    |                 `200 OK`                  | 读取详情、分页查询             |
+|  **`POST`**  | 创建新资源或执行非 CRUD 操作 |   非幂等   | `201 Created` / `202 Accepted` / `200 OK` | 创建实体、提交认证、异步长任务 |
+|  **`PUT`**   | 全量覆盖替换目标资源         |    幂等    |                 `200 OK`                  | 完整替换目标配置               |
+| **`PATCH`**  | 局部修改目标资源属性         | 视实现而定 |                 `200 OK`                  | 局部更新字段、变更状态         |
+| **`DELETE`** | 销毁或注销目标资源           |    幂等    |        `204 No Content` / `200 OK`        | 删除资源、解绑关联             |
 
 ### 4.2 响应状态码速查
 
-| 状态码 | 对应枚举 Code | 说明 |
-| :---: | :--- | :--- |
-| **`200`** | `OK` | 请求处理成功 |
-| **`201`** | `CREATED` | 资源创建成功 |
-| **`202`** | `ACCEPTED` | 异步长任务已受理排队，后台处理中 |
-| **`204`** | `NO_CONTENT` | 请求成功，无返回数据体（0 字节） |
-| **`304`** | `NOT_MODIFIED` | 资源未变更（配合 If-None-Match 缓存） |
-| **`400`** | `BAD_REQUEST` | 请求格式无效、缺少必填参数或语法错误 |
-| **`401`** | `UNAUTHORIZED` | 未提供身份凭证或 Token 已过期失效 |
-| **`403`** | `FORBIDDEN` | 凭证有效但无权执行该操作（权限不足） |
-| **`404`** | `NOT_FOUND` | 请求的资源或 URI 不存在 |
-| **`409`** | `CONFLICT` | 资源状态冲突（如唯一键重复、并发重试冲突） |
-| **`412`** | `PRECONDITION_FAILED` | 前置条件未满足（如 If-Match 版本冲突） |
-| **`422`** | `UNPROCESSABLE_ENTITY` | 请求体字段语义或参数验证规则校验失败 |
-| **`429`** | `TOO_MANY_REQUESTS` | 请求频率超出速率配额限制 |
+|  状态码   | 对应枚举 Code           | 说明                                       |
+| :-------: | :---------------------- | :----------------------------------------- |
+| **`200`** | `OK`                    | 请求处理成功                               |
+| **`201`** | `CREATED`               | 资源创建成功                               |
+| **`202`** | `ACCEPTED`              | 异步长任务已受理排队，后台处理中           |
+| **`204`** | `NO_CONTENT`            | 请求成功，无返回数据体（0 字节）           |
+| **`304`** | `NOT_MODIFIED`          | 资源未变更（配合 If-None-Match 缓存）      |
+| **`400`** | `BAD_REQUEST`           | 请求格式无效、缺少必填参数或语法错误       |
+| **`401`** | `UNAUTHORIZED`          | 未提供身份凭证或 Token 已过期失效          |
+| **`403`** | `FORBIDDEN`             | 凭证有效但无权执行该操作（权限不足）       |
+| **`404`** | `NOT_FOUND`             | 请求的资源或 URI 不存在                    |
+| **`409`** | `CONFLICT`              | 资源状态冲突（如唯一键重复、并发重试冲突） |
+| **`412`** | `PRECONDITION_FAILED`   | 前置条件未满足（如 If-Match 版本冲突）     |
+| **`422`** | `UNPROCESSABLE_ENTITY`  | 请求体字段语义或参数验证规则校验失败       |
+| **`429`** | `TOO_MANY_REQUESTS`     | 请求频率超出速率配额限制                   |
 | **`500`** | `INTERNAL_SERVER_ERROR` | 服务器内部未知异常（向外屏蔽底层实现细节） |
 
 ---
@@ -277,9 +277,7 @@ Authorization: Bearer <your_access_token>
     "code": "VALIDATION_FAILED",
     "message": "Validation failed",
     "fields": {
-      "<field_name>": [
-        "<validation_rule_failure_message>"
-      ]
+      "<field_name>": ["<validation_rule_failure_message>"]
     }
   }
 }
@@ -287,6 +285,32 @@ Authorization: Bearer <your_access_token>
 
 > `fields` 的键为「点号分隔的字段路径」：顶层字段为 `email`，嵌套字段为 `profile.nickname`，
 > 数组元素为 `items.0.name`；无法归入具体字段的校验失败统一归入 `root`。
+
+##### 校验契约细则
+
+**未知字段（客户端多传的 key）**：由 schema 自身决定，不由管道决定。
+
+| 场景                                      | 语义               | 客户端表现                                             |
+| :---------------------------------------- | :----------------- | :----------------------------------------------------- |
+| 存量写接口（`z.object`）                  | 静默丢弃未声明字段 | 字段名拼错不会报错，只会表现为「字段缺失」或完全不生效 |
+| 新增写接口（`z.strictObject`）            | 拒绝未声明字段     | 422，`fields` 含 `Unrecognized key: "xxx"`             |
+| 第三方回调（微信支付 / Centrifugo Proxy） | 永远静默丢弃       | 上游新增协议字段不会打断回调                           |
+
+> 新写接口一律用 `z.strictObject()`；存量接口的 strip 行为属已发布契约，收紧需单独评估。
+
+**转换语义（`transform`）**：管道默认 `transform: true`，handler 收到的是 **schema 输出**而非原始输入。
+
+- 查询/路径参数一律用 `z.coerce.*` + `.default()` 归一化，handler 不得再做 `parseInt` / 默认值处理；
+- 写接口的 `trim()` / `toLowerCase()` 等归一化在 schema 完成（如 `email`），service 层不得重复清洗；
+- 若某参数需「只校验不改写」（`transform: false`），其 TS 类型必须写成 `z.input<typeof schema>`，否则会出现「类型是 number、运行时是 string」。
+
+**单值与数组**：
+
+- 单值参数：`@Body('email', { schema: z.email() })` / `@Param('id', { schema: z.uuid() })`；
+- 数组参数：`@Body({ schema: z.array(itemSchema) })`，元素错误路径带下标前缀（`1.email`）；
+- 自定义参数装饰器（`createParamDecorator`）需在管道开启 `validateCustomDecorators: true` 才会被校验（已在 `createApiValidationPipe()` 开启）。
+
+**响应序列化**：响应 schema 即白名单（未声明字段不外泄），数组返回时传**元素** schema；响应不符 schema 属服务端缺陷，统一 **500**（而非 400）。
 
 #### 3. 服务器内部异常 (500 Internal Server Error)
 
@@ -317,9 +341,7 @@ Authorization: Bearer <your_access_token>
 
   ```json
   {
-    "items": [
-      { "id": "<resource_id>", "<attribute>": "<value>" }
-    ],
+    "items": [{ "id": "<resource_id>", "<attribute>": "<value>" }],
     "meta": {
       "page": 1,
       "pageSize": 20,
@@ -336,9 +358,7 @@ Authorization: Bearer <your_access_token>
 
   ```json
   {
-    "items": [
-      { "id": "<resource_id>", "<attribute>": "<value>" }
-    ],
+    "items": [{ "id": "<resource_id>", "<attribute>": "<value>" }],
     "meta": {
       "hasMore": true,
       "nextCursor": "<opaque_cursor_string>",

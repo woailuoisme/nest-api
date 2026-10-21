@@ -46,10 +46,15 @@ function groupIssuesByField(issues: readonly ValidationIssue[]): Record<string, 
  *
  * 复用 docs/api.md 已定义的错误契约：422 + `{ code, message, fields, errors }` 四键零变化。
  * 仅对声明了 `schema` 的参数装饰器（`@Body({ schema })` / `@Query({ schema })` / `@Param(name, { schema })`）生效。
+ *
+ * `validateCustomDecorators` 默认 false：`createParamDecorator` 创建的自定义参数即使声明了 `schema` 也会被跳过。
+ * 本仓库已有 3 个自定义装饰器（@CurrentUser / @Session / @ReqSignal），当前均未带 schema，
+ * 开启是为避免未来「@Foo({ schema }) 静默不校验」的隐蔽失效；对未声明 schema 的参数无任何影响。
  */
 export function createApiValidationPipe(): StandardSchemaValidationPipe {
   return new StandardSchemaValidationPipe({
     errorHttpStatusCode: HttpStatus.UNPROCESSABLE_ENTITY,
+    validateCustomDecorators: true,
     exceptionFactory: (issues) => {
       const fields = groupIssuesByField(issues);
       return new UnprocessableEntityException({

@@ -52,6 +52,8 @@ export interface RealtimeTokenResponse {
 
 /**
  * 频道订阅凭据请求 DTO Schema
+ *
+ * strict: 未知字段当前静默丢弃（z.object strip）；新增写接口应改用 z.strictObject
  */
 export const RealtimeSubscribeSchema = z.object({
   channel: z.string().min(1, 'channel 不能为空'),
@@ -97,6 +99,9 @@ export class RealtimeChannelInfoDto {
  * 安全约定：`user` 由 Centrifugo 依据连接 Token 的 subject 注入（可信），
  * 其余字段仅为协议元数据；**严禁**在此声明客户端可控的身份/角色字段
  * （客户端 `subscribe.data` 会原样透传到 webhook，任何来自 data 的角色声明都是伪造入口）。
+ *
+ * strict 例外（永远保持 strip）：本 schema 的输入来自 Centrifugo 网关而非第一方客户端，
+ * 网关升级可能新增协议字段，strictObject 会直接 422 打断全部订阅回调。
  */
 export const CentrifugoProxySubscribeSchema = z.object({
   client: z.string().optional(),

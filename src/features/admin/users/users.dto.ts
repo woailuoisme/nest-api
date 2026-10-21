@@ -6,6 +6,7 @@ import { PageOptionsSchema, paginatedEnvelopeSchema } from '@/common/dto/paginat
 
 // ─── 请求 DTO（Nest 12 原生 Standard Schema：schema 即契约，类型由 z.infer 派生）────────
 
+// strict: 未知字段当前静默丢弃（z.object strip）；收紧为 strictObject 属破坏性变更，需单独评估
 export const CreateUserSchema = z.object({
   name: z.string().trim().min(2).max(100).describe('用户名称'),
   email: z.email().toLowerCase().trim().describe('电子邮箱'),
@@ -31,6 +32,7 @@ export const SearchUsersSchema = PageOptionsSchema.extend({
 
 export type SearchUsersRequest = z.infer<typeof SearchUsersSchema>;
 
+// strict: 未知字段当前静默丢弃；收紧需单独评估（存量客户端可能携带额外字段）
 export const UpdateUserSchema = z.object({
   name: z.string().trim().min(2).max(100).optional().describe('用户名称'),
   email: z.email().toLowerCase().trim().optional().describe('电子邮箱'),
@@ -38,6 +40,7 @@ export const UpdateUserSchema = z.object({
 
 export type UpdateUserRequest = z.infer<typeof UpdateUserSchema>;
 
+// strict: 未知字段当前静默丢弃；收紧需单独评估（与 UpdateUserSchema 同一策略）
 export const ChangeRoleSchema = z.object({
   role: z.enum(Role).describe('目标角色'),
 });

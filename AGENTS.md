@@ -229,6 +229,10 @@ BullMQ 队列由 `AuthModule → MailJobs` 依赖，CLI 模块也需 `BullModule
   - OpenAPI 转换由 `standardSchemaConverter`（`src/setup/swagger/standard-schema-converter.ts`）接管 Zod schema，`z.date()` 等不可表达类型统一映射为 `string/date-time`。
   - `@ApiSuccessResponse` / `@ApiPageResponse` / `@ApiCursorPageResponse` 同时接受**实体类**与 **Zod schema** 两种模型。
   - 路径参数：非 schema 场景沿用内置管道（`ParseUUIDPipe` 等）；领域标识用显式 schema（如 IoT 的 `DeviceIdSchema`），不要假设 UUID。
+  - **未知字段策略（硬规则）**：新增写接口一律 `z.strictObject()`（未知字段报 422）；存量 `z.object()` 的 strip 行为属已发布契约，收紧必须单独评估；第三方回调（微信支付 / Centrifugo Proxy）永远保持 `z.object()`，避免上游新增字段打断回调。
+  - **禁止占位校验**：不得用 `z.any()` / `z.unknown()` 代替真实规则（等于关闭校验）；确需透传的字典型字段用 `z.record(z.string(), z.unknown())` 并限定键与大小上限。
+  - **禁止二次校验**：管道已经执行 schema 校验与归一化（`trim` / `z.coerce` / `.default()`），service 与 handler 不得再 `parse` 或重复清洗；需“只校验不改写”时用 `transform: false` 并把类型写成 `z.input<>`。
+  - **自定义参数装饰器**：`createParamDecorator` 的参数默认不被校验，`createApiValidationPipe()` 已开启 `validateCustomDecorators: true`；新写自定义装饰器携带 `schema` 时无需额外配置。
 - **日志**: 业务服务、控制器与基础设施使用注入的 `Logger` (Pino)，严禁在业务逻辑中使用 `console.log`（CLI / Seeder 终端输出除外）。
   - **原生极速架构**: 彻底消除 `nestjs-pino` / `pino-http` 额外包装层，基于原生 `@Global()` `LoggerModule` 与 `PinoLoggerService` 实现。
   - **单通道 stdout**: 生产输出单行 JSON（带 `service`/`hostname` 基字段与 ISO 时间，便于多进程 / 多副本归集），开发 / 测试输出 `pino-pretty` 彩色单行。**不落盘**：日志留存交容器日志驱动（根 `docker-compose.yml` 的 `json-file` 上限，`api` 与 `worker` 服务复用 `x-app` 锚点同一 `logging` 块）；Pino `mixin` 注入 `trace_id`/`span_id`（无活动 span 零开销），otel-collector `filelog` 采集容器 stdout 后三信号在 OpenObserve 内互相关联。

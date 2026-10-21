@@ -32,6 +32,7 @@ export type DeviceTelemetryDto = z.infer<typeof DeviceTelemetrySchema>;
 
 // ─── 工业设备指令下发 Schema & DTO ────────────────────────────────────────
 
+// strict: 未知字段当前静默丢弃；收紧需同时更新真实 PLC 固件与仿真器
 export const SendCommandSchema = z.object({
   command: z.string().min(1).describe('指令名称 (如 setSpeed, emergencyStop, calibrate)'),
   params: z.record(z.string(), z.unknown()).optional().describe('指令附加参数字典'),
@@ -42,6 +43,7 @@ export type SendCommandDto = z.infer<typeof SendCommandSchema>;
 
 // ─── 模拟遥测测试 Schema & DTO ────────────────────────────────────────────
 
+// strict: 仿真载荷仅开发/联调使用，保留 strip 以便本地脚本随手附加上下文字段
 export const MockTelemetrySchema = z.object({
   tenantId: z.string().default('tenant-01').describe('租户 ID'),
   deviceId: z.string().default('plc-01').describe('设备序列号 / 标识符'),
@@ -70,6 +72,7 @@ export const DEFAULT_TENANT_ID = 'default';
 
 // ─── 设备安全凭证签发 Schema & DTO ──────────────────────────────────────────
 
+// strict: 未知字段当前静默丢弃；收紧需评估历史设备固件是否携带额外字段
 export const DeviceTokenRequestSchema = z.object({
   deviceId: DeviceIdSchema,
   deviceSecret: z.string().min(6).describe('设备预置通信密钥 (Pre-Shared Secret)'),
@@ -92,6 +95,7 @@ export class DeviceTokenResponseDto {
 
 // ─── 工业设备突发硬件告警事件 Schema & DTO ──────────────────────────────────────
 
+// strict: 告警上报为设备侧载荷，保留 strip 以兼容后续固件新增字段
 export const DeviceCriticalEventSchema = z.object({
   tenantId: z.string().default('default').describe('租户 ID'),
   deviceId: DeviceIdSchema.describe('设备序列号'),

@@ -1,4 +1,4 @@
-import { UnprocessableEntityException } from '@nestjs/common';
+import { StandardSchemaValidationPipe, UnprocessableEntityException } from '@nestjs/common';
 import { describe, expect, it } from 'vitest';
 import { z } from 'zod';
 
@@ -83,5 +83,70 @@ describe('createApiValidationPipe (Standard Schema 校验管道)', () => {
     const result = await pipe.transform(rawData, { type: 'body', metatype: Object });
 
     expect(result).toBe(rawData);
+  });
+
+  it('z.object 下未知字段被静默剥离（存量写接口契约）', async () => {
+    const result = await pipe.transform(
+      { name: 'Alice', email: 'alice@example.com', isAdmin: true, extraField: 'dropped' },
+      { type: 'body', schema: TestSchema },
+    );
+
+    expect(result).toEqual({ name: 'Alice', email: 'alice@example.com' });
+    expect(Object.keys(result)).not.toContain('isAdmin');
+  });
+
+  it('z.strictObject 下未知字段触发 422（可用于新增写接口防字段走私）', async () => {
+    const StrictSchema = z.strictObject({ name: z.string().min(2) });
+
+    let caughtError: UnprocessableEntityException | undefined;
+    try {
+      await pipe.transform({ name: 'Alice', isAdmin: true }, { type: 'body', schema: StrictSchema });
+    } catch (e) {
+      caughtError = e as UnprocessableEntityException;
+    }
+
+    const response = caughtError?.getResponse() as { fields?: Record<string, string[]> };
+    expect(caughtError?.getStatus()).toBe(422);
+    expect(JSON.stringify(response.fields)).toContain('Unrecognized key');
+  });
+
+  it('单值参数（@Body("email", { schema })）只校验被提取的值', async () => {
+    await expect(pipe.transform('alice@example.com', { type: 'body', data: 'email', schema: z.email() })).resolves.toBe(
+      'alice@example.com',
+    );
+
+    await expect(
+      pipe.transform('not-an-email', { type: 'body', data: 'email', schema: z.email() }),
+    ).rejects.toBeInstanceOf(UnprocessableEntityException);
+  });
+
+  it('数组 schema 的元素错误带下标前缀', async () => {
+    let caughtError: UnprocessableEntityException | undefined;
+    try {
+      await pipe.transform(
+        [
+          { name: 'Alice', email: 'alice@example.com' },
+          { name: 'B', email: 'bad' },
+        ],
+        {
+          type: 'body',
+          schema: z.array(TestSchema),
+        },
+      );
+    } catch (e) {
+      caughtError = e as UnprocessableEntityException;
+    }
+
+    const response = caughtError?.getResponse() as { fields?: Record<string, string[]> };
+    expect(Object.keys(response.fields ?? {})).toEqual(expect.arrayContaining(['1.name', '1.email']));
+  });
+
+  it('validateCustomDecorators 开启后自定义装饰器参数的 schema 才生效', async () => {
+    const customMeta = { type: 'custom' as const, schema: z.email() };
+
+    // 默认（false）：跳过校验，非法值原样通过 —— 这正是开启开关要防的隐蔽失效
+    await expect(new StandardSchemaValidationPipe().transform('bad', customMeta)).resolves.toBe('bad');
+    // 本仓库管道（true）：非法值被拒绝
+    await expect(pipe.transform('bad', customMeta)).rejects.toBeInstanceOf(UnprocessableEntityException);
   });
 });
