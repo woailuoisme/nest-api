@@ -12,6 +12,7 @@ default:
     @just --list
 
 # 启动开发服务器（API + Worker 双进程，watch 模式；两个进程均经 CLI 前门启动）
+# 共用 dist/，故 nest-cli.json 关闭 deleteOutDir（否则两者互相清空 → MODULE_NOT_FOUND）
 [group('dev')]
 dev:
     kill -9 $(lsof -ti:${PORT:-4300} 2>/dev/null) 2>/dev/null || true; concurrently -k -n app,worker -c bgBlue.bold,bgMagenta.bold -p "[{name}]" -t "HH:mm:ss" "nest start --watch --entryFile cli -- serve" "nest start --watch --entryFile cli -- worker"
@@ -19,7 +20,7 @@ dev:
 # 构建生产产物（SWC）
 [group('dev')]
 build:
-    nest build
+    rm -rf dist && nest build
 
 # 启动生产构建（CLI 前门 serve）— 仅 HTTP API，队列由独立 worker 进程消费
 [group('dev')]
