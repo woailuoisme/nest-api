@@ -75,7 +75,7 @@ export class BetterAuthGuard implements CanActivate {
         id: user.id,
         email: user.email,
         name: user.name,
-        role: (user.role as Role) || ('user' as Role),
+        role: user.role ?? ('user' as Role),
         image: user.image,
       };
 

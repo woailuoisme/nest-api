@@ -35,29 +35,29 @@ function assertDispatcherRegistered(label: string): void {
  */
 export const authMailHandlers = {
   async sendResetPassword(params: { user: { email: string; name: string }; url: string; token: string }) {
-    if (mailDispatcher) {
-      await mailDispatcher.queuePasswordResetEmail(params.user.email, params.user.name, params.token, 'zh');
-    } else {
+    if (!mailDispatcher) {
       assertDispatcherRegistered('发送重置密码邮件失败');
       logger.log(`[BetterAuth:ResetPassword] User ${params.user.email}: ${params.url}`);
+      return;
     }
+    await mailDispatcher.queuePasswordResetEmail(params.user.email, params.user.name, params.token, 'zh');
   },
 
   async sendVerificationEmail(params: { user: { email: string; name: string }; url: string; token: string }) {
-    if (mailDispatcher) {
-      await mailDispatcher.queueVerificationEmail(params.user.email, params.user.name, params.token, 'zh');
-    } else {
+    if (!mailDispatcher) {
       assertDispatcherRegistered('发送验证邮件失败');
       logger.log(`[BetterAuth:VerifyEmail] User ${params.user.email}: ${params.url}`);
+      return;
     }
+    await mailDispatcher.queueVerificationEmail(params.user.email, params.user.name, params.token, 'zh');
   },
 
   async sendVerificationOTP(params: { email: string; otp: string }) {
-    if (mailDispatcher?.queueEmailOTP) {
-      await mailDispatcher.queueEmailOTP(params.email, params.otp);
-    } else {
+    if (!mailDispatcher?.queueEmailOTP) {
       assertDispatcherRegistered('发送邮箱验证码失败');
       logger.log(`[BetterAuth:EmailOTP] ${params.email}: ${params.otp}`);
+      return;
     }
+    await mailDispatcher.queueEmailOTP(params.email, params.otp);
   },
 };

@@ -52,6 +52,9 @@ function httpStatusName(status: HttpStatus): string {
   return HttpStatus[status] ?? String(status);
 }
 
+/** 未经脱敏的内部错误统一文案（debug=false 时使用） */
+const INTERNAL_ERROR_MESSAGE = 'Internal Server Error';
+
 /** PostgreSQL 常见约束错误码转译映射表 */
 const PG_ERROR_MAP: Record<string, { status: HttpStatus; message: string; i18nKey: I18nPath }> = {
   '23505': {
@@ -104,7 +107,7 @@ export interface ResolvedError {
 export function resolveErrorEnvelope(exception: unknown, debug = false): ResolvedError {
   let status = exception instanceof HttpException ? exception.getStatus() : HttpStatus.INTERNAL_SERVER_ERROR;
 
-  let message = 'Internal Server Error';
+  let message = INTERNAL_ERROR_MESSAGE;
   let errors: Record<string, string[]> | undefined;
   let code = httpStatusName(status);
   let log: ResolvedErrorLog | undefined;
@@ -161,7 +164,7 @@ export function resolveErrorEnvelope(exception: unknown, debug = false): Resolve
       i18nKey = dbError.i18nKey;
     } else if (exception instanceof Error) {
       // 脱敏：debug=false 时不向客户端透出内部异常 message（可能含 SQL/堆栈/内网信息），仅返回通用文案
-      message = debug ? exception.message : 'Internal Server Error';
+      message = debug ? exception.message : INTERNAL_ERROR_MESSAGE;
       code = httpStatusName(status);
       log = { level: 'error', message: `Unhandled Exception: ${exception.message}`, stack: exception.stack };
     } else {
@@ -234,6 +237,24 @@ function resolveI18nCandidateKey(i18nKey?: string, message?: unknown): I18nPath 
 }
 
 /**
+ * 按当前请求语言翻译错误文案；无 i18n 上下文、无候选 Key 或翻译失败时原样返回。
+ */
+function translateErrorMessage(host: ArgumentsHost, i18nKey: string | undefined, message: unknown): unknown {
+  const i18n = I18nContext.current(host);
+  if (!i18n) return message;
+
+  const candidateKey = resolveI18nCandidateKey(i18nKey, message);
+  if (!candidateKey) return message;
+
+  try {
+    const translated = i18n.t(candidateKey);
+    return typeof translated === 'string' && translated !== candidateKey ? translated : message;
+  } catch {
+    return message;
+  }
+}
+
+/**
  * 全局异常过滤器：捕获所有未处理的 HTTP 及系统异常，委托 {@link resolveErrorEnvelope} 完成
  * 转译与脱敏，随后执行日志意图并按当前响应对象形态（Fastify / raw ServerResponse）写回。
  */
@@ -259,21 +280,7 @@ export class HttpExceptionFilter implements ExceptionFilter {
     }
 
     const { status, body, log, i18nKey } = resolveErrorEnvelope(exception, this.debug);
-
-    const i18n = I18nContext.current(host);
-    if (i18n) {
-      const candidateKey = resolveI18nCandidateKey(i18nKey, body.error.message);
-      if (candidateKey) {
-        try {
-          const translated = i18n.t(candidateKey);
-          if (typeof translated === 'string' && translated !== candidateKey) {
-            body.error.message = translated;
-          }
-        } catch {
-          // 翻译失败时优雅降级为原始 message
-        }
-      }
-    }
+    body.error.message = translateErrorMessage(host, i18nKey, body.error.message);
 
     if (log) {
       const line = `${log.message} at ${request?.url ?? ''}`;

@@ -3,7 +3,7 @@ import { betterAuth } from 'better-auth';
 import { DEV_ONLY_AUTH_SECRET, isProductionEnv } from '@/common/constants/app.constants';
 
 import { authDatabaseAdapter } from './database';
-import { authMailHandlers, setBetterAuthMailDispatcher } from './mail-dispatcher';
+import { authMailHandlers } from './mail-dispatcher';
 import { getAuthPlugins } from './plugins';
 
 const baseURL = process.env.BETTER_AUTH_URL || process.env.APP_URL || 'http://localhost:4300';
@@ -31,14 +31,10 @@ export const auth = betterAuth({
     enabled: true,
     minPasswordLength: 8,
     maxPasswordLength: 128,
-    sendResetPassword: async ({ user, url, token }) => {
-      await authMailHandlers.sendResetPassword({ user, url, token });
-    },
+    sendResetPassword: authMailHandlers.sendResetPassword,
   },
   emailVerification: {
-    sendVerificationEmail: async ({ user, url, token }) => {
-      await authMailHandlers.sendVerificationEmail({ user, url, token });
-    },
+    sendVerificationEmail: authMailHandlers.sendVerificationEmail,
   },
   session: {
     expiresIn: 60 * 60 * 24 * 7, // 7 天生命周期
@@ -53,6 +49,3 @@ export const auth = betterAuth({
 });
 
 export type Auth = typeof auth;
-
-// 向下兼容导出邮件调度器注入接口
-export { setBetterAuthMailDispatcher };

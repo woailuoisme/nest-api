@@ -87,21 +87,13 @@ export class RequestLifecycleInterceptor implements NestInterceptor {
       return next.handle();
     }
 
-    const isBypassed =
-      this.reflector.getAllAndOverride<boolean | undefined>(BYPASS_TIMEOUT_KEY, [
-        context.getHandler(),
-        context.getClass(),
-      ]) === true;
+    const targets = [context.getHandler(), context.getClass()];
+
+    const isBypassed = this.reflector.getAllAndOverride<boolean | undefined>(BYPASS_TIMEOUT_KEY, targets) === true;
 
     const rawTimeout =
-      this.reflector.getAllAndOverride<number | string | undefined>(TIMEOUT_METADATA_KEY, [
-        context.getHandler(),
-        context.getClass(),
-      ]) ??
-      this.reflector.getAllAndOverride<number | string | undefined>(LEGACY_TIMEOUT_METADATA_KEY, [
-        context.getHandler(),
-        context.getClass(),
-      ]);
+      this.reflector.getAllAndOverride<number | string | undefined>(TIMEOUT_METADATA_KEY, targets) ??
+      this.reflector.getAllAndOverride<number | string | undefined>(LEGACY_TIMEOUT_METADATA_KEY, targets);
     const timeoutMs = parseDurationToMs(rawTimeout, this.defaultTimeoutMs);
 
     const req = context.switchToHttp().getRequest<FastifyRequest & { [REQUEST_SIGNAL_SYMBOL]?: AbortSignal }>();

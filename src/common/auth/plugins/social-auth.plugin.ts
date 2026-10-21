@@ -21,14 +21,10 @@ export const socialAuthPlugins = [
         return false;
       }
     },
-    sendOTP: async ({ phoneNumber: phone, code }) => {
-      await sendSmsOtp({ phone, code });
-    },
+    sendOTP: ({ phoneNumber, code }) => sendSmsOtp({ phone: phoneNumber, code }),
   }),
   emailOTP({
-    sendVerificationOTP: async ({ email, otp }) => {
-      await authMailHandlers.sendVerificationOTP({ email, otp });
-    },
+    sendVerificationOTP: authMailHandlers.sendVerificationOTP,
   }),
   lastLoginMethod({
     storeInDatabase: true,

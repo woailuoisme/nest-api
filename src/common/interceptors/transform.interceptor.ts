@@ -6,7 +6,7 @@ import { BYPASS_TRANSFORM_KEY } from '@/common/decorators/response.decorator';
 
 /**
  * 全局成功响应拦截器：遵循 docs/api.md 工业级 RESTful 响应契约：
- * - 仅分页列表采用 `{"items": [...], "pagination": {...}}` 信封（空数据时保底为空数组 `[]`，杜绝前端空指针）
+ * - 仅分页列表采用 `{"items": [...], "meta": {...}}` 信封（空数据时保底为空数组 `[]`，杜绝前端空指针）
  * - 其余所有单资源、业务操作结果一律直接返回裸 JSON 业务对象，彻底废除无意义的 `{ data: ... }` / `{ success: ... }` 外层包装
  * - 204 No Content 保持 0 字节裸响应
  * - 支持通过 `@BypassTransform()` 装饰器跳过包装（如文件流、SSE、健康检查等）
@@ -36,11 +36,11 @@ export class TransformInterceptor<T> implements NestInterceptor<T, unknown> {
 
         // 分页对象自动归一化为标准的 items 与 meta 信封
         if (data && typeof data === 'object' && 'items' in data) {
-          const obj = data as { items: unknown; pagination?: unknown; meta?: unknown };
-          if (obj.meta || obj.pagination) {
+          const envelope = data as { items: unknown; meta?: unknown };
+          if (envelope.meta) {
             return {
-              items: Array.isArray(obj.items) ? obj.items : [],
-              meta: obj.meta ?? obj.pagination,
+              items: Array.isArray(envelope.items) ? envelope.items : [],
+              meta: envelope.meta,
             };
           }
         }
