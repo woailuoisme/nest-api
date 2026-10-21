@@ -137,29 +137,8 @@ export const UPLOAD = {
   },
 } as const;
 
-/** 便捷别名 — 直接 import 使用 */
-export const ALLOWED_MIME_TYPES = UPLOAD.ALLOWED_MIME_TYPES;
-export const ALLOWED_EXTENSIONS = UPLOAD.ALLOWED_EXTENSIONS;
-export const MAX_FILE_SIZE_BYTES = UPLOAD.MAX_FILE_SIZE_BYTES;
-
 /** Redis 连接常量 */
 export const REDIS_MAX_RETRIES = 3;
-
-/** Snowflake ID 生成器常量 */
-export const SNOWFLAKE = {
-  /** 自定义纪元 (2024-01-01T00:00:00.000Z)，避免 ID 过长 */
-  EPOCH: new Date('2024-01-01').getTime(),
-  /** Worker ID 位数 */
-  WORKER_ID_BITS: 10,
-  /** 每毫秒序列号位数 */
-  SEQUENCE_BITS: 12,
-} as const;
-
-/** OTP 验证码常量 */
-export const OTP = {
-  /** 验证码长度 */
-  LENGTH: 6,
-} as const;
 
 /** 依赖注入令牌 */
 export const INJECTION_TOKENS = {

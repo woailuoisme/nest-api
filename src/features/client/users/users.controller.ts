@@ -16,7 +16,7 @@ import { FileInterceptor } from '@nestjs/platform-fastify/multipart';
 import { ApiBearerAuth, ApiBody, ApiConsumes, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { Throttle } from '@nestjs/throttler';
 
-import { ALLOWED_MIME_TYPES, UPLOAD } from '@/common/constants/app.constants';
+import { UPLOAD } from '@/common/constants/app.constants';
 import { Permission } from '@/common/constants/permissions';
 import { Role } from '@/common/constants/roles';
 import { CurrentUser, type CurrentUserPayload } from '@/common/decorators/current-user.decorator';
@@ -68,7 +68,7 @@ export class UsersController {
     FileInterceptor(AVATAR_FIELD_NAME, {
       limits: { fileSize: UPLOAD.AVATAR.MAX_SIZE_BYTES },
       fileFilter: createUploadFileFilter({
-        allowedMime: ALLOWED_MIME_TYPES,
+        allowedMime: UPLOAD.ALLOWED_MIME_TYPES,
         allowedExt: UPLOAD.AVATAR.ALLOWED_EXTENSIONS,
       }),
     }),
