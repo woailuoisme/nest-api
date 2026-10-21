@@ -81,24 +81,30 @@ export const CursorPageMetaSchema = z.object({
   prevCursor: z.string().nullable().describe('Cursor to pass for previous page'),
 });
 
+/** `{ items, meta }` 信封共建：两种分页仅元数据 schema 与描述不同（泛型保留 meta 的具体类型） */
+function buildEnvelopeSchema<TItem extends z.ZodType, TMeta extends z.ZodType>(
+  item: TItem,
+  meta: TMeta,
+  metaDescription: string,
+) {
+  return z.object({
+    items: z.array(item).describe('列表数据集合（空数据时保底为空数组 []）'),
+    meta: meta.describe(metaDescription),
+  });
+}
+
 /**
  * 分页信封 schema 工厂：把资源 schema 包装为 `{ items, meta }` 输出契约。
  *
  * 供 `@SerializeOptions({ schema })` 运行时序列化与 OpenAPI 响应文档共用，确保两种分页信封结构永不漂移。
  */
 export function paginatedEnvelopeSchema<T extends z.ZodType>(item: T) {
-  return z.object({
-    items: z.array(item).describe('列表数据集合（空数据时保底为空数组 []）'),
-    meta: PageMetaSchema.describe('Offset 分页元数据'),
-  });
+  return buildEnvelopeSchema(item, PageMetaSchema, 'Offset 分页元数据');
 }
 
 /** Cursor 分页信封 schema 工厂 */
 export function cursorPaginatedEnvelopeSchema<T extends z.ZodType>(item: T) {
-  return z.object({
-    items: z.array(item).describe('列表数据集合（空数据时保底为空数组 []）'),
-    meta: CursorPageMetaSchema.describe('Cursor 游标分页元数据'),
-  });
+  return buildEnvelopeSchema(item, CursorPageMetaSchema, 'Cursor 游标分页元数据');
 }
 
 export class CursorPageMetaResource {

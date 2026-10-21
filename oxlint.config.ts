@@ -35,9 +35,9 @@ export default defineConfig({
         'no-param-reassign': 'off',
       },
     },
-    // ── CLI 与种子脚本：允许标准输出日志 ─────────────────────
+    // ── CLI、种子与运维脚本：允许标准输出日志 ─────────────────
     {
-      files: ['src/commands/**/*.ts', 'src/database/seeds/**/*.ts', 'src/cli.ts'],
+      files: ['src/commands/**/*.ts', 'src/database/seeds/**/*.ts', 'src/cli.ts', 'scripts/**/*.ts'],
       rules: {
         'no-console': 'off',
       },

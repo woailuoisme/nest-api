@@ -509,10 +509,9 @@ describe('CentrifugoTransport', () => {
   });
 
   describe('PresenceService Centrifugo 多态委托集成', () => {
-    it('当 BROADCAST_DRIVER 为 centrifugo 时应委托 transport.getPresence', async () => {
+    it('配置了 REALTIME_URL 时应委托 transport.getPresence', async () => {
       const mockConfigService = {
         get: vi.fn().mockImplementation((key: string) => {
-          if (key === 'BROADCAST_DRIVER') return 'centrifugo';
           if (key === 'REALTIME_URL') return 'centrifugo://k:s@127.0.0.1:8000/api';
           return undefined;
         }),

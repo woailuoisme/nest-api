@@ -1,5 +1,6 @@
 import { HttpException, HttpStatus } from '@nestjs/common';
 
+import { safeParseJson } from '../json.util';
 import {
   MINIPROGRAM_DEFAULT_ERROR_STATUS,
   MINIPROGRAM_ERROR_MAP,
@@ -47,14 +48,6 @@ interface MiniprogramApiErrorBody {
 }
 
 /** 安全解析 JSON 文本，失败返回 null */
-function safeParseJson(raw: string): MiniprogramApiErrorBody | null {
-  try {
-    const parsed = JSON.parse(raw) as MiniprogramApiErrorBody;
-    return parsed && typeof parsed === 'object' ? parsed : null;
-  } catch {
-    return null;
-  }
-}
 
 /**
  * 微信小程序领域异常
@@ -114,7 +107,7 @@ export class MiniprogramException extends HttpException {
    * 用于「HTTP 200 但应答为 JSON 错误」以及二进制接口（小程序码）返回错误 JSON 的场景。
    */
   static fromRawError(rawBody: string, upstreamStatus?: number): MiniprogramException {
-    const parsed = safeParseJson(rawBody);
+    const parsed = safeParseJson<MiniprogramApiErrorBody>(rawBody);
     if (parsed && parsed.errcode !== undefined && parsed.errcode !== 0) {
       return MiniprogramException.fromApiError(parsed.errcode, parsed.errmsg, upstreamStatus);
     }

@@ -1,9 +1,9 @@
-import { describe, expect, it } from 'vitest';
 import type { ConfigService } from '@nestjs/config';
+import { describe, expect, it } from 'vitest';
 
 import { MiniprogramService } from '@/common/wechat/miniprogram/miniprogram.service';
-import type { EnvConfig } from '@/config/env.validation';
 import { WepayService } from '@/common/wechat/pay/wepay.service';
+import type { EnvConfig } from '@/config/env.validation';
 import { RedisService } from '@/database/redis.service';
 
 /**
@@ -12,8 +12,7 @@ import { RedisService } from '@/database/redis.service';
  */
 
 /** 最小 ConfigService 桩：仅覆盖驱动装配读取的键 */
-const fakeConfig =
-  (values: Record<string, string>) =>
+const fakeConfig = (values: Record<string, string>) =>
   ({ get: (key: string) => values[key] }) as unknown as ConfigService<EnvConfig, true>;
 
 /** MiniprogramService 构造所需的最小 RedisService 桩（mock 驱动不触达缓存） */

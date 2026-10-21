@@ -1,5 +1,7 @@
 import { randomUUID } from 'node:crypto';
 
+import { appName } from '@/common/constants/app.constants';
+
 import type { MqttOptions } from '../interfaces/mqtt.interface';
 
 /**
@@ -37,7 +39,12 @@ export function parseMqttDsn(dsn: string): MqttOptions {
 
   const search = url.searchParams;
 
-  const clientId = search.get('clientId') || search.get('client_id') || `nestforge-${randomUUID().slice(0, 8)}`;
+  // 默认 clientId：前缀跟随 APP_NAME。MQTT 3.1.1 限制 23 字节，且非字母数字字符可能被 Broker 拒收，
+  // 故先净化再截断（14 + 1 + 8 位随机 = 23），避免长应用名导致连接被拒
+  const clientIdPrefix = appName()
+    .replace(/[^A-Za-z0-9-]/g, '-')
+    .slice(0, 14);
+  const clientId = search.get('clientId') || search.get('client_id') || `${clientIdPrefix}-${randomUUID().slice(0, 8)}`;
   const clean = search.has('clean') ? search.get('clean') === 'true' : true;
   const keepalive = search.has('keepalive') ? Number.parseInt(search.get('keepalive') ?? '60', 10) : 60;
   const reconnectPeriod = search.has('reconnectPeriod')

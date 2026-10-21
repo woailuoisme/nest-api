@@ -117,6 +117,14 @@ describe('logger.config', () => {
       expect(typeof logger.info).toBe('function');
     });
 
+    it('非生产环境默认 level=debug（保留既有调试可见性），LOG_LEVEL 可显式覆盖', async () => {
+      expect((await createPinoLogger()).level).toBe('debug');
+
+      vi.stubEnv('LOG_LEVEL', 'warn');
+      expect((await createPinoLogger()).level).toBe('warn');
+      vi.unstubAllEnvs();
+    });
+
     it('生产环境：level 收敛为 info 且不再落盘（日志只走 stdout）', async () => {
       vi.stubEnv('APP_ENV', 'production');
       const logsDir = join(process.cwd(), 'storage', 'logs');

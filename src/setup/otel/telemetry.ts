@@ -10,7 +10,21 @@
  * 生效的是 diagnostics-channel 类探针（HTTP server spans 由 @fastify/otel 承担、出站 fetch 由 undici 探针承担）；
  * 如需完整覆盖需引入 --experimental-loader hook（Node 24 有已知挂起 issue，暂不启用）。
  */
+import { appName } from '@/common/constants/app.constants';
 import { resolveServiceName } from '@/setup/logger/logger.config';
+
+import { createRedactingExporter } from './redacting-exporter';
+
+/**
+ * OTel `service.name`：`<APP_NAME>-<role>`，便于同一应用按进程角色区分。
+ *
+ * 应用名已以角色结尾时不再重复追加（APP_NAME=nest-api + api → nest-api）。
+ */
+function resolveOtelServiceName(): string {
+  const role = resolveServiceName();
+  const base = appName();
+  return base.endsWith(`-${role}`) ? base : `${base}-${role}`;
+}
 
 let sdk: import('@opentelemetry/sdk-node').NodeSDK | undefined;
 
@@ -39,13 +53,15 @@ if (endpoint) {
     // defaultResource 保留 env 探测与 telemetry.sdk.* 基础属性，显式属性覆盖同名项
     resource: defaultResource().merge(
       resourceFromAttributes({
-        'service.name': process.env.OTEL_SERVICE_NAME ?? `nestforge-${resolveServiceName()}`,
+        'service.name': process.env.OTEL_SERVICE_NAME ?? resolveOtelServiceName(),
         'deployment.environment.name': process.env.APP_ENV ?? 'development',
       }),
     ),
     // endpoint/headers/采样率均沿用官方标准 env（OTEL_EXPORTER_OTLP_* / OTEL_TRACES_SAMPLER*）
-    traceExporter: new OTLPTraceExporter(),
-    metricReader: new PeriodicExportingMetricReader({ exporter: new OTLPMetricExporter() }),
+    // 导出前捕获一层脱敏：抹掉把凭据放在 query 的第三方网关 URL
+    traceExporter: createRedactingExporter(new OTLPTraceExporter()),
+    // 复数形态（IMetricReader[]）：单数 metricReader 已在 sdk-node 0.300 移除
+    metricReaders: [new PeriodicExportingMetricReader({ exporter: new OTLPMetricExporter() })],
     instrumentations: [
       getNodeAutoInstrumentations({
         // fs 探针产生海量无价值 spans，显式关闭

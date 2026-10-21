@@ -57,4 +57,30 @@ describe('MQTT 5.0 DSN 解析器 (parseMqttDsn)', () => {
     expect(() => parseMqttDsn('http://localhost:1883')).toThrow('不支持的 MQTT 协议方案');
     expect(() => parseMqttDsn('redis://localhost:6379')).toThrow('不支持的 MQTT 协议方案');
   });
+
+  it('未指定 clientId 时以 APP_NAME 为前缀生成默认值（不写死品牌）', () => {
+    const original = process.env.APP_NAME;
+    process.env.APP_NAME = 'acme';
+
+    try {
+      expect(parseMqttDsn('mqtt://localhost:1883').clientId).toMatch(/^acme-[0-9a-f]{8}$/);
+    } finally {
+      if (original === undefined) delete process.env.APP_NAME;
+      else process.env.APP_NAME = original;
+    }
+  });
+
+  it('默认 clientId 需净化并截断：非字母数字字符替换、总长不超 MQTT 3.1.1 的 23 字节上限', () => {
+    const original = process.env.APP_NAME;
+    process.env.APP_NAME = '我的超长应用名称-very-long-app-name';
+
+    try {
+      const clientId = parseMqttDsn('mqtt://localhost:1883').clientId ?? '';
+      expect(clientId).toMatch(/^[A-Za-z0-9-]+$/);
+      expect(clientId.length).toBeLessThanOrEqual(23);
+    } finally {
+      if (original === undefined) delete process.env.APP_NAME;
+      else process.env.APP_NAME = original;
+    }
+  });
 });

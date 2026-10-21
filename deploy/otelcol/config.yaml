@@ -1,4 +1,4 @@
-# OpenTelemetry Collector (contrib)：NestForge 统一遥测网关
+# OpenTelemetry Collector (contrib)：统一遥测网关
 # 应用 OTLP (4317/4318) + Docker 容器 stdout (filelog) → memory_limiter → resourcedetection → batch → OpenObserve
 receivers:
   otlp:

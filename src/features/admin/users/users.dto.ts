@@ -62,7 +62,7 @@ function toDate(value: Date | number | string): Date {
  * 用户资源输出契约（运行时响应序列化 + OpenAPI 文档的单一事实源）
  *
  * 以白名单方式裁剪 `new UserEntity(row)` 自 `user` 表带入的其余列
- * （twoFactorEnabled / phoneNumber / lastLoginMethod / isAnonymous 等），杜绝敏感字段意外外泄。
+ * （twoFactorEnabled / phoneNumber / lastLoginMethod 等），杜绝敏感字段意外外泄。
  */
 export const UserResourceSchema = z.object({
   id: z.string().describe('用户ID'),

@@ -4,7 +4,7 @@
 
 ## 项目概览
 
-**NestForge** — 生产级 NestJS 企业后端脚手架。
+生产级 NestJS 企业后端脚手架。
 
 - 运行时: Bun ≥ 1.2 + Node ≥ 24，纯 ESM（`"type": "module"`）
 - 框架: NestJS 12 + Fastify 5（非 Express）· ORM: Drizzle 0.45（PostgreSQL 多文件 schema）· 校验: Zod 4 · Redis + BullMQ
@@ -30,15 +30,15 @@ just test         # 单元测试
 just test-e2e     # E2E 测试
 just test-cov     # 单测 + 覆盖率
 just test-watch   # 单测 watch 模式
-just k6 smoke     # 运行 k6 smoke 场景负载基准测试
 
 # Drizzle
 just db-gen       # 生成迁移 SQL (drizzle-kit generate)
 just db-migrate   # 应用迁移 (dev)
 just db-deploy    # 应用迁移 (prod)
-just db-seed      # 灌种子数据
+just db-seed      # 清空所有表数据 + 灌种子 (保留表结构)
+just db-fresh     # 删表重建 + 重跑迁移 + 灌种子 (破坏性)
 just db-studio    # Drizzle Studio
-just db-reset     # 重置数据库 (destructive)
+just db-reset     # 同 db-fresh (destructive)
 
 # Better Auth
 just ba-migrate   # 生成并应用 Better Auth 表结构变更
@@ -59,6 +59,8 @@ just i18n-check   # 校验多语言翻译字典键值对称性
 just cmd --help           # 查看所有命令 (直接跑 TS 源码)
 just cmd route:list       # 列出所有路由
 just cmd jwt:secret       # 生成 JWT 密钥
+just cmd app:init         # 幂等初始化：密钥 / 数据库迁移 / S3 桶（容器内跳过密钥写入，由部署环境注入）
+just rbac-gen             # 由 ROLE_PERMISSIONS 重新生成 Casbin policy.csv
 just cli --help           # 运行生产构建 CLI (node dist/cli.js)
 ```
 
@@ -129,7 +131,7 @@ src/
 ├── cli.ts          # CLI bootstrap
 └── main.ts         # HTTP bootstrap
 deploy/             # 统一交付与运维编排 (Docker 容器编排 app/centrifugo/... + Helm Kubernetes Chart)
-storage/            # 运行时数据 (cache/logs/tmp/uploads，git 忽略内容)
+storage/            # 运行时数据 (cache/tmp/uploads，git 忽略内容)
 tests/
 ├── setup.ts            # 全局 setup（环境变量、mock 重置）
 ├── factories/          # 可复用的测试数据工厂
@@ -138,8 +140,7 @@ tests/
 ├── mocks/              # 共享 Drizzle/Manager mock 工厂
 │   └── drizzle.mock.ts
 ├── unit/               # 单元测试 (*.test.ts)
-├── e2e/                # E2E 测试 (*.e2e-test.ts)
-└── k6/                 # k6 性能与负载测试套件 (config.js, client.js, workflow.js, scenarios/)
+└── e2e/                # E2E 测试 (*.e2e-test.ts)
 ```
 
 ## 关键约定
@@ -171,7 +172,7 @@ tests/
   - **Mail**: `MAIL_URL="smtp://user:pass@host:587"`（发件人保持 `MAIL_FROM_ADDRESS` / `MAIL_FROM_NAME`）
   - **S3 Storage**: `STORAGE_S3_URL="s3://key:secret@endpoint:port/bucket?region=...&publicUrl=..."`
   - **Realtime (Centrifugo)**: `REALTIME_URL="centrifugo://api-key:hmac-secret@host:port/api?tls=false"`
-  - **Search (Meilisearch)**: `SEARCH_URL="meilisearch://masterKey@localhost:7700"`（未配置时默认使用 `noop` 空驱动降级，配置后推导为 `SEARCH_DRIVER=meilisearch`）
+  - **Search (Meilisearch)**: `SEARCH_URL="meilisearch://masterKey@localhost:7700"`（未配置时默认使用 `noop` 空驱动降级，配置后推导为 `SCOUT_DRIVER=meilisearch`）
   - **Imgproxy**: `IMGPROXY_URL="imgproxy://key:salt@host:port?publicUrl=..."`（支持 HMAC-SHA256 安全签名与多驱动映射）
   - **MQTT (Mosquitto/EMQX)**: `MQTT_URL="mqtt://admin:password@localhost:1883?clientId=nest-api"`（工业物联网通信与遥测总线）
 - **安全相关 env**：
@@ -191,8 +192,9 @@ tests/
 ### 鉴权
 
 - **Better Auth**（`src/common/auth/better-auth.ts`）：Drizzle 适配器，基础路径 `/v1/auth`，默认 `emailAndPassword`，会话 token 存库可吊销；邮件通过 `MailJobs` 队列分发。
-- 插件全家桶：`admin` (RBAC) / `twoFactor` / `username` / `phoneNumber` / `magicLink` / `emailOTP` / `passkey` / `oneTap` / `anonymous` / `genericOAuth` (Google) / `apiKey` / `organization` / `bearer` / `multiSession` / `lastLoginMethod` / `jwt` / `deviceAuthorization` / `openAPI`。
+- 插件集（JWT + REST API 后端）：`admin` (RBAC) / `twoFactor` / `username` / `phoneNumber` / `emailOTP` / `apiKey` / `bearer` / `lastLoginMethod` / `jwt` / `oneTimeToken` / `openAPI`。`oneTap` / `anonymous` / `genericOAuth` / `multiSession` / `deviceAuthorization` / `sso` / `passkey` / `magicLink` / `organization` / `i18n`（better-auth 认证层文案本地化）已移除；**应用层多语言仍由 `nestjs-i18n` 承担**（`src/i18n/`、`just i18n-check` 不受影响）。对应 `passkey` / `organization` / `member` / `invitation` / `sso_provider` / `device_code` 表与 `user.is_anonymous`、`session.active_organization_id` 列不再生成。
 - 角色: `SUPER_ADMIN / ADMIN / OPERATOR / USER`（`src/common/constants/roles.ts`），统一用户主表 `user`（UUID `uuidv7()`），前台用户与后台管理员聚合于同一张表。
+- **权限判定 (Casbin)**: `ROLE_PERMISSIONS`（`src/common/constants/role-permissions.ts`）是唯一事实源，`just rbac-gen` 生成 `src/common/auth/casbin/policy.csv`（随 `nest-cli.json` assets 发布），`CasbinService` 加载策略供 `AccessControlGuard` 对 `@Permissions()` 做 `enforce(role, resource, action)`（`Permission` 枚举即 `resource:action`）。**改权限只改常量并重跑 `just rbac-gen`**；`just check` 内含 `rbac-check` 守卫一致性，单测再兜一层。`@Roles()` 与管理员豁免仍由守卫直接判定。`CasbinService` 仅在 `AppModule` 提供（CLI/Worker 无权限判定需求）。
 - 细粒度权限: `@Roles(Role.ADMIN)` 角色级 + `@Permissions(Permission.UserCreate)` 声明式，配合 `BetterAuthGuard` / `AccessControlGuard` 兜底。
 
 ### 安全基线 (Nest 12 内置能力)
@@ -249,13 +251,13 @@ BullMQ 队列由 `AuthModule → MailJobs` 依赖，CLI 模块也需 `BullModule
   - **唯一首选**: 项目全面拥抱 `es-toolkit` (2~3x 极速、纯 ESM、类型安全)。严禁引入 Lodash / Underscore / Ramda 等老旧或体积庞大的工具库。
   - **按需引入与场景速查表**:
 
-    | 场景领域 | 推荐 API | 典型应用范式 |
-    | :--- | :--- | :--- |
-    | **对象清洗与 DTO 映射** | `pick`, `omit`, `cloneDeep`, `toMerged` | `pick(entity, ['id', 'name', 'email'])` 抽取 API 返回字段；`omit(row, ['passwordHash'])` 剔除敏感属性；`pick(dto, ['name', 'avatarUrl'])` 提炼更新载荷。 |
-    | **集合计算与批处理** | `uniq`, `uniqBy`, `chunk`, `compact`, `groupBy`, `keyBy`, `sortBy`, `orderBy` | `uniq(guardNames)` 替代 `[...new Set(...)]`；`chunk(ids, 500)` 批处理数据库与队列任务；`compact(urls)` 清除空值；`groupBy(logs, 'level')` 统计汇总。 |
-    | **异步流控与延时** | `delay`, `retry`, `withTimeout`, `debounce`, `throttle` | `await delay(200)` 恒定时间侧信道防御与定时等待；`await retry(fn, { retries: 3 })` 外部网络与 S3 I/O 容灾重试；`withTimeout` 防挂死。 |
-    | **字符串与命名** | `camelCase`, `pascalCase`, `snakeCase`, `kebabCase`, `deburr` | 统一从 `es-toolkit/string` 导入；`deburr(text)` 分解重音字符；`kebabCase(name)` 命名策略。 |
-    | **类型守卫与安全计算** | `isNil`, `isEmptyObject`, `isPlainObject`, `clamp` | `isNil(val)` 替代 `val === null \|\| val === undefined`；`clamp(size, 1, 100)` 约束分页与数值边界。 |
+    | 场景领域                | 推荐 API                                                                      | 典型应用范式                                                                                                                                             |
+    | :---------------------- | :---------------------------------------------------------------------------- | :------------------------------------------------------------------------------------------------------------------------------------------------------- |
+    | **对象清洗与 DTO 映射** | `pick`, `omit`, `cloneDeep`, `toMerged`                                       | `pick(entity, ['id', 'name', 'email'])` 抽取 API 返回字段；`omit(row, ['passwordHash'])` 剔除敏感属性；`pick(dto, ['name', 'avatarUrl'])` 提炼更新载荷。 |
+    | **集合计算与批处理**    | `uniq`, `uniqBy`, `chunk`, `compact`, `groupBy`, `keyBy`, `sortBy`, `orderBy` | `uniq(guardNames)` 替代 `[...new Set(...)]`；`chunk(ids, 500)` 批处理数据库与队列任务；`compact(urls)` 清除空值；`groupBy(logs, 'level')` 统计汇总。     |
+    | **异步流控与延时**      | `delay`, `retry`, `withTimeout`, `debounce`, `throttle`                       | `await delay(200)` 恒定时间侧信道防御与定时等待；`await retry(fn, { retries: 3 })` 外部网络与 S3 I/O 容灾重试；`withTimeout` 防挂死。                    |
+    | **字符串与命名**        | `camelCase`, `pascalCase`, `snakeCase`, `kebabCase`, `deburr`                 | 统一从 `es-toolkit/string` 导入；`deburr(text)` 分解重音字符；`kebabCase(name)` 命名策略。                                                               |
+    | **类型守卫与安全计算**  | `isNil`, `isEmptyObject`, `isPlainObject`, `clamp`                            | `isNil(val)` 替代 `val === null \|\| val === undefined`；`clamp(size, 1, 100)` 约束分页与数值边界。                                                      |
 
 ### 高性能与高可用基础设施
 
@@ -286,7 +288,7 @@ BullMQ 队列由 `AuthModule → MailJobs` 依赖，CLI 模块也需 `BullModule
 5. **纯 ESM 运行时规范** — 项目已声明 `"type": "module"`，严禁直接使用 CJS 全局变量 `__dirname` / `__filename`，统一使用 `import.meta.dirname ?? path.dirname(fileURLToPath(import.meta.url))`；SWC 配置需保持 `module.resolveFully: true` 以确保相对导入携带 `.js` 扩展名。
 6. **SWC 构建与资源拷贝** — SWC 仅做转译，类型检查用 `tsc --noEmit`；构建时需通过 `tsconfig.build.json` 锁定 `"rootDir": "src"`，防止 Nest CLI 误判项目根目录导致 assets 资源拷贝偏移至 `dist/src/`。
 7. **启动日志降噪机制** — 启动时不输出数十行 `InstanceLoader` 与路由映射属于设计内行为（由 `SILENT_BOOTSTRAP_CONTEXTS` 静默）；完整路由树请运行 `just cmd route:list` 查看。
-8. **`storage/uploads`** 由业务 `fsPromises.mkdir({recursive:true})` 创建，无需手动建目录；`storage/logs` 不再承载应用日志（仅 k6 报告归档使用）。
+8. **`storage/uploads`** 由业务 `fsPromises.mkdir({recursive:true})` 创建，无需手动建目录；应用日志走单通道 stdout，不落盘（原 `storage/logs` 目录已随 k6 套件移除）。
 9. **Vitest 配置两份**: `vitest.config.mts` (unit) / `vitest.e2e.config.mts` (e2e)，别混用。
 10. **Controller 禁写 `@ApiErrorResponse` 与中文文档规范** — 错误响应已由 `HttpExceptionFilter` 全局标准化接管，Controller 层无需也不得标注 `@ApiErrorResponse`；所有 Controller 的 `@ApiTags` 与 `@ApiOperation({ summary })` 必须使用纯粹、简明的中文命名。
 11. **工具库严禁引入 Lodash** — 项目已全面接入 `es-toolkit`，所有对象清洗、集合计算、批处理、延迟与字符串操作一律使用 `es-toolkit`（如 `pick`, `omit`, `uniq`, `chunk`, `delay`, `deburr`），严禁引入 `lodash` 或 `lodash-es`。

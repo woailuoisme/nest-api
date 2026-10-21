@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { type HealthIndicatorResult, HealthIndicatorService } from '@nestjs/terminus';
 
+import { isProductionEnv } from '@/common/constants/app.constants';
 import { MiniprogramService } from '@/common/wechat/miniprogram';
 
 /**
@@ -22,14 +23,20 @@ export class MiniprogramHealthIndicator {
 
     try {
       const health = this.miniprogramService.checkHealth();
+      // 生产环境跑 mock 驱动意味着接口返回假 openid/手机号/小程序码：必须在就绪探针上可见
+      const mockInProduction = isProductionEnv() && health.driver === 'mock';
+
       const details = {
         driver: health.driver,
         configured: health.configured,
         ...(health.message ? { message: health.message } : {}),
+        ...(mockInProduction ? { message: '生产环境运行于 mock 驱动：返回假 openid / 手机号 / 小程序码' } : {}),
       };
 
       // 软依赖容灾降级：小程序能力未就绪属于业务功能降级，不应触发 K8s 503 误杀
-      return health.status === 'up' ? indicator.up(details) : indicator.up({ state: 'degraded', ...details });
+      return health.status === 'up' && !mockInProduction
+        ? indicator.up(details)
+        : indicator.up({ state: 'degraded', ...details });
     } catch (error) {
       return indicator.up({
         state: 'degraded',

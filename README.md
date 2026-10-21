@@ -17,7 +17,7 @@
 - 🗄️ **持久化与缓存队列**：Drizzle ORM 0.45 + PostgreSQL 18（原生 `uuidv7()`、多文件 Schema）、Redis 分布式锁与穿透缓存、BullMQ 异步队列与 Bull Board 可视化看板。
 - 📄 **三合一 Scalar API 交互文档**：客户端 API (`/docs`)、管理后台 API (`/docs/admin`) 与 Better Auth 专有参考 (`/docs/auth`) 物理隔离并支持在线调试。
 - 🪵 **企业级极速可观测性**：原生 Pino 极速流日志、OpenTelemetry 三信号归集（logs/metrics/traces → OpenObserve）、Terminus 基础设施就绪探针 (`/readyz`) 与云原生存活探针 (`/livez`)。
-- 🛠️ **卓越开发者体验**：纯 ESM 规范、Bun 1.4.2 + Node ≥ 24、SWC 极速编译、Vitest 5 单元/集成测试、k6 负载基准测试、oxlint + oxfmt 代码检查与 Just 任务自动化。
+- 🛠️ **卓越开发者体验**：纯 ESM 规范、Bun 1.4.2 + Node ≥ 24、SWC 极速编译、Vitest 5 单元/集成测试、oxlint + oxfmt 代码检查与 Just 任务自动化。
 
 ---
 
@@ -37,7 +37,7 @@
 | **数据校验** | Zod 4 + Standard Schema | Nest 12 原生 Standard Schema 校验通道与白名单序列化 |
 | **API 文档** | OpenAPI 3.1 + Scalar UI | 客户端、管理后台与认证专有三份独立隔离交互文档 |
 | **代码质量** | oxlint + oxfmt + Gitleaks | 毫秒级 Lint、代码格式化与凭据泄漏防护 |
-| **测试套件** | Vitest 5 + k6 | 高速单元测试、E2E 测试与全场景性能压力测试 |
+| **测试套件** | Vitest 5 | 高速单元测试与 E2E 端到端集成测试 |
 | **任务编排** | Just (justfile) | 统一声明式命令入口，消除长参数脚本记忆成本 |
 
 ---
@@ -47,7 +47,7 @@
 ```text
 ├── deploy/            # 统一交付与运维编排 (Docker 容器集群 + Kubernetes Helm Chart)
 ├── storage/           # 运行时数据 (cache, logs, tmp, uploads，由 git 忽略)
-├── tests/             # Vitest 单元测试、E2E 测试、数据工厂与 k6 压测套件
+├── tests/             # Vitest 单元测试、E2E 测试与数据工厂
 └── src/
     ├── common/        # 全局基础设施与深模块
     │   ├── auth/          # Better Auth 配置与插件装配
@@ -94,7 +94,7 @@ cp .env.example .env
 # 2. 一键拉起全栈 Docker 容器集群
 just docker-up
 
-# 3. 执行数据库迁移与种子数据填充
+# 3. 应用迁移并灌入种子数据（全新库用 just db-fresh 可一步重建）
 just db-migrate
 just db-seed
 ```
@@ -112,7 +112,7 @@ cp .env.example .env
 # 2. 安装项目依赖
 bun install
 
-# 3. 执行数据库迁移并灌入初始测试数据
+# 3. 应用迁移并灌入初始测试数据
 just db-migrate
 just db-seed
 
@@ -196,15 +196,14 @@ just test                 # 运行 Vitest 单元测试
 just test-watch           # 单元测试 Watch 模式
 just test-cov             # 单元测试覆盖率报告
 just test-e2e             # 运行 E2E 端到端集成测试
-just k6 <scenario>        # 运行 k6 负载基准测试 (默认 smoke，可选 stress/load/spike/soak)
-just k6-docker <scenario> # 在 Docker 容器内运行 k6 (免本地安装 CLI)
 
 # --- 数据库与 Better Auth ---
 just db-gen               # 生成 Drizzle 迁移 SQL
 just db-migrate           # 应用数据库迁移 (开发与生产)
-just db-seed              # 填充数据库种子数据
+just db-seed              # 清空所有表数据 + 灌种子 (保留表结构)
+just db-fresh             # 删表重建 + 重跑迁移 + 灌种子 (破坏性)
 just db-studio            # 启动 Drizzle Studio 可视化管理
-just db-reset             # 重置数据库 (破坏性操作：删除并重新迁移)
+just db-reset             # 同 db-fresh (破坏性重置)
 just ba-migrate           # 生成并应用 Better Auth 表结构变更
 just ba-generate          # 依据 better-auth.ts 重新生成 Drizzle Schema
 just ba-secret            # 生成新的 Better Auth secret
@@ -224,6 +223,7 @@ just mail-build           # 编译 MJML 邮件模板为 Handlebars (.hbs)
 just i18n-gen             # 生成 i18n TypeScript 强类型定义
 just i18n-check           # 校验多语言翻译字典键值对称性
 just cmd <command>        # 运行 TS CLI (如 `just cmd route:list`)
+just cmd app:init         # 幂等初始化：鉴权密钥 / 数据库迁移 / S3 桶
 just cli <command>        # 运行生产构建 CLI (node dist/cli.js)
 ```
 

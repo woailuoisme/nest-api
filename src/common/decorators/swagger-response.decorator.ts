@@ -153,6 +153,25 @@ export function ApiNoContentResponse(options: ApiSuccessResponseOptions = {}) {
 }
 
 /**
+ * Standard Schema 通道的分页响应共建函数
+ *
+ * 与 `buildPaginatedResponse` 对称：Offset / Cursor 两种分页只在信封工厂与兜底文案上不同。
+ */
+function buildStandardSchemaPageResponse(
+  model: z.ZodType,
+  options: ApiSuccessResponseOptions,
+  config: { buildEnvelope: (item: z.ZodType) => z.ZodType; fallbackDescription: string },
+) {
+  return applyDecorators(
+    ApiResponse({
+      status: options.status ?? 200,
+      description: resolveDescription(options, config.fallbackDescription),
+      standardSchema: config.buildEnvelope(model),
+    }),
+  );
+}
+
+/**
  * Swagger 偏移分页响应装饰器：自动生成符合系统统一 JSON 结构的 Offset 分页列表 OpenAPI 响应文档。
  *
  * @param model 列表项 DTO / Entity 类
@@ -160,13 +179,10 @@ export function ApiNoContentResponse(options: ApiSuccessResponseOptions = {}) {
  */
 export function ApiPageResponse(model: ResponseModel, options: ApiSuccessResponseOptions = {}) {
   if (isStandardSchema(model)) {
-    return applyDecorators(
-      ApiResponse({
-        status: options.status ?? 200,
-        description: resolveDescription(options, 'Paginated list retrieved successfully'),
-        standardSchema: paginatedEnvelopeSchema(model),
-      }),
-    );
+    return buildStandardSchemaPageResponse(model, options, {
+      buildEnvelope: paginatedEnvelopeSchema,
+      fallbackDescription: 'Paginated list retrieved successfully',
+    });
   }
 
   return buildPaginatedResponse(model, options, {
@@ -184,13 +200,10 @@ export function ApiPageResponse(model: ResponseModel, options: ApiSuccessRespons
  */
 export function ApiCursorPageResponse(model: ResponseModel, options: ApiSuccessResponseOptions = {}) {
   if (isStandardSchema(model)) {
-    return applyDecorators(
-      ApiResponse({
-        status: options.status ?? 200,
-        description: resolveDescription(options, 'Cursor paginated list retrieved successfully'),
-        standardSchema: cursorPaginatedEnvelopeSchema(model),
-      }),
-    );
+    return buildStandardSchemaPageResponse(model, options, {
+      buildEnvelope: cursorPaginatedEnvelopeSchema,
+      fallbackDescription: 'Cursor paginated list retrieved successfully',
+    });
   }
 
   return buildPaginatedResponse(model, options, {

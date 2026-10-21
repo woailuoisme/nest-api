@@ -110,7 +110,6 @@ export function setupGlobalMiddleware(app: NestFastifyApplication): void {
       config.get('TRUSTED_ORIGINS'),
       config.get('APP_URL'),
       config.get('BETTER_AUTH_URL'),
-      config.get('PASSKEY_ORIGIN'),
     ]),
     exclude: (request: FastifyRequest) => (request.url.split('?')[0] ?? '').endsWith(WEPAY_NOTIFY_SUFFIX),
   });

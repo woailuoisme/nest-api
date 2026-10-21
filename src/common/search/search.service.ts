@@ -37,7 +37,7 @@ export class SearchService {
   }
 
   private resolveDriver(): SearchDriver {
-    const driverType = this.configService.get('SEARCH_DRIVER');
+    const driverType = this.configService.get('SCOUT_DRIVER');
     const searchUrl = this.configService.get('SEARCH_URL');
 
     if (driverType === 'meilisearch' && searchUrl) {

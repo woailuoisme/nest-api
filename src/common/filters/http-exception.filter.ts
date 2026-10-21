@@ -47,6 +47,11 @@ export function isHealthReportBody(body: unknown): body is Record<string, unknow
   return typeof candidate.status === 'string' && hasProbeBucket;
 }
 
+/** HTTP 状态码 → 枚举名（作为机器可读 code 的兜底值） */
+function httpStatusName(status: HttpStatus): string {
+  return HttpStatus[status] ?? String(status);
+}
+
 /** PostgreSQL 常见约束错误码转译映射表 */
 const PG_ERROR_MAP: Record<string, { status: HttpStatus; message: string; i18nKey: I18nPath }> = {
   '23505': {
@@ -101,7 +106,7 @@ export function resolveErrorEnvelope(exception: unknown, debug = false): Resolve
 
   let message = 'Internal Server Error';
   let errors: Record<string, string[]> | undefined;
-  let code = HttpStatus[status] ?? String(status);
+  let code = httpStatusName(status);
   let log: ResolvedErrorLog | undefined;
   let i18nKey: string | undefined;
 
@@ -151,13 +156,13 @@ export function resolveErrorEnvelope(exception: unknown, debug = false): Resolve
     if (dbError) {
       status = dbError.status;
       message = dbError.message;
-      code = HttpStatus[status] ?? String(status);
+      code = httpStatusName(status);
       log = { level: 'warn', message: `Database constraint mapped to HTTP ${status}: ${message}` };
       i18nKey = dbError.i18nKey;
     } else if (exception instanceof Error) {
       // 脱敏：debug=false 时不向客户端透出内部异常 message（可能含 SQL/堆栈/内网信息），仅返回通用文案
       message = debug ? exception.message : 'Internal Server Error';
-      code = HttpStatus[status] ?? String(status);
+      code = httpStatusName(status);
       log = { level: 'error', message: `Unhandled Exception: ${exception.message}`, stack: exception.stack };
     } else {
       log = { level: 'error', message: `Unhandled Exception: ${String(exception)}` };

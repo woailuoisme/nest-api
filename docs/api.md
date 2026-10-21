@@ -13,13 +13,13 @@ API 统一采用 **URI 路径版本控制**，传输格式固定为 `application
 | **测试环境 (Staging)** | `https://staging-api.example.com/v1`      | 集成测试与 QA 验收        |
 | **生产环境 (Prod)**    | `https://api.example.com/v1`              | 线上生产环境 (强制 HTTPS) |
 
-> 💡 **协议规范与深度接入指南**：
+> **协议规范与深度接入指南**：
 >
-> - 🛡️ [API 幂等性工业级客户端接入指南](./idempotency.md)（IETF 草案标准、Key 生成准则、全抖动指数退避重试状态机、多语言 SDK）
-> - 🌐 [实时通信中枢总览与多端选型指南](./realtime.md)（架构设计、双 JWT 鉴权、Channel 拓扑、选型决策树）
-> - ⚡ [WebSocket 全功能实时接入指南](./realtime-websocket.md)（TS / Dart / Android / 微信小程序原生实现与 Bruno 调试）
-> - 📡 [Server-Sent Events (Uni-SSE) 接入指南](./realtime-sse.md)（Web / 微信小程序分块流 / cURL 接入与 Nginx 调优）
-> - 📡 [工业物联网 MQTT 5.0 接入指南](./mqtt.md)（物模型规范、主题拓扑、双向 RPC 通信范式）
+> - [API 幂等性工业级客户端接入指南](./idempotency.md)（IETF 草案标准、Key 生成准则、全抖动指数退避重试状态机、多语言 SDK）
+> - [实时通信中枢总览与多端选型指南](./realtime.md)（架构设计、双 JWT 鉴权、Channel 拓扑、选型决策树）
+> - [WebSocket 全功能实时接入指南](./realtime-websocket.md)（TS / Dart / Android / 微信小程序原生实现与 Bruno 调试）
+> - [Server-Sent Events (Uni-SSE) 接入指南](./realtime-sse.md)（Web / 微信小程序分块流 / cURL 接入与 Nginx 调优）
+> - [工业物联网 MQTT 5.0 接入指南](./mqtt.md)（物模型规范、主题拓扑、双向 RPC 通信范式）
 
 ---
 
@@ -42,8 +42,8 @@ API 统一采用 **URI 路径版本控制**，传输格式固定为 `application
 
 遵循 **单一版本演进原则 (The One-Version Rule)**，接口通过向前兼容的方式演化：
 
-- ✅ **推荐（非破坏性扩展）**：新增可选入参字段、在响应中新增只读属性、提供全新的专用端点；
-- ❌ **严禁（破坏性变更）**：修改现有字段数据类型、将已有可选字段提升为必填、删除正在使用的字段、变更已有字段名或改变既有成功 HTTP 状态码。
+- **推荐（非破坏性扩展）**：新增可选入参字段、在响应中新增只读属性、提供全新的专用端点；
+- **严禁（破坏性变更）**：修改现有字段数据类型、将已有可选字段提升为必填、删除正在使用的字段、变更已有字段名或改变既有成功 HTTP 状态码。
 
 #### 接口平滑退役标准 (RFC 8594 Sunset & Deprecation)
 
@@ -102,10 +102,10 @@ Authorization: Bearer <your_access_token>
 
 | 请求头                        | 必需 | 描述                                                  | 示例                           |
 | :---------------------------- | :--: | :---------------------------------------------------- | :----------------------------- |
-| **`Content-Type`**    |  ✅  | 请求体媒体类型                                        | `application/json`           |
-| **`Accept`**          |  ✅  | 客户端期望的响应格式                                  | `application/json`           |
+| **`Content-Type`**    | 是 | 请求体媒体类型                                        | `application/json`           |
+| **`Accept`**          | 是 | 客户端期望的响应格式                                  | `application/json`           |
 | **`Authorization`**   | 条件 | 访问受保护资源的 Bearer Token                         | `Bearer eyJhbGci...`         |
-| **`x-request-id`**    |  ❌  | 全链路追踪 ID（若未提供，网关自动生成并回写响应头）   | `req_019572d4a6c878b18cf0`   |
+| **`x-request-id`**    | 否 | 全链路追踪 ID（若未提供，网关自动生成并回写响应头）   | `req_019572d4a6c878b18cf0`   |
 | **`Idempotency-Key`** | 条件 | 非幂等写操作防重放并发唯一键（推荐 UUIDv7 / ULID）    | `019572d4-a6c8-78b1-8cf0-281b94c032a1` |
 | **`If-Match`**        | 条件 | 条件更新控制：携带前序 ETag 防并发覆写（防丢失更新）  | `W/"019572d4a6c878b1"`        |
 
@@ -117,9 +117,9 @@ Authorization: Bearer <your_access_token>
 4. **并发中途重试阻断**：若前序相同 Key 请求仍在处理中，后续重试请求必须返回 `409 Conflict` 提示退避，禁止并发重复执行。
 5. **留存期覆盖最长重试链**：幂等 Key 的保留期（TTL）必须显著长于客户端最长重试链与异步死信重放周期。
 
-> 📖 **完整工业级客户端接入文档**：涵盖网络两军问题剖析、IETF 规范草案对齐、全抖动退避重试状态机、HTTP 状态码处置矩阵以及 TypeScript(Axios/Fetch)/Go/Python/cURL 多语言完整实现，请参阅专有指南：
+> **完整工业级客户端接入文档**：涵盖网络两军问题剖析、IETF 规范草案对齐、全抖动退避重试状态机、HTTP 状态码处置矩阵以及 TypeScript(Axios/Fetch)/Go/Python/cURL 多语言完整实现，请参阅专有指南：
 >
-> 🔗 [API 幂等性工业级客户端接入指南](./idempotency.md)
+> [API 幂等性工业级客户端接入指南](./idempotency.md)
 
 ### 3.5 安全响应头与跨站请求防护 (Security Headers & CSRF)
 
@@ -132,7 +132,7 @@ Authorization: Bearer <your_access_token>
 - **不带 `Origin` / `Sec-Fetch-Site` 的服务端调用（cURL、SDK、Webhook 回调）不受影响**；
 - 独立域名的前端需由服务端在 `TRUSTED_ORIGINS` 中登记来源；第三方回调端点（如微信支付结果通知）由服务端显式豁免。
 
-> ⚠️ 若前端部署在与 API 不同的域名下且未登记 `TRUSTED_ORIGINS`，跨域写请求将被 403 拒绝（读取类请求不受影响）。
+> 注意：若前端部署在与 API 不同的域名下且未登记 `TRUSTED_ORIGINS`，跨域写请求将被 403 拒绝（读取类请求不受影响）。
 
 ### 3.6 文件上传契约 (Multipart Upload)
 
@@ -149,11 +149,11 @@ Authorization: Bearer <your_access_token>
 
 | 方法 | 语义 | 幂等性 | 成功返回 | 典型场景 |
 | :---: | :--- | :---: | :---: | :--- |
-| **`GET`** | 获取单个资源或列表 | ✅ 幂等 | `200 OK` | 读取详情、分页查询 |
-| **`POST`** | 创建新资源或执行非 CRUD 操作 | ❌ 非幂等 | `201 Created` / `202 Accepted` / `200 OK` | 创建实体、提交认证、异步长任务 |
-| **`PUT`** | 全量覆盖替换目标资源 | ✅ 幂等 | `200 OK` | 完整替换目标配置 |
-| **`PATCH`** | 局部修改目标资源属性 | ❌/✅ 取决实现 | `200 OK` | 局部更新字段、变更状态 |
-| **`DELETE`** | 销毁或注销目标资源 | ✅ 幂等 | `204 No Content` / `200 OK` | 删除资源、解绑关联 |
+| **`GET`** | 获取单个资源或列表 | 幂等 | `200 OK` | 读取详情、分页查询 |
+| **`POST`** | 创建新资源或执行非 CRUD 操作 | 非幂等 | `201 Created` / `202 Accepted` / `200 OK` | 创建实体、提交认证、异步长任务 |
+| **`PUT`** | 全量覆盖替换目标资源 | 幂等 | `200 OK` | 完整替换目标配置 |
+| **`PATCH`** | 局部修改目标资源属性 | 视实现而定 | `200 OK` | 局部更新字段、变更状态 |
+| **`DELETE`** | 销毁或注销目标资源 | 幂等 | `204 No Content` / `200 OK` | 删除资源、解绑关联 |
 
 ### 4.2 响应状态码速查
 
@@ -205,7 +205,7 @@ Authorization: Bearer <your_access_token>
 }
 ```
 
-> 🛡️ **空数据保底规则**：当列表为空时，`items` **必须返回 `[]`，绝对禁止返回 `null`**：
+> **空数据保底规则**：当列表为空时，`items` **必须返回 `[]`，绝对禁止返回 `null`**：
 >
 > ```json
 > {
@@ -299,7 +299,7 @@ Authorization: Bearer <your_access_token>
 }
 ```
 
-> 🛡️ **生产脱敏与追踪规范**：
+> **生产脱敏与追踪规范**：
 >
 > 1. 全链路追踪 ID 统一通过响应头 `x-request-id` 返回，不污染 JSON 响应体；
 > 2. 生产环境严禁向外输出任何语言异常名、源码文件路径、代码行号或数据库底层错误。未捕获异常统一转为通用提示。
@@ -392,14 +392,14 @@ X-RateLimit-Reset: 1756137600
 
 ### 8.1 严厉禁止的反模式红线 (Red Flags)
 
-- 🚩 **不可预测的多变响应结构**：同一端点根据条件返回完全不同层级或不同结构的 JSON 根体。
-- 🚩 **包装泛滥反模式**：为非分页单资源或业务结果增加无意义的 `data` / `success` / `code` 外层包装。
-- 🚩 **空切片反模式 (Null Array)**：无数据时返回 `null` 而非 `[]`，诱发前端 `.map()` 空指针崩溃。
-- 🚩 **在 REST 路径中滥用动词**：在普通 CRUD 路径中出现 `/api/createResource`、`/api/deleteResource` 等 RPC 风格命名。
-- 🚩 **无分页的无底洞列表**：开放无 `page` / `cursor` 限制的批量列表拉取端点，随着数据增长引发 OOM 甚至拖垮数据库。
-- 🚩 **防重放竞态（TOCTOU）**：采用 `SELECT` 检查幂等 Key 是否存在后紧接 `INSERT`，而非依赖原子唯一约束抢占。
-- 🚩 **静默吞咽载荷篡改**：收到相同的 `Idempotency-Key` 但 Payload 发生变更时，服务端未校验 Payload 哈希而直接回放上一请求的响应。
-- 🚩 **破坏性字段变更**：未经版本升级直接删除公开字段、修改字段类型或将原有可选参数改为必选。
+- **不可预测的多变响应结构**：同一端点根据条件返回完全不同层级或不同结构的 JSON 根体。
+- **包装泛滥反模式**：为非分页单资源或业务结果增加无意义的 `data` / `success` / `code` 外层包装。
+- **空切片反模式 (Null Array)**：无数据时返回 `null` 而非 `[]`，诱发前端 `.map()` 空指针崩溃。
+- **在 REST 路径中滥用动词**：在普通 CRUD 路径中出现 `/api/createResource`、`/api/deleteResource` 等 RPC 风格命名。
+- **无分页的无底洞列表**：开放无 `page` / `cursor` 限制的批量列表拉取端点，随着数据增长引发 OOM 甚至拖垮数据库。
+- **防重放竞态（TOCTOU）**：采用 `SELECT` 检查幂等 Key 是否存在后紧接 `INSERT`，而非依赖原子唯一约束抢占。
+- **静默吞咽载荷篡改**：收到相同的 `Idempotency-Key` 但 Payload 发生变更时，服务端未校验 Payload 哈希而直接回放上一请求的响应。
+- **破坏性字段变更**：未经版本升级直接删除公开字段、修改字段类型或将原有可选参数改为必选。
 
 ### 8.2 接口发布质量门禁自检表 (Verification Checklist)
 

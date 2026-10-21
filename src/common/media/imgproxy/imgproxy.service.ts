@@ -38,7 +38,7 @@ export class ImgproxyService {
 
   constructor(private readonly configService: ConfigService) {
     this.appUrl = this.configService.get<string>('APP_URL') ?? 'http://localhost:4300';
-    this.storageDriver = this.configService.get<'local' | 's3'>('STORAGE_DRIVER') ?? 'local';
+    this.storageDriver = this.configService.get<'local' | 's3'>('FILESYSTEM_DISK') ?? 'local';
     this.s3Bucket = parseS3Bucket(this.configService.get<string>('STORAGE_S3_URL'));
 
     const dsn = this.configService.get<string>('IMGPROXY_URL');

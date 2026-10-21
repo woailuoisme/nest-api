@@ -3,14 +3,17 @@ import { join, posix } from 'node:path';
 
 import fastifyMultipart from '@fastify/multipart';
 import fastifyStatic from '@fastify/static';
+import { UnauthorizedException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import type { NestFastifyApplication } from '@nestjs/platform-fastify';
 import { fromNodeHeaders } from 'better-auth/node';
 import type { FastifyReply, FastifyRequest } from 'fastify';
 
 import { auth } from '@/common/auth/better-auth';
+import { applyQueryTokenAsBearer } from '@/common/auth/request-token.util';
 import { PATHS, ROUTES } from '@/common/constants/app.constants';
 import { RequestContext } from '@/common/context';
+import { resolveErrorEnvelope } from '@/common/filters/http-exception.filter';
 import { extractIp, PinoLoggerService } from '@/setup/logger';
 
 import { isAppShuttingDown } from './lifecycle';
@@ -128,13 +131,11 @@ export async function registerFastifyPlugins(app: NestFastifyApplication): Promi
   });
 
   // 私有上传文件鉴权：公开子目录放行，其余需合法 Better Auth 会话凭证
-  const sendUnauthorized = (reply: FastifyReply) =>
-    reply.code(401).send({
-      error: {
-        code: 'UNAUTHORIZED',
-        message: 'Unauthorized',
-      },
-    });
+  // 响应信封复用全局异常过滤器的纯函数，避免手写 body 与统一错误契约分叉
+  const sendUnauthorized = (reply: FastifyReply) => {
+    const { status, body } = resolveErrorEnvelope(new UnauthorizedException());
+    return reply.code(status).send(body);
+  };
 
   fastify.addHook('onRequest', async (request: FastifyRequest, reply: FastifyReply) => {
     const rawPath = request.url.split('?')[0];
@@ -151,10 +152,7 @@ export async function registerFastifyPlugins(app: NestFastifyApplication): Promi
     }
 
     const headers = fromNodeHeaders(request.headers);
-    const query = request.query as { token?: string } | undefined;
-    if (query?.token && !headers.has('authorization')) {
-      headers.set('authorization', `Bearer ${query.token.trim()}`);
-    }
+    applyQueryTokenAsBearer(headers, request.query as { token?: unknown } | undefined);
 
     try {
       const sessionData = await auth.api.getSession({ headers });

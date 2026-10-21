@@ -67,7 +67,6 @@ LABEL org.opencontainers.image.title="Nest API" \
 ENV NODE_ENV=production \
   APP_ENV=production \
   PORT=4400 \
-  HOST=0.0.0.0 \
   WORKER_EMBEDDED=false
 
 # 1. 注入 init 进程与统一调度脚本

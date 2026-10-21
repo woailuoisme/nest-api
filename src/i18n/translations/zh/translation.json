@@ -1,7 +1,7 @@
 {
   "app": {
     "hello": "你好，世界！",
-    "welcome": "欢迎使用 NestForge API"
+    "welcome": "欢迎使用 API"
   },
   "common": {
     "internalError": "服务器内部错误，请稍后重试",

@@ -13,11 +13,7 @@ describe('Drizzle Schemas Integrity', () => {
       expect(schema.verification).toBeDefined();
       expect(schema.twoFactor).toBeDefined();
       expect(schema.apikey).toBeDefined();
-      expect(schema.organization).toBeDefined();
-      expect(schema.member).toBeDefined();
-      expect(schema.invitation).toBeDefined();
       expect(schema.jwks).toBeDefined();
-      expect(schema.deviceCode).toBeDefined();
       expect(schema.media).toBeDefined();
       expect(schema.notifications).toBeDefined();
     });

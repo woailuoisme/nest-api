@@ -7,6 +7,13 @@ import { IS_PUBLIC_KEY } from '@/common/decorators/public.decorator';
 /** 管理后台路由前缀（精确匹配 '/admin' 或 '/admin/...'，避免 '/admin-xxx' 误伤） */
 const ADMIN_PREFIX = '/admin';
 
+/**
+ * 可进入应用管理面（`/admin/*`）的角色。
+ *
+ * 注意与 Better Auth 的 `adminRoles`（仅 SUPER_ADMIN / ADMIN）区分：
+ * 本守卫只负责放行进「应用管理面」，细粒度权限由 Casbin 按 `@Permissions()` 逐条判定；
+ * `adminRoles` 管辖的是 `/v1/auth/admin/*` 认证插件治理端点。OPERATOR 能进前者、进不了后者。
+ */
 const VALID_ADMIN_ROLES: readonly Role[] = [Role.SUPER_ADMIN, Role.ADMIN, Role.OPERATOR];
 
 /**

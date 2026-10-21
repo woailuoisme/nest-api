@@ -5,43 +5,8 @@
     {
       "idx": 0,
       "version": "7",
-      "when": 1786545527786,
-      "tag": "0000_great_namor",
-      "breakpoints": true
-    },
-    {
-      "idx": 1,
-      "version": "7",
-      "when": 1786944987057,
-      "tag": "0001_nostalgic_silk_fever",
-      "breakpoints": true
-    },
-    {
-      "idx": 2,
-      "version": "7",
-      "when": 1787861167253,
-      "tag": "0002_consolidate_ephemeral_tokens",
-      "breakpoints": true
-    },
-    {
-      "idx": 3,
-      "version": "7",
-      "when": 1787941211210,
-      "tag": "0003_spooky_ultimo",
-      "breakpoints": true
-    },
-    {
-      "idx": 4,
-      "version": "7",
-      "when": 1788825031031,
-      "tag": "0004_better_auth",
-      "breakpoints": true
-    },
-    {
-      "idx": 5,
-      "version": "7",
-      "when": 1788837442550,
-      "tag": "0005_add_passkey_and_anonymous",
+      "when": 1792515704285,
+      "tag": "0000_boring_doorman",
       "breakpoints": true
     }
   ]

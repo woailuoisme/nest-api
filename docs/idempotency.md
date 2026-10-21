@@ -1,6 +1,6 @@
 # 工业级 API 幂等性 (Idempotency) 架构与客户端接入指南
 
-> 本规范面向全端开发工程师（Web / iOS / Android / 小程序）、后端微服务开发团队以及系统架构师，作为调用 NestForge 服务端受控写操作接口的**行业工业级幂等接入标准、网络重试状态机设计、全抖动退避算法以及多语言客户端 SDK 实现指南**。
+> 本规范面向全端开发工程师（Web / iOS / Android / 小程序）、后端微服务开发团队以及系统架构师，作为调用 服务端受控写操作接口的**行业工业级幂等接入标准、网络重试状态机设计、全抖动退避算法以及多语言客户端 SDK 实现指南**。
 
 ---
 
@@ -14,7 +14,7 @@
 flowchart LR
     Client["客户端 (Client)"]
     Network["公共互联网 / 移动基站 (Unreliable Network)"]
-    Server["NestForge API 服务端"]
+    Server["API 服务端"]
     DB[("PostgreSQL / Redis")]
 
     Client -->|"1. POST /v1/orders (创建订单)"| Network
@@ -34,7 +34,7 @@ flowchart LR
 
 ### 1.2 业界权威规范对齐
 
-NestForge 幂等子系统严格遵循现代工业界两大事实标准：
+幂等子系统严格遵循现代工业界两大事实标准：
 
 - **IETF 国际标准草案**：[`draft-ietf-httpapi-idempotency-key-header`](https://datatracker.ietf.org/doc/draft-ietf-httpapi-idempotency-key-header/)
 - **Stripe / AWS 架构级生产标准**：[Stripe API Idempotent Requests](https://stripe.com/docs/api/idempotent_requests) 与 [square1-io/laravel-idempotency](https://github.com/square1-io/laravel-idempotency)
@@ -752,7 +752,7 @@ Content-Type: application/json; charset=utf-8
 
 ## 7. 服务端装饰器与行为控制速查 (Server-Side Reference)
 
-为了让全栈开发人员更好地协同理解，NestForge 提供了极其简洁的声明式注解 `@Idempotent(options)`：
+为了让全栈开发人员更好地协同理解，提供了极其简洁的声明式注解 `@Idempotent(options)`：
 
 ```typescript
 import { Controller, Post, Body } from '@nestjs/common';

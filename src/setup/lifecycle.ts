@@ -52,6 +52,35 @@ function startShutdownWatchdog(tag: string, timeoutMs: number, signal: string): 
   return () => clearTimeout(watchdog);
 }
 
+/**
+ * 关闭应用 → flush telemetry → 取消 watchdog → 退出。
+ *
+ * HTTP 与 Worker 两种进程角色共用同一退出协议：成功 exit(0)、异常 exit(1)，
+ * 保证任何路径都不会停在「已停止接收流量但未退出」的半死状态。
+ */
+async function closeAppAndExit(params: {
+  app: INestApplicationContext;
+  logger: Logger;
+  cancelWatchdog: () => void;
+  successMessage: string;
+  errorPrefix: string;
+}): Promise<void> {
+  const { app, logger, cancelWatchdog } = params;
+  try {
+    await app.close();
+    // 停机期动态导入：flush OTel spans/metrics（未初始化时空操作），避免传递性求值污染非 OTel 入口
+    const { shutdownTelemetry } = await import('./otel/telemetry');
+    await shutdownTelemetry();
+    cancelWatchdog();
+    logger.log(params.successMessage);
+    process.exit(0);
+  } catch (err) {
+    cancelWatchdog();
+    logger.error(`${params.errorPrefix}: ${(err as Error).message}`, (err as Error).stack);
+    process.exit(1);
+  }
+}
+
 /** 注册 SIGTERM / SIGINT → 优雅停机处理器（once 语义，避免重复触发） */
 function registerShutdownSignals(handle: (signal: string) => Promise<void>): void {
   process.once('SIGTERM', () => void handle('SIGTERM'));
@@ -109,19 +138,13 @@ export function setupShutdownHooks(app: NestFastifyApplication): void {
 
     // 阶段三：注销应用与底层依赖
     logger.log('[3/3] 正在关闭应用并释放数据库、缓存与消息队列等底层基础设施...');
-    try {
-      await app.close();
-      // 停机期动态导入：flush OTel spans/metrics（未初始化时空操作），避免传递性求值污染非 OTel 入口
-      const { shutdownTelemetry } = await import('./otel/telemetry');
-      await shutdownTelemetry();
-      cancelWatchdog();
-      logger.log('应用已安全关闭，进程正常退出。');
-      process.exit(0);
-    } catch (err) {
-      cancelWatchdog();
-      logger.error(`应用关闭过程中发生异常: ${(err as Error).message}`, (err as Error).stack);
-      process.exit(1);
-    }
+    await closeAppAndExit({
+      app,
+      logger,
+      cancelWatchdog,
+      successMessage: '应用已安全关闭，进程正常退出。',
+      errorPrefix: '应用关闭过程中发生异常',
+    });
   };
 
   registerShutdownSignals(handleShutdown);
@@ -143,19 +166,13 @@ export function setupWorkerShutdownHooks(app: INestApplicationContext): void {
     const cancelWatchdog = startShutdownWatchdog(WORKER_SHUTDOWN_TAG, shutdownTimeoutMs, signal);
 
     logger.log(`收到 ${signal} 停机信号，正在停止 Worker 并等待正在消费的队列任务安全完成...`);
-    try {
-      await app.close();
-      // 同上：停机期动态导入 flush OTel
-      const { shutdownTelemetry } = await import('./otel/telemetry');
-      await shutdownTelemetry();
-      cancelWatchdog();
-      logger.log('Worker 资源已全部安全释放，正常退出。');
-      process.exit(0);
-    } catch (err) {
-      cancelWatchdog();
-      logger.error(`Worker 关闭过程中发生异常: ${(err as Error).message}`, (err as Error).stack);
-      process.exit(1);
-    }
+    await closeAppAndExit({
+      app,
+      logger,
+      cancelWatchdog,
+      successMessage: 'Worker 资源已全部安全释放，正常退出。',
+      errorPrefix: 'Worker 关闭过程中发生异常',
+    });
   };
 
   registerShutdownSignals(handleShutdown);

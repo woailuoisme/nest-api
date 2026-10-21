@@ -15,7 +15,7 @@ export class StorageHealthIndicator {
   async isHealthy(key = 'storage'): Promise<HealthIndicatorResult> {
     const indicator = this.healthIndicatorService.check(key);
     const activeDriver =
-      this.configService.get<string>('STORAGE_DRIVER') ?? (this.configService.get('STORAGE_S3_URL') ? 's3' : 'local');
+      this.configService.get<string>('FILESYSTEM_DISK') ?? (this.configService.get('STORAGE_S3_URL') ? 's3' : 'local');
 
     try {
       await this.storageService.disk(activeDriver).exists('.healthcheck');

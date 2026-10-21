@@ -118,6 +118,26 @@ export class S3StorageDriver implements StorageDriver {
     return (await this.#ensureClient()).send(this.#createCommand(commandName, input)) as T;
   }
 
+  #errorName(err: unknown): string | undefined {
+    const e = err as { name?: string; code?: string };
+    return e?.name ?? e?.code;
+  }
+
+  #errorStatus(err: unknown): number | undefined {
+    return (err as { $metadata?: { httpStatusCode?: number } } | undefined)?.$metadata?.httpStatusCode;
+  }
+
+  /** S3 各类 404（对象不存在 / 桶不存在）的归一化判定 */
+  #isNotFound(err: unknown): boolean {
+    const e = err as { message?: string } | undefined;
+    return (
+      this.#errorName(err) === 'NotFound' ||
+      this.#errorName(err) === 'NoSuchBucket' ||
+      this.#errorStatus(err) === 404 ||
+      e?.message?.includes('NotFound') === true
+    );
+  }
+
   // ── 公开方法 ──────────────────────────────────────────
 
   async put(path: string, contents: Buffer | Readable | string, options?: PutOptions): Promise<string> {
@@ -152,19 +172,38 @@ export class S3StorageDriver implements StorageDriver {
       await this.#send('HeadObjectCommand', { Bucket: this.config.bucket, Key: path });
       return true;
     } catch (err: unknown) {
-      const error = err as { name?: string; code?: string; message?: string; $metadata?: { httpStatusCode?: number } };
-      if (
-        error?.name === 'NotFound' ||
-        error?.name === 'NoSuchKey' ||
-        error?.code === 'NotFound' ||
-        error?.code === 'NoSuchKey' ||
-        error?.$metadata?.httpStatusCode === 404 ||
-        error?.message?.includes('NotFound')
-      ) {
+      if (this.#isNotFound(err) || this.#errorName(err) === 'NoSuchKey') {
         return false;
       }
       throw err;
     }
+  }
+
+  /** 桶是否存在（404 → false；403 视为存在但无 HeadBucket 权限） */
+  async bucketExists(): Promise<boolean> {
+    try {
+      await this.#send('HeadBucketCommand', { Bucket: this.config.bucket });
+      return true;
+    } catch (err: unknown) {
+      if (this.#isNotFound(err)) return false;
+      if (this.#errorStatus(err) === 403) return true;
+      throw err;
+    }
+  }
+
+  /** 确保桶存在（不存在则创建），返回是否新建 */
+  async ensureBucket(): Promise<{ created: boolean }> {
+    if (await this.bucketExists()) return { created: false };
+
+    const { endpoint, region } = this.config;
+    // LocationConstraint 仅 AWS 非 us-east-1 需要；自定义 endpoint（MinIO/Garage/R2）省略以兼容
+    const withLocation = !endpoint && region && region !== 'us-east-1';
+
+    await this.#send('CreateBucketCommand', {
+      Bucket: this.config.bucket,
+      ...(withLocation ? { CreateBucketConfiguration: { LocationConstraint: region } } : {}),
+    });
+    return { created: true };
   }
 
   async deleteBatch(paths: string[]): Promise<void> {

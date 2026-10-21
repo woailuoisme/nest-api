@@ -40,7 +40,7 @@ start-worker:
 # ----------------------------------------
 
 # 提交前完整检查 (修复 + 格式化 + 类型 + 敏感信息 + 架构规则 + 多语言)
-check: fix fmt type secret-check i18n-check
+check: fix fmt type secret-check rbac-check i18n-check
 
 # TypeScript 类型检查
 type:
@@ -91,14 +91,6 @@ test-cov:
 test-e2e:
     bun x vitest run --config vitest.e2e.config.mts
 
-# 运行 k6 场景负载基准测试（如 `just k6 smoke`、`just k6 stress -e BASE_URL=...`）
-k6 scenario='smoke' *args='':
-    k6 run tests/k6/scenarios/{{scenario}}.js {{args}}
-
-# 在 Docker 容器内运行 k6（免本地安装 CLI）
-k6-docker scenario='smoke' *args='':
-    docker run --rm -i -e BASE_URL="http://host.docker.internal:4300" -v "$(pwd)/tests/k6:/scripts:ro" -v "$(pwd)/storage/logs:/storage/logs" grafana/k6 run /scripts/scenarios/{{scenario}}.js {{args}}
-
 bench path="/livez" *args="":
     wrk -t4 -c200 -d30s --latency {{args}} "http://localhost:${APP_PORT:-4300}{{path}}"
 
@@ -116,18 +108,20 @@ db-migrate:
 
 alias db-deploy := db-migrate
 
-# 灌入种子数据
+# 清空所有表数据并灌入种子（保留表结构）
 db-seed:
-    bun x tsx src/database/seeds/index.ts
+    just cmd db:seed --yes
+
+# 删表重建 + 重跑迁移 + 灌种子 (破坏性)
+db-fresh:
+    just cmd db:seed --fresh --yes
 
 # 启动 Drizzle Studio 可视化管理面板
 db-studio:
     bun x drizzle-kit studio
 
-# 重置数据库 (破坏性操作：删除并重新迁移)
-db-reset:
-    bun x drizzle-kit drop
-    bun x drizzle-kit migrate
+# 重置数据库 (破坏性，等同 db-fresh：删表重建 + 迁移 + 种子)
+db-reset: db-fresh
 
 # ----------------------------------------
 # 认证 (Better Auth)
@@ -145,6 +139,14 @@ ba-generate:
 # 生成新的 Better Auth secret
 ba-secret:
     bun x --bun auth secret
+
+# 由 ROLE_PERMISSIONS 重新生成 Casbin 策略 (policy.csv)
+rbac-gen:
+    bun scripts/rbac-policy.gen.ts
+
+# 校验 policy.csv 与 ROLE_PERMISSIONS 是否一致（漂移即非零退出，CI 用）
+rbac-check:
+    bun scripts/rbac-policy.gen.ts --check
 
 # 显示系统与 Better Auth 配置信息
 ba-info:

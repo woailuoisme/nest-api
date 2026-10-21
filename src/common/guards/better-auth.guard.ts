@@ -12,6 +12,7 @@ import { fromNodeHeaders } from 'better-auth/node';
 import type { FastifyRequest } from 'fastify';
 
 import { auth } from '@/common/auth/better-auth';
+import { applyQueryTokenAsBearer } from '@/common/auth/request-token.util';
 import type { Role } from '@/common/constants/roles';
 import type { CurrentUserPayload } from '@/common/decorators/current-user.decorator';
 import { IS_PUBLIC_KEY } from '@/common/decorators/public.decorator';
@@ -51,10 +52,7 @@ export class BetterAuthGuard implements CanActivate {
     const headers = fromNodeHeaders(request.headers);
 
     // 支持 Query String ?token=<session_token> 提取并转换为 Bearer 头（适配 EventSource / 某些移动端场景）
-    const query = request.query as Record<string, unknown> | undefined;
-    if (query?.token && typeof query.token === 'string' && !headers.has('authorization')) {
-      headers.set('authorization', `Bearer ${query.token.trim()}`);
-    }
+    applyQueryTokenAsBearer(headers, request.query as { token?: unknown } | undefined);
 
     try {
       const sessionData = await auth.api.getSession({ headers });

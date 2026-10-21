@@ -288,7 +288,7 @@ describe('StorageModule Unit Tests', () => {
 
     beforeEach(() => {
       configService = new ConfigService({
-        STORAGE_DRIVER: 'local',
+        FILESYSTEM_DISK: 'local',
         STORAGE_LOCAL_ROOT: testUploadDir,
         STORAGE_S3_URL: 's3://test-key:test-secret@s3.us-east-1.amazonaws.com/test-bucket?region=us-east-1',
       });

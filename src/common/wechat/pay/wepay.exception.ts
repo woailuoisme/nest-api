@@ -1,5 +1,6 @@
 import { HttpException, HttpStatus } from '@nestjs/common';
 
+import { safeParseJson } from '../json.util';
 import {
   WEPAY_DEFAULT_ERROR_STATUS,
   WEPAY_ERROR_MAP,
@@ -27,14 +28,6 @@ interface WepayApiErrorBody {
 }
 
 /** 安全解析 JSON 文本，失败返回 null（用于容错解析微信错误应答） */
-function safeParseJson(raw: string): WepayApiErrorBody | null {
-  try {
-    const parsed = JSON.parse(raw) as WepayApiErrorBody;
-    return parsed && typeof parsed === 'object' ? parsed : null;
-  } catch {
-    return null;
-  }
-}
 
 /** 查询错误码的处置描述 */
 export function getWepayErrorDescriptor(code: string | undefined): WepayErrorDescriptor | undefined {
@@ -96,7 +89,7 @@ export class WepayException extends HttpException {
    * 否则降级为携带原始 HTTP 状态的通用错误（5xx 空体与网关 HTML 应答均走此分支）。
    */
   static fromApiError(status: number, rawBody: string, requestId?: string): WepayException {
-    const parsed = safeParseJson(rawBody);
+    const parsed = safeParseJson<WepayApiErrorBody>(rawBody);
     if (parsed?.code) {
       const field = parsed.detail?.field ? `（字段 ${parsed.detail.field}）` : '';
       return new WepayException(

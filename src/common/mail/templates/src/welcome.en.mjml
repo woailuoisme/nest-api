@@ -1,6 +1,6 @@
 <mjml>
   <mj-head>
-    <mj-title>Welcome to NestForge</mj-title>
+    <mj-title>Welcome aboard</mj-title>
     <mj-attributes>
       <mj-all font-family="'Helvetica Neue', Helvetica, Arial, sans-serif" />
     </mj-attributes>
@@ -9,7 +9,7 @@
     <mj-include path="./partials/header.mjml" />
     <mj-section background-color="#FFFFFF" border-radius="8px" padding="24px">
       <mj-column>
-        <mj-text font-size="20px" font-weight="bold" color="#1F2937">Welcome to NestForge</mj-text>
+        <mj-text font-size="20px" font-weight="bold" color="#1F2937">Welcome aboard</mj-text>
         <mj-text font-size="14px" color="#4B5563" line-height="1.6">
           Hi {{ name }}, your account has been created! Click the button below to log in and get started:
         </mj-text>

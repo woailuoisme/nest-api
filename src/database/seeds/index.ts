@@ -3,6 +3,7 @@ import { drizzle, type PostgresJsDatabase } from 'drizzle-orm/postgres-js';
 import { reset } from 'drizzle-seed';
 import postgres from 'postgres';
 
+import { DEFAULT_DB_URL } from '@/common/constants/app.constants';
 import * as schema from '@/database/drizzle/schema';
 
 import { description as authDesc, run as seedAuth } from './auth.seed';
@@ -123,7 +124,7 @@ async function main(): Promise<void> {
     return;
   }
 
-  const sql = postgres(process.env.DB_URL ?? '', { max: 1, prepare: false, onnotice: () => {} });
+  const sql = postgres(process.env.DB_URL || DEFAULT_DB_URL, { max: 1, prepare: false, onnotice: () => {} });
   const db = drizzle(sql, { schema });
 
   try {

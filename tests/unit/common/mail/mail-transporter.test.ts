@@ -13,8 +13,8 @@ describe('mailTransporterProvider', () => {
   const config = {
     get: vi.fn((key: string) => {
       if (key === 'MAIL_URL') return 'smtp://localhost:1025';
-      if (key === 'MAIL_FROM_ADDRESS') return 'no-reply@nestforge.dev';
-      if (key === 'MAIL_FROM_NAME') return 'NestForge';
+      if (key === 'MAIL_FROM_ADDRESS') return 'no-reply@example.com';
+      if (key === 'MAIL_FROM_NAME') return 'nest-api';
       return undefined;
     }),
   } as unknown as ConfigService<EnvConfig, true>;
@@ -38,7 +38,7 @@ describe('mailTransporterProvider', () => {
     runFactory(config);
 
     expect(createTransportSpy).toHaveBeenCalledWith('smtp://localhost:1025', {
-      from: { name: 'NestForge', address: 'no-reply@nestforge.dev' },
+      from: { name: 'nest-api', address: 'no-reply@example.com' },
     });
   });
 
@@ -46,7 +46,7 @@ describe('mailTransporterProvider', () => {
     const configWithoutName = {
       get: vi.fn((key: string) => {
         if (key === 'MAIL_URL') return 'smtp://localhost:1025';
-        if (key === 'MAIL_FROM_ADDRESS') return 'no-reply@nestforge.dev';
+        if (key === 'MAIL_FROM_ADDRESS') return 'no-reply@example.com';
         return undefined;
       }),
     } as unknown as ConfigService<EnvConfig, true>;
@@ -54,7 +54,7 @@ describe('mailTransporterProvider', () => {
     runFactory(configWithoutName);
 
     expect(createTransportSpy).toHaveBeenCalledWith('smtp://localhost:1025', {
-      from: { name: undefined, address: 'no-reply@nestforge.dev' },
+      from: { name: undefined, address: 'no-reply@example.com' },
     });
   });
 

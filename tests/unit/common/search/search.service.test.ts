@@ -21,9 +21,9 @@ describe('SearchService 核心门面', () => {
     };
   });
 
-  it('未配置 SEARCH_URL 或 SEARCH_DRIVER=noop 时应默认加载 NoopSearchDriver', () => {
+  it('未配置 SEARCH_URL 或 SCOUT_DRIVER=noop 时应默认加载 NoopSearchDriver', () => {
     mockConfigService.get.mockImplementation((key: string) => {
-      if (key === 'SEARCH_DRIVER') return 'noop';
+      if (key === 'SCOUT_DRIVER') return 'noop';
       return undefined;
     });
 
@@ -32,9 +32,9 @@ describe('SearchService 核心门面', () => {
     expect(service.driver().name).toBe('noop');
   });
 
-  it('配置 SEARCH_DRIVER=meilisearch 且带有合法 SEARCH_URL 时应加载 MeiliSearchDriver', () => {
+  it('配置 SCOUT_DRIVER=meilisearch 且带有合法 SEARCH_URL 时应加载 MeiliSearchDriver', () => {
     mockConfigService.get.mockImplementation((key: string) => {
-      if (key === 'SEARCH_DRIVER') return 'meilisearch';
+      if (key === 'SCOUT_DRIVER') return 'meilisearch';
       if (key === 'SEARCH_URL') return 'meilisearch://masterKey@127.0.0.1:7700';
       return undefined;
     });
@@ -46,7 +46,7 @@ describe('SearchService 核心门面', () => {
 
   it('MeiliSearchDriver 初始化失败（如非法 DSN）时应优雅降级为 NoopSearchDriver', () => {
     mockConfigService.get.mockImplementation((key: string) => {
-      if (key === 'SEARCH_DRIVER') return 'meilisearch';
+      if (key === 'SCOUT_DRIVER') return 'meilisearch';
       if (key === 'SEARCH_URL') return ':::bad-dsn:::';
       return undefined;
     });

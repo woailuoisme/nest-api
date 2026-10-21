@@ -35,6 +35,23 @@ function createCleanDocument(
   return doc;
 }
 
+/** 三份文档共用的服务器条目（client / admin 由 DocumentBuilder 消费，auth 手写 spec 直接引用） */
+const CURRENT_SERVER_DESCRIPTION = 'Current server';
+const PRODUCTION_SERVER = { url: 'https://api.xxx.com', description: 'Production server' } as const;
+
+/** 客户端与管理后台文档的公共配置（标题、描述、版本、服务器、双模态凭据），调用方再追加自身 tag */
+function createBaseDocConfig(appUrl: string, title: string, description: string) {
+  return new DocumentBuilder()
+    .setTitle(title)
+    .setDescription(description)
+    .setVersion(APP_VERSION)
+    .setOpenAPIVersion(OPENAPI_VERSION)
+    .addServer(appUrl, CURRENT_SERVER_DESCRIPTION)
+    .addServer(PRODUCTION_SERVER.url, PRODUCTION_SERVER.description)
+    .addBearerAuth()
+    .addCookieAuth('better-auth.session_token');
+}
+
 export interface ApiDocUrls {
   clientDocsUrl: string;
   adminDocsUrl: string;
@@ -50,10 +67,10 @@ export async function setupApiDocumentation(app: NestFastifyApplication, appUrl:
 `.trim();
   const clientDescription = existsSync(apiMdPath)
     ? `${clientDocHeader}\n\n${readFileSync(apiMdPath, 'utf-8')}`
-    : `${clientDocHeader}\n\nNestForge Client & Features RESTful API Specification`;
+    : `${clientDocHeader}\n\nClient & Features RESTful API Specification`;
 
   const adminDescription = `
-# NestForge 管理后台 API 设计规范与接入指南
+# 管理后台 API 设计规范与接入指南
 
 > [!NOTE]
 > 管理员登录与治理相关端点已独立收敛至 [Better Auth API Reference](/${ROUTES.AUTH_DOCS})。
@@ -63,39 +80,24 @@ export async function setupApiDocumentation(app: NestFastifyApplication, appUrl:
   `.trim();
 
   const authDescription = `
-# NestForge Better Auth 认证体系 API 参考
+# Better Auth 认证体系 API 参考
 
-本文档汇总全量 14 个已启用插件的认证与权限管控端点（核心凭据、双因素 2FA、动态验证码、魔术链接、手机号、组织租户、API Key、多会话、管理员治理等）。
+本文档汇总 11 个已启用插件的认证与权限管控端点（核心凭据、用户名、手机号、邮箱动态验证码、双因素 2FA、API Key、Bearer、一次性令牌、JWT/JWKS、最后登录方式、管理员治理）。
+面向 JWT + REST API 后端：未启用浏览器端 ceremony（Passkey / 魔术链接）、多租户组织、设备码授权、企业 SSO 与认证层文案本地化。
 所有端点基于 \`/v1/auth\` 路径直接挂载，支持 \`Bearer Token\` 与 \`Cookie\` 复合双模态在线调试。
   `.trim();
 
   const betterAuthOpenAPI = await getProcessedBetterAuthOpenAPI();
 
   // ─── 1. 客户端 API 文档 (Client API) ──────────────────────────────────
-  const clientDocConfig = new DocumentBuilder()
-    .setTitle('NestForge Client API')
-    .setDescription(clientDescription)
-    .setVersion(APP_VERSION)
-    .setOpenAPIVersion(OPENAPI_VERSION)
-    .addServer(appUrl, 'Current server')
-    .addServer('https://api.xxx.com', 'Production server')
-    .addBearerAuth()
-    .addCookieAuth('better-auth.session_token')
+  const clientDocConfig = createBaseDocConfig(appUrl, 'Client API', clientDescription)
     .addTag('用户中心', '用户个人资料、头像上传与信息查询')
     .build();
 
   const clientDocument = createCleanDocument(app, clientDocConfig, CLIENT_FEATURE_MODULES);
 
   // ─── 2. 管理后台 API 文档 (Admin API) ──────────────────────────────────
-  const adminDocConfig = new DocumentBuilder()
-    .setTitle('NestForge Admin API')
-    .setDescription(adminDescription)
-    .setVersion(APP_VERSION)
-    .setOpenAPIVersion(OPENAPI_VERSION)
-    .addServer(appUrl, 'Current server')
-    .addServer('https://api.xxx.com', 'Production server')
-    .addBearerAuth()
-    .addCookieAuth('better-auth.session_token')
+  const adminDocConfig = createBaseDocConfig(appUrl, 'Admin API', adminDescription)
     .addTag('用户管理', 'C 端用户列表、角色调整与账号删除')
     .addTag('仪表盘', '系统运行时健康指标与监控大盘')
     .addTag('消息通知', '实时事件向指定用户或全局广播派发')
@@ -107,14 +109,11 @@ export async function setupApiDocumentation(app: NestFastifyApplication, appUrl:
   const authDocument = {
     openapi: OPENAPI_VERSION,
     info: {
-      title: 'NestForge Better Auth API Reference',
+      title: 'Better Auth API Reference',
       description: authDescription,
       version: APP_VERSION,
     },
-    servers: [
-      { url: appUrl, description: 'Current server' },
-      { url: 'https://api.xxx.com', description: 'Production server' },
-    ],
+    servers: [{ url: appUrl, description: CURRENT_SERVER_DESCRIPTION }, PRODUCTION_SERVER],
     tags: betterAuthOpenAPI.allTags,
     paths: betterAuthOpenAPI.allPaths,
     components: {
@@ -203,9 +202,9 @@ export async function setupApiDocumentation(app: NestFastifyApplication, appUrl:
   const renderScalarPage = (doc: OpenAPIObject | typeof authDocument, pageTitle: string) =>
     renderApiReference({ config: { ...SCALAR_UNIFIED_CONFIG, spec: { content: doc } }, pageTitle });
 
-  const clientScalarHtml = renderScalarPage(clientDocument, 'NestForge Client API Reference');
-  const adminScalarHtml = renderScalarPage(adminDocument, 'NestForge Admin API Reference');
-  const authScalarHtml = renderScalarPage(authDocument, 'NestForge Better Auth API Reference');
+  const clientScalarHtml = renderScalarPage(clientDocument, 'Client API Reference');
+  const adminScalarHtml = renderScalarPage(adminDocument, 'Admin API Reference');
+  const authScalarHtml = renderScalarPage(authDocument, 'Better Auth API Reference');
 
   const httpAdapter = app.getHttpAdapter();
   const fastifyInstance = httpAdapter.getInstance();

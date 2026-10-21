@@ -12,7 +12,7 @@ import { MAIL_TRANSPORTER } from './mail-transporter.provider';
 export const MAIL_SUBJECTS: Record<MailJobName, Record<MailLocale, string>> = {
   [MailJobName.VerifyEmail]: { zh: '验证您的邮箱', en: 'Verify your email' },
   [MailJobName.ResetPassword]: { zh: '重置密码', en: 'Reset your password' },
-  [MailJobName.Welcome]: { zh: '欢迎加入 NestForge', en: 'Welcome to NestForge' },
+  [MailJobName.Welcome]: { zh: '欢迎加入我们', en: 'Welcome aboard' },
 };
 
 /**
@@ -36,8 +36,8 @@ export class MailService {
   /**
    * 发送邮箱验证邮件
    */
-  async sendVerificationEmail({ to, name, token, locale }: MailJobData): Promise<void> {
-    await this.sendTemplateMail({
+  sendVerificationEmail({ to, name, token, locale }: MailJobData): Promise<void> {
+    return this.sendTemplateMail({
       to,
       name,
       locale,
@@ -49,8 +49,8 @@ export class MailService {
   /**
    * 发送密码重置邮件
    */
-  async sendPasswordResetEmail({ to, name, token, locale }: MailJobData): Promise<void> {
-    await this.sendTemplateMail({
+  sendPasswordResetEmail({ to, name, token, locale }: MailJobData): Promise<void> {
+    return this.sendTemplateMail({
       to,
       name,
       locale,
@@ -62,8 +62,8 @@ export class MailService {
   /**
    * 发送欢迎邮件（注册后，无 token）
    */
-  async sendWelcomeEmail({ to, name, locale }: MailJobData): Promise<void> {
-    await this.sendTemplateMail({
+  sendWelcomeEmail({ to, name, locale }: MailJobData): Promise<void> {
+    return this.sendTemplateMail({
       to,
       name,
       locale,

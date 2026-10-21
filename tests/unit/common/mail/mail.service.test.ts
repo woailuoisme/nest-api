@@ -110,7 +110,7 @@ describe('MailService', () => {
       });
       expect(sendMailMock).toHaveBeenCalledWith({
         to: 'welcome@example.com',
-        subject: 'Welcome to NestForge',
+        subject: 'Welcome aboard',
         html: '<html><body>rendered</body></html>',
       });
     });

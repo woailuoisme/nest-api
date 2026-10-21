@@ -20,7 +20,7 @@ describe('Swagger & Scalar Split Integration Test', () => {
     const clientJsonRes = await app.inject({ method: 'GET', url: '/docs-json' });
     expect(clientJsonRes.statusCode).toBe(200);
     const clientJson = JSON.parse(clientJsonRes.body);
-    expect(clientJson.info.title).toBe('NestForge Client API');
+    expect(clientJson.info.title).toBe('Client API');
     expect(clientJson.info.description).toContain('/docs/auth');
     expect(clientJson.tags.map((t: { name: string }) => t.name)).toEqual(['用户中心']);
     expect(Object.keys(clientJson.paths)).not.toContain('/auth/{path}');
@@ -37,7 +37,7 @@ describe('Swagger & Scalar Split Integration Test', () => {
     const adminJsonRes = await app.inject({ method: 'GET', url: '/docs-admin-json' });
     expect(adminJsonRes.statusCode).toBe(200);
     const adminJson = JSON.parse(adminJsonRes.body);
-    expect(adminJson.info.title).toBe('NestForge Admin API');
+    expect(adminJson.info.title).toBe('Admin API');
     expect(adminJson.info.description).toContain('/docs/auth');
     expect(adminJson.tags.map((t: { name: string }) => t.name)).toEqual(
       expect.arrayContaining(['用户管理', '仪表盘', '消息通知']),
@@ -53,28 +53,17 @@ describe('Swagger & Scalar Split Integration Test', () => {
     expect(adminJson.components.securitySchemes).toHaveProperty('bearerAuth');
     expect(adminJson.components.securitySchemes).toHaveProperty('cookieAuth');
 
-    // 3. Better Auth 全量专本文档 JSON Spec 校验 (全量 118 个端点完整聚合)
+    // 3. Better Auth 全量专本文档 JSON Spec 校验 (全量 78 个端点完整聚合)
     const authJsonRes = await app.inject({ method: 'GET', url: '/docs-auth-json' });
     expect(authJsonRes.statusCode).toBe(200);
     const authJson = JSON.parse(authJsonRes.body);
-    expect(authJson.info.title).toBe('NestForge Better Auth API Reference');
+    expect(authJson.info.title).toBe('Better Auth API Reference');
     expect(authJson.tags.map((t: { name: string }) => t.name)).toEqual(
-      expect.arrayContaining([
-        '认证-核心凭据',
-        '认证-双因素(2FA)',
-        '认证-组织租户',
-        '认证-管理员治理',
-        '认证-通行密钥',
-        '认证-一键登录',
-        '认证-匿名访客',
-      ]),
+      expect.arrayContaining(['认证-核心凭据', '认证-双因素(2FA)', '认证-管理员治理']),
     );
     expect(Object.keys(authJson.paths)).toContain('/v1/auth/sign-in/email');
     expect(Object.keys(authJson.paths)).toContain('/v1/auth/admin/list-users');
-    expect(Object.keys(authJson.paths)).toContain('/v1/auth/passkey/generate-register-options');
-    expect(Object.keys(authJson.paths)).toContain('/v1/auth/one-tap/callback');
-    expect(Object.keys(authJson.paths)).toContain('/v1/auth/sign-in/anonymous');
-    expect(Object.keys(authJson.paths).length).toBe(132);
+    expect(Object.keys(authJson.paths).length).toBe(78);
     expect(authJson.components.securitySchemes).toHaveProperty('bearerAuth');
     expect(authJson.components.securitySchemes).toHaveProperty('cookieAuth');
 
@@ -82,8 +71,8 @@ describe('Swagger & Scalar Split Integration Test', () => {
     const clientHtmlRes = await app.inject({ method: 'GET', url: '/docs' });
     expect(clientHtmlRes.statusCode).toBe(200);
     expect(clientHtmlRes.headers['content-type']).toContain('text/html');
-    expect(clientHtmlRes.body).toContain('NestForge Client API');
-    expect(clientHtmlRes.body).not.toContain('NestForge Admin API');
+    expect(clientHtmlRes.body).toContain('Client API');
+    expect(clientHtmlRes.body).not.toContain('Admin API');
     expect(clientHtmlRes.body).toContain('"persistAuth": true');
     expect(clientHtmlRes.body).toContain('"telemetry": false');
     expect(clientHtmlRes.body).toContain('"theme": "purple"');
@@ -94,8 +83,8 @@ describe('Swagger & Scalar Split Integration Test', () => {
     const adminHtmlRes = await app.inject({ method: 'GET', url: '/docs/admin' });
     expect(adminHtmlRes.statusCode).toBe(200);
     expect(adminHtmlRes.headers['content-type']).toContain('text/html');
-    expect(adminHtmlRes.body).toContain('NestForge Admin API');
-    expect(adminHtmlRes.body).not.toContain('NestForge Client API');
+    expect(adminHtmlRes.body).toContain('Admin API');
+    expect(adminHtmlRes.body).not.toContain('Client API');
     expect(adminHtmlRes.body).toContain('"persistAuth": true');
     expect(adminHtmlRes.body).toContain('"telemetry": false');
     expect(adminHtmlRes.body).toContain('"theme": "purple"');
@@ -106,7 +95,7 @@ describe('Swagger & Scalar Split Integration Test', () => {
     const authHtmlRes = await app.inject({ method: 'GET', url: '/docs/auth' });
     expect(authHtmlRes.statusCode).toBe(200);
     expect(authHtmlRes.headers['content-type']).toContain('text/html');
-    expect(authHtmlRes.body).toContain('NestForge Better Auth API Reference');
+    expect(authHtmlRes.body).toContain('Better Auth API Reference');
     expect(authHtmlRes.body).toContain('"persistAuth": true');
     expect(authHtmlRes.body).toContain('"telemetry": false');
     expect(authHtmlRes.body).toContain('"theme": "purple"');

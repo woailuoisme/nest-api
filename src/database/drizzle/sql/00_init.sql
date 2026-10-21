@@ -1,5 +1,5 @@
 -- =============================================================================
--- NestForge Database Full Initialization Script (PostgreSQL)
+-- Database Full Initialization Script (PostgreSQL)
 -- Aggregates all schema definitions from src/database/drizzle/schema/
 -- =============================================================================
 

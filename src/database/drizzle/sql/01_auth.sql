@@ -2,6 +2,9 @@
 -- Better Auth Core & Plugins DDL (PostgreSQL)
 -- 100% Strictly Generated from:
 --   src/database/drizzle/schema/better-auth.schema.ts
+--
+-- ⚠️ 仅作**参考实现 / 人工核对**，权威来源是 drizzle/migrations（应用启动与 CI 只跑迁移）。
+--    改表流程：插件变更 → `just ba-generate` 重生成 schema → `just db-gen` 产出迁移 → 再同步本文件。
 -- =============================================================================
 
 -- -----------------------------------------------------------------------------
@@ -24,7 +27,6 @@ CREATE TABLE IF NOT EXISTS "user" (
     "display_username" text,
     "phone_number" text UNIQUE,
     "phone_number_verified" boolean,
-    "is_anonymous" boolean DEFAULT false,
     "last_login_method" text
 );
 
@@ -40,8 +42,7 @@ CREATE TABLE IF NOT EXISTS "session" (
     "ip_address" text,
     "user_agent" text,
     "user_id" text NOT NULL REFERENCES "user"("id") ON DELETE CASCADE,
-    "impersonated_by" text,
-    "active_organization_id" text
+    "impersonated_by" text
 );
 CREATE INDEX IF NOT EXISTS "session_userId_idx" ON "session" ("user_id");
 
@@ -94,26 +95,7 @@ CREATE INDEX IF NOT EXISTS "twoFactor_secret_idx" ON "two_factor" ("secret");
 CREATE INDEX IF NOT EXISTS "twoFactor_userId_idx" ON "two_factor" ("user_id");
 
 -- -----------------------------------------------------------------------------
--- 6. Passkey Table (WebAuthn / FIDO2)
--- -----------------------------------------------------------------------------
-CREATE TABLE IF NOT EXISTS "passkey" (
-    "id" text PRIMARY KEY,
-    "name" text,
-    "public_key" text NOT NULL,
-    "user_id" text NOT NULL REFERENCES "user"("id") ON DELETE CASCADE,
-    "credential_id" text NOT NULL,
-    "counter" integer NOT NULL,
-    "device_type" text NOT NULL,
-    "backed_up" boolean NOT NULL,
-    "transports" text,
-    "created_at" timestamp,
-    "aaguid" text
-);
-CREATE INDEX IF NOT EXISTS "passkey_userId_idx" ON "passkey" ("user_id");
-CREATE INDEX IF NOT EXISTS "passkey_credentialID_idx" ON "passkey" ("credential_id");
-
--- -----------------------------------------------------------------------------
--- 7. API Key Table
+-- 6. API Key Table
 -- -----------------------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS "apikey" (
     "id" text PRIMARY KEY,
@@ -143,49 +125,10 @@ CREATE INDEX IF NOT EXISTS "apikey_configId_idx" ON "apikey" ("config_id");
 CREATE INDEX IF NOT EXISTS "apikey_referenceId_idx" ON "apikey" ("reference_id");
 CREATE INDEX IF NOT EXISTS "apikey_key_idx" ON "apikey" ("key");
 
--- -----------------------------------------------------------------------------
--- 8. Organization Table
--- -----------------------------------------------------------------------------
-CREATE TABLE IF NOT EXISTS "organization" (
-    "id" text PRIMARY KEY,
-    "name" text NOT NULL,
-    "slug" text NOT NULL UNIQUE,
-    "logo" text,
-    "created_at" timestamp NOT NULL,
-    "metadata" text
-);
+-- SSO / Organization / Member / Invitation / Passkey / Device Code 表随插件移除而废弃
 
 -- -----------------------------------------------------------------------------
--- 9. Member Table (Organization Membership)
--- -----------------------------------------------------------------------------
-CREATE TABLE IF NOT EXISTS "member" (
-    "id" text PRIMARY KEY,
-    "organization_id" text NOT NULL REFERENCES "organization"("id") ON DELETE CASCADE,
-    "user_id" text NOT NULL REFERENCES "user"("id") ON DELETE CASCADE,
-    "role" text NOT NULL DEFAULT 'member',
-    "created_at" timestamp NOT NULL
-);
-CREATE INDEX IF NOT EXISTS "member_organizationId_idx" ON "member" ("organization_id");
-CREATE INDEX IF NOT EXISTS "member_userId_idx" ON "member" ("user_id");
-
--- -----------------------------------------------------------------------------
--- 10. Invitation Table (Organization Invitations)
--- -----------------------------------------------------------------------------
-CREATE TABLE IF NOT EXISTS "invitation" (
-    "id" text PRIMARY KEY,
-    "organization_id" text NOT NULL REFERENCES "organization"("id") ON DELETE CASCADE,
-    "email" text NOT NULL,
-    "role" text,
-    "status" text NOT NULL DEFAULT 'pending',
-    "expires_at" timestamp NOT NULL,
-    "created_at" timestamp NOT NULL,
-    "inviter_id" text NOT NULL REFERENCES "user"("id") ON DELETE CASCADE
-);
-CREATE INDEX IF NOT EXISTS "invitation_organizationId_idx" ON "invitation" ("organization_id");
-CREATE INDEX IF NOT EXISTS "invitation_email_idx" ON "invitation" ("email");
-
--- -----------------------------------------------------------------------------
--- 11. JWKS Table (Key Rotation & Discovery)
+-- 7. JWKS Table (Key Rotation & Discovery)
 -- -----------------------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS "jwks" (
     "id" text PRIMARY KEY,
@@ -197,34 +140,4 @@ CREATE TABLE IF NOT EXISTS "jwks" (
     "crv" text
 );
 
--- -----------------------------------------------------------------------------
--- 12. Device Code Table (RFC 8628 Device Authorization Flow)
--- -----------------------------------------------------------------------------
-CREATE TABLE IF NOT EXISTS "device_code" (
-    "id" text PRIMARY KEY,
-    "device_code" text NOT NULL,
-    "user_code" text NOT NULL,
-    "user_id" text,
-    "expires_at" timestamp NOT NULL,
-    "status" text NOT NULL,
-    "last_polled_at" timestamp,
-    "polling_interval" integer,
-    "client_id" text,
-    "scope" text
-);
-CREATE UNIQUE INDEX IF NOT EXISTS "deviceCode_deviceCode_uidx" ON "device_code" ("device_code");
-CREATE UNIQUE INDEX IF NOT EXISTS "deviceCode_userCode_uidx" ON "device_code" ("user_code");
-
--- -----------------------------------------------------------------------------
--- 13. SSO Provider Table (SAML 2.0 & OIDC Single Sign-On)
--- -----------------------------------------------------------------------------
-CREATE TABLE IF NOT EXISTS "sso_provider" (
-    "id" text PRIMARY KEY,
-    "issuer" text NOT NULL,
-    "oidc_config" text,
-    "saml_config" text,
-    "user_id" text NOT NULL REFERENCES "user"("id") ON DELETE CASCADE,
-    "provider_id" text NOT NULL UNIQUE,
-    "organization_id" text,
-    "domain" text NOT NULL
-);
+-- SSO / Organization / Member / Invitation / Passkey / Device Code 表已随插件移除（历史库回收见后续迁移）

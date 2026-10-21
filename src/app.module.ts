@@ -6,6 +6,7 @@ import { EventEmitterModule } from '@nestjs/event-emitter';
 import { ThrottlerGuard, ThrottlerModule, type ThrottlerStorage } from '@nestjs/throttler';
 import { I18nModule } from 'nestjs-i18n';
 
+import { CasbinService } from '@/common/auth/casbin/casbin.service';
 import { isTruthyEnv } from '@/common/constants/app.constants';
 import { AccessControlGuard } from '@/common/guards/access-control.guard';
 import { AdminPrefixGuard } from '@/common/guards/admin-prefix.guard';
@@ -82,6 +83,8 @@ const isWorkerEmbedded = isTruthyEnv(process.env.WORKER_EMBEDDED);
     ...(isWorkerEmbedded ? [WorkerModule] : []),
   ],
   providers: [
+    // 权限判定引擎（策略由 ROLE_PERMISSIONS 生成，守卫按需注入）
+    CasbinService,
     { provide: APP_GUARD, useClass: ThrottlerGuard },
     { provide: APP_GUARD, useClass: BetterAuthGuard },
     { provide: APP_GUARD, useClass: AdminPrefixGuard },

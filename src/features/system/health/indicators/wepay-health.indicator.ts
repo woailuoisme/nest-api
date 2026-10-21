@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { type HealthIndicatorResult, HealthIndicatorService } from '@nestjs/terminus';
 
+import { isProductionEnv } from '@/common/constants/app.constants';
 import { WepayService } from '@/common/wechat/pay';
 
 /**
@@ -21,15 +22,21 @@ export class WepayHealthIndicator {
 
     try {
       const health = await this.wepayService.checkHealth();
+      // 生产环境跑 mock 驱动意味着支付不会产生真实交易：必须在就绪探针上可见，而非只留一行 warn 日志
+      const mockInProduction = isProductionEnv() && health.driver === 'mock';
+
       const details = {
         driver: health.driver,
         ...(health.certificateMode ? { certificateMode: health.certificateMode } : {}),
         ...(health.certificateExpireTime ? { certificateExpireTime: health.certificateExpireTime } : {}),
         ...(health.message ? { message: health.message } : {}),
+        ...(mockInProduction ? { message: '生产环境运行于 mock 驱动：支付不会产生真实交易' } : {}),
       };
 
       // 软依赖容灾降级：支付未就绪属于业务功能降级，不应触发 K8s 503 误杀
-      return health.status === 'up' ? indicator.up(details) : indicator.up({ state: 'degraded', ...details });
+      return health.status === 'up' && !mockInProduction
+        ? indicator.up(details)
+        : indicator.up({ state: 'degraded', ...details });
     } catch (error) {
       return indicator.up({
         state: 'degraded',
