@@ -97,7 +97,7 @@ src/
 │   ├── services/       # 遥测影子与指令 RPC 服务 (iot-command.service.ts, iot-telemetry.service.ts)
 │   ├── dto/            # 统一设备 DTO 与影子实体 (iot.dto.ts)
 │   ├── iot.controller.ts # 模拟仿真与设备管理控制器 (/v1/iot/devices/*)
-│   ├── iot.module.ts   # @Global() 核心物联网模块 (并提供 MqttModule 兼容别名)
+│   ├── iot.module.ts   # 核心物联网模块 (MQTT 5.0 传输/订阅/物模型)
 │   └── index.ts        # 聚合导出
 ├── realtime/       # 统一实时通信中枢 (对齐 Laravel Broadcasting)：Centrifugo 适配 + 频道鉴权 + 协议 Token + 领域事件
 │   ├── channels/       # 模式匹配频道鉴权与业务频道定义 (channel-manager.service.ts, @ChannelAuth 等)

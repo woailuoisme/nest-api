@@ -31,7 +31,7 @@ flowchart TD
 
     subgraph L4_Cloud["Level 3~4: 核心工业服务底座 (NestJS Core)"]
         direction TB
-        MqttClientModule["MqttModule (MQTT 5.0 Engine)"]
+        IotCoreModule["IotModule (MQTT 5.0 Engine)"]
         SharedSubs["$share 共享订阅集群负载均衡"]
         RpcEngine["MQTT 5.0 RPC 协调器 (responseTopic/correlationData)"]
         DeviceShadow["数字影子 (Device Shadow Memory/Timescale)"]
