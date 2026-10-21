@@ -116,11 +116,11 @@ bun install
 just db-migrate
 just db-seed
 
-# 4. 启动开发服务器（单进程内嵌 Worker，支持热更新与 SWC）
+# 4. 启动开发服务器（API + Worker 双进程，支持热更新与 SWC）
 just dev
 ```
 
-> **提示**：若需要模拟双进程生产架构（API 主进程 + 独立 Worker 进程），可运行 `just dev-all`。
+> **提示**：`just dev` 并发拉起 API 与 Worker 两个进程，与生产容器拓扑保持一致；日志以 `[app]` / `[worker]` 前缀区分，`Ctrl-C` 同时停止两者。
 
 ---
 
@@ -172,14 +172,18 @@ just dev
 
 ## 🛠️ 常用命令 (Justfile)
 
+同一个镜像承载三种进程类型，由 `entrypoint.sh` 的 verb 唯一确定（不存在由 env 二次决定的空间）：
+
+| verb | 本地命令 | 容器命令 | 用途 |
+| :--- | :--- | :--- | :--- |
+| `api` | `just api` | 默认（`CMD ["api"]`） | HTTP API，队列由独立 worker 消费 |
+| `worker` | `just worker` | `command: ["worker"]` | 消费队列与定时任务，不提供 HTTP |
+| `cli` | `just cli <命令>` | `command: ["cli", "<命令>"]` | 一次性 CLI，如 `route:list` / `db:seed` |
+
 ```bash
 # --- 开发与运行 ---
-just dev                  # 开发模式 (单进程内嵌 Worker + SWC Watch)
-just dev-all              # 开发模式 (并发启动应用 + 独立 Worker 进程)
+just dev                  # 开发模式 (API + Worker 双进程 + SWC Watch)
 just build                # 生产构建 (SWC 转译到 dist/)
-just start                # 启动生产主服务
-just start-embedded       # 启动生产模式 (内嵌 Worker，单进程)
-just start-worker         # 仅启动独立 Worker 消费进程
 
 # --- 质量与门禁 ---
 just check                # 提交前完整检查 (fix + fmt + type + secret-check + i18n-check)

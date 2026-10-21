@@ -21,14 +21,14 @@ dev:
 build:
     nest build
 
-# 启动生产构建（dist/main.js，仅 HTTP API）
+# 启动生产构建（容器 verb: api）— 仅 HTTP API，队列由独立 worker 进程消费
 [group('dev')]
-start:
+api:
     node dist/main.js
 
-# 仅启动 Worker（消费队列，不提供 HTTP）
+# 启动生产构建（容器 verb: worker）— 消费队列与定时任务，不提供 HTTP
 [group('dev')]
-start-worker:
+worker:
     node dist/workers/worker.main.js
 
 # 提交前完整检查（修复并格式化 → 类型 → 密钥 → 架构规则 → 多语言）
@@ -175,7 +175,7 @@ outline *args='':
 cmd *args='--help':
     nest build && node dist/cli.js {{ args }}
 
-# 直接运行生产构建 CLI（要求已 just build / just cmd）
+# 直接运行生产构建 CLI（容器 verb: cli；要求已 just build / just cmd）
 [group('codegen')]
 cli *args='--help':
     node dist/cli.js {{ args }}

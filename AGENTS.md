@@ -14,10 +14,10 @@
 ## 常用命令
 
 ```bash
-just dev          # 开发模式 (单进程内嵌 Worker + watch)
-just dev-all      # 开发模式 (双进程并发 + watch)
-just start-embedded # 生产模式 (单进程内嵌 Worker)
+just dev          # 开发模式 (API + Worker 双进程 + watch)
 just build        # 构建到 dist/
+just api          # 生产构建仅 HTTP API (容器 verb: api)
+just worker       # 生产构建独立 Worker 进程 (容器 verb: worker)
 just type         # tsc --noEmit 类型检查
 just lint         # oxlint 静态检查 (src tests)
 just fix          # oxlint --fix + oxfmt (src tests)
@@ -281,7 +281,7 @@ BullMQ 队列由 `AuthModule → MailJobs` 依赖，CLI 模块也需 `BullModule
 
 - **`.env`**: 本地开发，不入库。
 - **`secret.ini`**: 部署用 VPS/SSH 凭据，`scripts/sync-secrets.sh` 同步到 GitHub Secrets (见 `secret.example.ini`)。
-- **Docker**: 根目录 `Dockerfile` 多阶段构建 (oven/bun:1.4-alpine)，生产镜像不含源码与 devDeps（**故运行时代码不得静态导入 devDependency**），`entrypoint.sh` 分发 `api` / `worker` / `cli` 子命令，镜像默认 `WORKER_EMBEDDED=false`；交付编排：根 `docker-compose.yml` 以 `x-app: &app` 锚点 + `build: .` 启动 `api` 与 `worker` 双服务，`deploy/docker-compose.yml` 以 `include: ../docker-compose.yml` 汇入并聚合 `centrifugo/`、`imgproxy/`、`meilisearch/`、`mosquitto/`、`otelcol/`。容器栈环境变量统一读 `deploy/.env`（service hostname DSN），根 `.env` 仅本地开发。
+- **Docker**: 根目录 `Dockerfile` 多阶段构建 (oven/bun:1.4-alpine)，生产镜像不含源码与 devDeps（**故运行时代码不得静态导入 devDependency**）。进程类型由 `entrypoint.sh` 的 verb 唯一确定（`api` / `worker` / `cli`），**不存在由 env 二次分叉的空间**：`api` 只提供 HTTP，队列消费恒由独立 `worker` 进程承担。交付编排：根 `docker-compose.yml` 以 `x-app: &app` 锚点 + `build: .` 启动 `api` 与 `worker` 双服务，`deploy/docker-compose.yml` 以 `include: ../docker-compose.yml` 汇入并聚合 `centrifugo/`、`imgproxy/`、`meilisearch/`、`mosquitto/`、`otelcol/`。容器栈环境变量统一读 `deploy/.env`（service hostname DSN），根 `.env` 仅本地开发。
 
 ## 易踩坑
 
