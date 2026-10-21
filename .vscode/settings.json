@@ -1,12 +1,69 @@
 {
+  // 基础排版（EOL / 缩进 / 末尾换行 / 行尾空格）统一由根目录 .editorconfig 提供，
+  // 此文件只保留 VS Code 独有配置：formatter、语言服务、搜索排除。
   "files.associations": {
-    "bun.lock": "jsonc"
+    "bun.lock": "jsonc",
+    "justfile": "makefile",
+    "*.hbs": "handlebars",
+    "*.mjml": "xml"
   },
-  "typescript.tsdk": "node_modules/typescript/lib",
-  "[json]": {
-    "editor.defaultFormatter": "vscode.json-language-features"
+  "editor.rulers": [120],
+
+  // ── 保存即格式化与修复（oxfmt + oxlint）──
+  "editor.formatOnSave": true,
+  "editor.defaultFormatter": "oxc.oxc-vscode",
+  "editor.codeActionsOnSave": {
+    "source.fixAll.oxc": "explicit",
+    // 导入排序交给 oxfmt 的 sortImports，避免两条规则互相改写
+    "source.organizeImports": "never"
   },
+  // 兜底关闭：防止全局安装的旧格式化/检查扩展与本仓库契约冲突
+  "prettier.enable": false,
+  "eslint.enable": false,
+  "biome.enabled": false,
+
+  // ── 仅需覆盖默认值的语言 ──
+  "[yaml]": { "editor.defaultFormatter": "redhat.vscode-yaml" },
   "[markdown]": {
-    "editor.defaultFormatter": "rvben.rumdl"
+    "editor.wordWrap": "on",
+    "editor.quickSuggestions": { "comments": "off", "strings": "off", "other": "off" }
+  },
+
+  // ── TypeScript / JavaScript 语言服务（工作区 tsc + @/* 别名优先）──
+  "typescript.tsdk": "node_modules/typescript/lib",
+  "typescript.enablePromptUseWorkspaceTsdk": true,
+  "typescript.preferences.importModuleSpecifier": "non-relative",
+  "typescript.preferences.importModuleSpecifierEnding": "minimal",
+  "typescript.preferences.quoteStyle": "single",
+  "javascript.preferences.quoteStyle": "single",
+  "typescript.updateImportsOnFileMove.enabled": "always",
+  "javascript.updateImportsOnFileMove.enabled": "always",
+  // 非默认行为：补全函数时自动补全括号，写装饰器/服务调用时省一次按键
+  "typescript.suggest.completeFunctionCalls": true,
+  "typescript.preferences.includePackageJsonAutoImports": "auto",
+  "typescript.inlayHints.parameterNames.enabled": "literals",
+
+  // ── 测试与包管理器（Vitest + Bun）──
+  "vitest.enable": true,
+  "vitest.commandLine": "bun x vitest",
+  "npm.packageManager": "bun",
+
+  // ── 搜索与文件监听降噪（构建产物 / 本地缓存 / 运行时存储）──
+  "search.exclude": {
+    "**/dist": true,
+    "**/coverage": true,
+    "**/storage": true,
+    "**/.rumdl_cache": true,
+    "**/.vitest": true,
+    "**/.code-review-graph": true,
+    "bun.lock": true
+  },
+  "files.watcherExclude": {
+    "**/dist/**": true,
+    "**/coverage/**": true,
+    "**/storage/**": true,
+    "**/.rumdl_cache/**": true,
+    "**/.vitest/**": true,
+    "**/.code-review-graph/**": true
   }
 }

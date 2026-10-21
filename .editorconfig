@@ -1,0 +1,21 @@
+# 编辑器排版契约 — 与 oxfmt.config.ts 保持一致（LF / 2 空格 / 末尾换行）
+# 放在仓库根，供 VS Code 之外的编辑器（JetBrains / Zed / Vim）共享同一套基础规则。
+root = true
+
+[*]
+charset = utf-8
+end_of_line = lf
+indent_style = space
+indent_size = 2
+insert_final_newline = true
+trim_trailing_whitespace = true
+
+# Markdown 行尾两个空格是硬换行，不能被裁掉
+[*.md]
+trim_trailing_whitespace = false
+
+[*.{yml,yaml}]
+indent_size = 2
+
+[{Makefile,justfile}]
+indent_style = tab
