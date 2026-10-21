@@ -16,10 +16,8 @@
 ```bash
 just dev          # 开发模式 (API + Worker 双进程 + watch)
 just build        # 构建到 dist/
-just api          # 生产构建仅 HTTP API (容器 verb: api)
-just worker       # 生产构建独立 Worker 进程 (容器 verb: worker)
-just cli serve    # 经 CLI 前门启动 HTTP API（与 just api 同一引导体，别名 server）
-just cli worker   # 经 CLI 前门启动队列 Worker（与 just worker 同一引导体）
+just serve        # 生产构建 HTTP API (CLI 前门: serve，容器默认 CMD)
+just worker       # 生产构建队列 Worker (CLI 前门: worker)
 just type         # tsc --noEmit 类型检查
 just lint         # oxlint 静态检查 (src tests)
 just fix          # oxlint --fix + oxfmt (src tests)
@@ -124,14 +122,14 @@ src/
 ├── schedules/      # 调度声明 (对齐 Laravel routes/console.php)：集中注册定时任务
 │   ├── schedules.module.ts # 聚合所有 *Schedule
 │   └── *.schedule.ts      # 每个定时任务一个文件，挂入 SchedulesModule
-├── workers/        # 独立 Worker 进程 (worker.main.ts)：只消费队列
+├── bootstrap/      # 进程引导体 (server.ts / worker.ts)，仅由 CLI 命令调用
+├── workers/        # Worker 模块 (worker.module.ts)：只消费队列
 ├── setup/          # Fastify 插件、中间件、Swagger/Scalar UI
 │   ├── logger/     # 原生 PinoLoggerService + LoggerModule + 日志流配置
 │   └── otel/       # OpenTelemetry NodeSDK 初始化 (traces + metrics → OTLP)
 ├── app.module.ts   # 主模块
 ├── cli.module.ts   # CLI 入口模块
-├── cli.ts          # CLI bootstrap
-└── main.ts         # HTTP bootstrap
+└── cli.ts          # 唯一启动前门 (serve / worker / 一次性命令)
 deploy/             # 统一交付与运维编排 (Docker 容器编排 app/centrifugo/... + Helm Kubernetes Chart)
 storage/            # 运行时数据 (cache/tmp/uploads，git 忽略内容)
 tests/
@@ -283,7 +281,7 @@ BullMQ 队列由 `AuthModule → MailJobs` 依赖，CLI 模块也需 `BullModule
 
 - **`.env`**: 本地开发，不入库。
 - **`secret.ini`**: 部署用 VPS/SSH 凭据，`scripts/sync-secrets.sh` 同步到 GitHub Secrets (见 `secret.example.ini`)。
-- **Docker**: 根目录 `Dockerfile` 多阶段构建 (oven/bun:1.4-alpine)，生产镜像不含源码与 devDeps（**故运行时代码不得静态导入 devDependency**）。进程类型由 `entrypoint.sh` 的 verb 唯一确定（`api` / `worker` / `cli`），**不存在由 env 二次分叉的空间**：`api` 只提供 HTTP，队列消费恒由独立 `worker` 进程承担。交付编排：根 `docker-compose.yml` 以 `x-app: &app` 锚点 + `build: .` 启动 `api` 与 `worker` 双服务，`deploy/docker-compose.yml` 以 `include: ../docker-compose.yml` 汇入并聚合 `centrifugo/`、`imgproxy/`、`meilisearch/`、`mosquitto/`、`otelcol/`。容器栈环境变量统一读 `deploy/.env`（service hostname DSN），根 `.env` 仅本地开发。
+- **Docker**: 根目录 `Dockerfile` 多阶段构建 (oven/bun:1.4-alpine)，生产镜像不含源码与 devDeps（**故运行时代码不得静态导入 devDependency**）。启动前门统一为 `dist/cli.js`：`entrypoint.sh` 的 verb（`serve` / `worker` / `cli`）全部转发到同一 CLI 命令，**不存在由 env 二次分叉的空间**：`serve` 只提供 HTTP，队列消费恒由独立 `worker` 进程承担。交付编排：根 `docker-compose.yml` 以 `x-app: &app` 锚点 + `build: .` 启动 `api` 与 `worker` 双服务，`deploy/docker-compose.yml` 以 `include: ../docker-compose.yml` 汇入并聚合 `centrifugo/`、`imgproxy/`、`meilisearch/`、`mosquitto/`、`otelcol/`。容器栈环境变量统一读 `deploy/.env`（service hostname DSN），根 `.env` 仅本地开发。
 
 ## 易踩坑
 

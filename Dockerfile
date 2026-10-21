@@ -86,4 +86,4 @@ EXPOSE 4400
 STOPSIGNAL SIGTERM
 
 ENTRYPOINT ["/sbin/tini", "--", "entrypoint.sh"]
-CMD ["api"]
+CMD ["serve"]

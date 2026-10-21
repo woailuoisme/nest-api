@@ -23,22 +23,22 @@
 
 ## 🧱 技术栈
 
-| 层次 | 选型与技术 | 说明 |
-| :--- | :--- | :--- |
-| **运行时** | Bun ≥ 1.2 + Node ≥ 24 | 纯 ESM (`"type": "module"`)，安装与执行高效可复现 |
-| **核心框架** | NestJS 12 + Fastify 5 | 极速底层 HTTP 驱动，避免 Express 性能瓶颈 |
-| **持久层** | Drizzle ORM 0.45 + PostgreSQL 18 | 原生 `uuidv7()` 主键，多文件模块化 Schema 与原生 DDL |
-| **认证授权** | Better Auth 1.7+ | 14+ 插件全家桶，集成本地凭据、OAuth、Passkey 与 2FA |
-| **缓存队列** | Redis 6+ + BullMQ | 分布式排他锁、穿透缓存与异步任务队列 |
-| **实时中枢** | Centrifugo 6+ | 纯粹无状态实时发布中枢，支持 WebSocket / SSE |
-| **全文检索** | Meilisearch / Noop | Laravel Scout 风格驱动抽象，模型属性映射与队列异步同步 |
-| **物联通信** | MQTT 5.0 (Mosquitto) | 工业物联网与遥测指令总线，声明式注解订阅 |
-| **媒体处理** | imgproxy + Sharp-free 工具链 | JIT 实时动态渲染、纯 JS 元数据提取、矢量二维码 |
-| **数据校验** | Zod 4 + Standard Schema | Nest 12 原生 Standard Schema 校验通道与白名单序列化 |
-| **API 文档** | OpenAPI 3.1 + Scalar UI | 客户端、管理后台与认证专有三份独立隔离交互文档 |
-| **代码质量** | oxlint + oxfmt + Gitleaks | 毫秒级 Lint、代码格式化与凭据泄漏防护 |
-| **测试套件** | Vitest 5 | 高速单元测试与 E2E 端到端集成测试 |
-| **任务编排** | Just (justfile) | 统一声明式命令入口，消除长参数脚本记忆成本 |
+| 层次         | 选型与技术                       | 说明                                                   |
+| :----------- | :------------------------------- | :----------------------------------------------------- |
+| **运行时**   | Bun ≥ 1.2 + Node ≥ 24            | 纯 ESM (`"type": "module"`)，安装与执行高效可复现      |
+| **核心框架** | NestJS 12 + Fastify 5            | 极速底层 HTTP 驱动，避免 Express 性能瓶颈              |
+| **持久层**   | Drizzle ORM 0.45 + PostgreSQL 18 | 原生 `uuidv7()` 主键，多文件模块化 Schema 与原生 DDL   |
+| **认证授权** | Better Auth 1.7+                 | 14+ 插件全家桶，集成本地凭据、OAuth、Passkey 与 2FA    |
+| **缓存队列** | Redis 6+ + BullMQ                | 分布式排他锁、穿透缓存与异步任务队列                   |
+| **实时中枢** | Centrifugo 6+                    | 纯粹无状态实时发布中枢，支持 WebSocket / SSE           |
+| **全文检索** | Meilisearch / Noop               | Laravel Scout 风格驱动抽象，模型属性映射与队列异步同步 |
+| **物联通信** | MQTT 5.0 (Mosquitto)             | 工业物联网与遥测指令总线，声明式注解订阅               |
+| **媒体处理** | imgproxy + Sharp-free 工具链     | JIT 实时动态渲染、纯 JS 元数据提取、矢量二维码         |
+| **数据校验** | Zod 4 + Standard Schema          | Nest 12 原生 Standard Schema 校验通道与白名单序列化    |
+| **API 文档** | OpenAPI 3.1 + Scalar UI          | 客户端、管理后台与认证专有三份独立隔离交互文档         |
+| **代码质量** | oxlint + oxfmt + Gitleaks        | 毫秒级 Lint、代码格式化与凭据泄漏防护                  |
+| **测试套件** | Vitest 5                         | 高速单元测试与 E2E 端到端集成测试                      |
+| **任务编排** | Just (justfile)                  | 统一声明式命令入口，消除长参数脚本记忆成本             |
 
 ---
 
@@ -66,9 +66,10 @@
     ├── jobs/          # 异步队列契约与消费者 (mail, media, search, token-cleanup)
     ├── schedules/     # 集中式定时任务调度声明
     ├── setup/         # Fastify 插件、中间件管道、原生 Pino 日志与 Scalar 文档挂载
-    ├── workers/       # 独立 Worker 进程入口 (消费队列与运行调度器)
+    ├── bootstrap/     # 进程引导体 (server / worker)，由 CLI 命令调用
+    ├── workers/       # Worker 模块 (worker.module.ts，只消费队列)
     ├── app.module.ts  # 主 HTTP 模块
-    └── main.ts        # HTTP bootstrap 入口
+    └── cli.ts         # 唯一启动前门 (serve / worker / 一次性命令)
 ```
 
 ---
@@ -128,16 +129,16 @@ just dev
 
 服务成功启动后，可通过以下端口与路径直接访问：
 
-| 服务 / 控制台 | 访问地址 | 默认凭据 / 说明 |
-| :--- | :--- | :--- |
-| **客户端 API 文档 (Scalar)** | `http://localhost:4300/docs` | 客户端公共业务接口与在线调试 |
-| **管理后台 API 文档 (Scalar)** | `http://localhost:4300/docs/admin` | 管理后台自包含领域接口（带 `/v1/admin` 前缀） |
-| **Better Auth 认证 API 文档** | `http://localhost:4300/docs/auth` | 14+ 认证插件全量端点参考手册 |
-| **云原生就绪探针 (Readiness)** | `http://localhost:4300/readyz` | 实时检测 DB、Redis、实时、搜索、存储等依赖健康与停机状态 |
-| **云原生存活探针 (Liveness)** | `http://localhost:4300/livez` | 快速返回 200 ok，用于容器/Pod 存活检测 |
-| **Prometheus 监控指标** | `http://localhost:4300/metrics` | 生产级 Prometheus 格式指标输出 |
-| **Centrifugo 实时管理控制台** | `http://localhost:8000` | 实时连接、频道订阅与广播监控 |
-| **Mailpit 本地邮件测试控制台** | `http://localhost:8025` | 捕获并直观查看系统外发的邮件模板 |
+| 服务 / 控制台                  | 访问地址                           | 默认凭据 / 说明                                          |
+| :----------------------------- | :--------------------------------- | :------------------------------------------------------- |
+| **客户端 API 文档 (Scalar)**   | `http://localhost:4300/docs`       | 客户端公共业务接口与在线调试                             |
+| **管理后台 API 文档 (Scalar)** | `http://localhost:4300/docs/admin` | 管理后台自包含领域接口（带 `/v1/admin` 前缀）            |
+| **Better Auth 认证 API 文档**  | `http://localhost:4300/docs/auth`  | 14+ 认证插件全量端点参考手册                             |
+| **云原生就绪探针 (Readiness)** | `http://localhost:4300/readyz`     | 实时检测 DB、Redis、实时、搜索、存储等依赖健康与停机状态 |
+| **云原生存活探针 (Liveness)**  | `http://localhost:4300/livez`      | 快速返回 200 ok，用于容器/Pod 存活检测                   |
+| **Prometheus 监控指标**        | `http://localhost:4300/metrics`    | 生产级 Prometheus 格式指标输出                           |
+| **Centrifugo 实时管理控制台**  | `http://localhost:8000`            | 实时连接、频道订阅与广播监控                             |
+| **Mailpit 本地邮件测试控制台** | `http://localhost:8025`            | 捕获并直观查看系统外发的邮件模板                         |
 
 ---
 
@@ -147,11 +148,11 @@ just dev
 
 执行 `just db-seed` 后，系统会自动装配初始测试账号：
 
-| 角色标识 | 邮箱 | 初始密码 | 角色说明 |
-| :--- | :--- | :--- | :--- |
-| `SUPER_ADMIN` | `admin@example.com` | `admin123456` | 超级管理员，具备全量管理与系统配置权限 |
-| `OPERATOR` | `operator@example.com` | `operator123456` | 运营管理员，具备常规业务运维与审计权限 |
-| `USER` | `user@nestforge.dev` | `password123` | 固定测试普通用户（同时会生成 100 位随机用户） |
+| 角色标识      | 邮箱                   | 初始密码         | 角色说明                                      |
+| :------------ | :--------------------- | :--------------- | :-------------------------------------------- |
+| `SUPER_ADMIN` | `admin@example.com`    | `admin123456`    | 超级管理员，具备全量管理与系统配置权限        |
+| `OPERATOR`    | `operator@example.com` | `operator123456` | 运营管理员，具备常规业务运维与审计权限        |
+| `USER`        | `user@nestforge.dev`   | `password123`    | 固定测试普通用户（同时会生成 100 位随机用户） |
 
 ### 统一角色与细粒度权限
 
@@ -174,13 +175,13 @@ just dev
 
 同一个镜像承载三种进程类型，由 `entrypoint.sh` 的 verb 唯一确定（不存在由 env 二次决定的空间）：
 
-| verb | 本地命令 | 容器命令 | 用途 |
-| :--- | :--- | :--- | :--- |
-| `api` | `just api` | 默认（`CMD ["api"]`） | HTTP API，队列由独立 worker 消费 |
+| verb     | 本地命令          | 容器命令                     | 用途                                    |
+| :------- | :---------------- | :--------------------------- | :-------------------------------------- |
+| `serve` | `just serve` | 默认（`CMD ["serve"]`） | HTTP API，队列由独立 worker 消费 |
 | `worker` | `just worker` | `command: ["worker"]` | 消费队列与定时任务，不提供 HTTP |
 | `cli` | `just cli <命令>` | `command: ["cli", "<命令>"]` | 一次性 CLI，如 `route:list` / `db:seed` |
 
-> 长驻进程也可经 CLI 前门启动：`just cli serve` 等同容器 `api`（别名 `server`），`just cli worker` 等同 `worker`。两者与 `main.ts` / `workers/worker.main.ts` 共用 `src/bootstrap/` 的引导体，行为与优雅停机语义一致。
+> 启动前门统一为 `dist/cli.js`：容器 verb 与本地 `just` 均落到同一 CLI 命令（`serve` 含别名 `server`），引导体集中在 `src/bootstrap/`；`src/main.ts` / `src/workers/worker.main.ts` 历史入口已删除。
 
 ```bash
 # --- 开发与运行 ---

@@ -11,25 +11,25 @@ set dotenv-load
 default:
     @just --list
 
-# 启动开发服务器（API + Worker 双进程，watch 模式）
+# 启动开发服务器（API + Worker 双进程，watch 模式；两个进程均经 CLI 前门启动）
 [group('dev')]
 dev:
-    kill -9 $(lsof -ti:${PORT:-4300} 2>/dev/null) 2>/dev/null || true; concurrently -k -n app,worker -c bgBlue.bold,bgMagenta.bold -p "[{name}]" -t "HH:mm:ss" "nest start --watch" "nest start --entryFile workers/worker.main --watch"
+    kill -9 $(lsof -ti:${PORT:-4300} 2>/dev/null) 2>/dev/null || true; concurrently -k -n app,worker -c bgBlue.bold,bgMagenta.bold -p "[{name}]" -t "HH:mm:ss" "nest start --watch --entryFile cli -- serve" "nest start --watch --entryFile cli -- worker"
 
 # 构建生产产物（SWC）
 [group('dev')]
 build:
     nest build
 
-# 启动生产构建（容器 verb: api）— 仅 HTTP API，队列由独立 worker 进程消费
+# 启动生产构建（CLI 前门 serve）— 仅 HTTP API，队列由独立 worker 进程消费
 [group('dev')]
-api:
-    node dist/main.js
+serve:
+    node dist/cli.js serve
 
-# 启动生产构建（容器 verb: worker）— 消费队列与定时任务，不提供 HTTP
+# 启动生产构建（CLI 前门 worker）— 消费队列与定时任务，不提供 HTTP
 [group('dev')]
 worker:
-    node dist/workers/worker.main.js
+    node dist/cli.js worker
 
 # 提交前完整检查（修复并格式化 → 类型 → 密钥 → 架构规则 → 多语言）
 [group('quality')]

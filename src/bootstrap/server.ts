@@ -8,7 +8,7 @@ import { setupTimezone } from '@/config/timezone';
 import { createFastifyAdapter, PinoLoggerService, setupApplicationPipeline, setupShutdownHooks } from '@/setup';
 
 /**
- * HTTP API 引导体 — `main.ts` 与 CLI `serve` 共用，保证两种入口行为完全一致。
+ * HTTP API 引导体 — 唯一入口是 CLI 命令 `serve`（`just serve` / 容器 verb `serve` 同源）。
  *
  * 失败必须以非零码退出：否则编排器会看到一个「健康」但永不服务的容器。
  */

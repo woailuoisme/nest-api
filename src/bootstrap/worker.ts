@@ -7,7 +7,7 @@ import { PinoLoggerService } from '@/setup/logger/pino-logger.service';
 import { WorkerModule } from '../workers/worker.module';
 
 /**
- * Worker 引导体 — `workers/worker.main.ts` 与 CLI `worker` 共用。
+ * Worker 引导体 — 唯一入口是 CLI 命令 `worker`（`just worker` / 容器 verb `worker` 同源）。
  *
  * 创建纯应用上下文（无 HTTP），消费 BullMQ 队列并运行定时任务；
  * 失败同样必须非零退出，避免队列长期无人消费而告警沉默。

@@ -159,25 +159,9 @@ describe('logger.config', () => {
       expect(getStreamFd(logger)).toBeUndefined();
     });
 
-    it('worker 入口应标记为 service=worker（守住 argv → service 的映射）', async () => {
+    it('按 CLI verb 判定 service：worker → worker，serve → api（守住 argv → service 的映射）', async () => {
       vi.stubEnv('APP_ENV', 'production');
-      const originalEntry = process.argv[1];
-      process.argv[1] = '/app/dist/workers/worker.main.js';
-
-      try {
-        const logger = await createPinoLogger();
-
-        expect(getChindings(logger)).toContain('"service":"worker"');
-      } finally {
-        process.argv[1] = originalEntry;
-      }
-    });
-
-    it('CLI 长驻进程按 verb 判定角色：cli worker → worker，cli serve → api', async () => {
-      vi.stubEnv('APP_ENV', 'production');
-      const originalEntry = process.argv[1];
       const originalVerb = process.argv[2];
-      process.argv[1] = '/app/dist/cli.js';
 
       try {
         process.argv[2] = 'worker';
@@ -186,7 +170,6 @@ describe('logger.config', () => {
         process.argv[2] = 'serve';
         expect(getChindings(await createPinoLogger())).toContain('"service":"api"');
       } finally {
-        process.argv[1] = originalEntry;
         if (originalVerb === undefined) {
           delete process.argv[2];
         } else {

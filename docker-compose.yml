@@ -10,17 +10,17 @@ x-app: &app
   logging:
     driver: json-file
     options:
-      max-size: "10m"
-      max-file: "3"
+      max-size: '10m'
+      max-file: '3'
 
 services:
   api:
     <<: *app
     container_name: api
     ports:
-      - "4400:4400"
+      - '4400:4400'
     healthcheck:
-      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:4400/livez || exit 1"]
+      test: ['CMD-SHELL', 'wget -qO- http://127.0.0.1:4400/livez || exit 1']
       interval: 30s
       timeout: 3s
       retries: 3
@@ -29,8 +29,8 @@ services:
   worker:
     <<: *app
     container_name: worker
-    # 独立队列消费进程 (entrypoint.sh worker → dist/workers/worker.main.js)
-    command: ["worker"]
+    # 独立队列消费进程 (entrypoint.sh worker → dist/cli.js worker)
+    command: ['worker']
 
 networks:
   backend:

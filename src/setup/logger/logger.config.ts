@@ -1,6 +1,5 @@
 import type { IncomingMessage } from 'node:http';
 import { hostname } from 'node:os';
-import { basename } from 'node:path';
 import { Writable } from 'node:stream';
 
 import { context, trace } from '@opentelemetry/api';
@@ -88,14 +87,12 @@ export function redactUrl(url?: string): string {
 /**
  * 进程角色标识（api / worker）。
  *
- * 生产 JSON 日志是唯一留存通道，且 api 与独立 worker 进程产出完全同构的 JSON；
- * 采集端需要 `service` 字段区分来源。独立 worker 的入口是 `dist/workers/worker.main.js`（见 justfile `worker` / 容器 verb `worker`）。
+ * 生产 JSON 日志是唯一留存通道，且 api 与 worker 进程产出完全同构的 JSON；
+ * 采集端需要 `service` 字段区分来源。启动前门已统一为 CLI，故按 verb 判定：
+ * `cli worker`（含 `nest start --entryFile cli -- worker`）为 worker，其余为 api。
  */
 export function resolveServiceName(): string {
-  const entry = basename(process.argv[1] ?? '');
-  // CLI 长驻进程（cli.js worker）与独立 worker 入口同等对待，
-  // 否则采集端会把队列进程误标为 api，service 维度聚合失真
-  return entry.startsWith('worker.main') || process.argv[2] === 'worker' ? 'worker' : 'api';
+  return process.argv[2] === 'worker' ? 'worker' : 'api';
 }
 
 /**

@@ -38,16 +38,20 @@ describe('entrypoint.sh 分发契约', () => {
     rmSync(stubDir, { recursive: true, force: true });
   });
 
-  it('api → bun run dist/main.js', () => {
-    expect(dispatch(['api'])).toBe('run dist/main.js');
+  it('serve → bun run dist/cli.js serve', () => {
+    expect(dispatch(['serve'])).toBe('run dist/cli.js serve');
   });
 
-  it('无参数（CMD 默认）→ 等同 api', () => {
-    expect(dispatch([])).toBe('run dist/main.js');
+  it('无参数（CMD 默认）→ 等同 serve', () => {
+    expect(dispatch([])).toBe('run dist/cli.js serve');
   });
 
-  it('worker → bun run dist/workers/worker.main.js', () => {
-    expect(dispatch(['worker'])).toBe('run dist/workers/worker.main.js');
+  it('worker → bun run dist/cli.js worker', () => {
+    expect(dispatch(['worker'])).toBe('run dist/cli.js worker');
+  });
+
+  it('已删除的 api verb 不再被识别（避免历史入口回流）', () => {
+    expect(() => dispatch(['api'])).toThrow();
   });
 
   it('cli 透传子命令 → bun run dist/cli.js route:list', () => {

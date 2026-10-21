@@ -7,16 +7,16 @@ if [ "${1#-}" != "$1" ]; then
 fi
 
 case "$1" in
-  api|"")
-    # 默认启动 HTTP API 服务
-    exec bun run dist/main.js
+  serve|"")
+    # 默认启动 HTTP API 服务（CLI 前门：cli serve）
+    exec bun run dist/cli.js serve
     ;;
   worker)
-    # 独立异步队列 Worker 消费进程
-    exec bun run dist/workers/worker.main.js
+    # 独立异步队列 Worker 消费进程（CLI 前门：cli worker）
+    exec bun run dist/cli.js worker
     ;;
   cli)
-    # 生产 CLI 工具（如 cli route:list, cli db:seed）
+    # 透传 CLI 子命令（如 cli route:list, cli db:seed）
     shift
     exec bun run dist/cli.js "$@"
     ;;
