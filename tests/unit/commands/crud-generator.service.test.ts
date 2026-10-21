@@ -94,7 +94,7 @@ describe('CrudGeneratorService', () => {
 
       expect(result.fieldDefs).toBeNull();
       expect(result.errors.length).toBeGreaterThan(0);
-      expect(result.errors[0]).toContain('不存在');
+      expect(result.errors[0]).toContain('not found');
     });
 
     it('当 schema 存在但表名不存在时应返回错误', () => {
@@ -102,7 +102,7 @@ describe('CrudGeneratorService', () => {
 
       expect(result.fieldDefs).toBeNull();
       expect(result.errors.length).toBeGreaterThan(0);
-      expect(result.errors[0]).toContain('未找到表定义');
+      expect(result.errors[0]).toContain('Table definition not found');
     });
   });
 
@@ -140,7 +140,7 @@ describe('CrudGeneratorService', () => {
 
       const conflicts = service.detectConflicts(tempDir, ctx);
       expect(conflicts.length).toBeGreaterThan(0);
-      expect(conflicts[0]).toContain('拒绝覆盖');
+      expect(conflicts[0]).toContain('refusing to overwrite');
 
       // 清理测试临时文件
       rmSync(tempDir, { recursive: true, force: true });

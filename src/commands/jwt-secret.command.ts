@@ -5,6 +5,8 @@ import { dirname, resolve } from 'node:path';
 import { Injectable } from '@nestjs/common';
 import { Command, CommandRunner, Option } from 'nest-commander';
 
+import { upsertEnvValue } from './utils/env-file.util';
+
 interface JwtSecretCommandOptions {
   show?: boolean;
   env?: string;
@@ -32,9 +34,9 @@ export class JwtSecretCommand extends CommandRunner {
       content = readFileSync(targetPath, 'utf8');
     }
 
-    content = this.updateOrAppendEnv(content, 'BETTER_AUTH_SECRET', betterAuthSecret);
-    content = this.updateOrAppendEnv(content, 'JWT_ACCESS_SECRET', accessSecret);
-    content = this.updateOrAppendEnv(content, 'JWT_REFRESH_SECRET', refreshSecret);
+    content = upsertEnvValue(content, 'BETTER_AUTH_SECRET', betterAuthSecret);
+    content = upsertEnvValue(content, 'JWT_ACCESS_SECRET', accessSecret);
+    content = upsertEnvValue(content, 'JWT_REFRESH_SECRET', refreshSecret);
 
     mkdirSync(dirname(targetPath), { recursive: true });
     writeFileSync(targetPath, content, 'utf8');
@@ -63,17 +65,5 @@ export class JwtSecretCommand extends CommandRunner {
   })
   parseEnv(val: string): string {
     return val;
-  }
-
-  private updateOrAppendEnv(content: string, key: string, value: string): string {
-    const regex = new RegExp(`^${key}=.*$`, 'm');
-    const newLine = `${key}=${value}`;
-
-    if (regex.test(content)) {
-      return content.replace(regex, newLine);
-    }
-
-    const prefix = content && !content.endsWith('\n') ? '\n' : '';
-    return `${content}${prefix}${newLine}\n`;
   }
 }

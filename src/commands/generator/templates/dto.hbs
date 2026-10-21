@@ -3,7 +3,7 @@ import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { z } from 'zod';
 import { PageOptionsSchema, paginatedEnvelopeSchema } from '@/common/dto/pagination.dto';
 
-// ─── 请求 DTO Schemas（Nest 12 原生 Standard Schema：schema 即契约，类型由 z.infer 派生）──
+// ─── Request DTO schemas (Nest 12 native Standard Schema: the schema IS the contract, types derived via z.infer) ──
 
 export const Create{{FeatureName}}Schema = z.object({
 {{#each createFields}}
@@ -15,7 +15,7 @@ export type Create{{FeatureName}}Request = z.infer<typeof Create{{FeatureName}}S
 
 export const Find{{FeatureName}}sSchema = PageOptionsSchema.extend({
 {{#if searchFields.length}}
-  search: z.string().optional().describe('搜索关键词'),
+  search: z.string().optional().describe('Search keyword'),
 {{/if}}
 {{#each filterFields}}
   {{name}}: {{{zodFilterValidation}}},
@@ -28,19 +28,19 @@ export const Update{{FeatureName}}Schema = Create{{FeatureName}}Schema.partial()
 
 export type Update{{FeatureName}}Request = z.infer<typeof Update{{FeatureName}}Schema>;
 
-// ─── 输出契约与响应实体 ────────────────────────────────────
+// ─── Output contracts and response entity ─────────────────
 
-/** 资源输出契约：同时驱动运行时序列化（@SerializeOptions）与 OpenAPI 响应文档 */
+/** Resource output contract: drives runtime serialization (@SerializeOptions) and OpenAPI response docs */
 export const {{FeatureName}}ResourceSchema = z.object({
   id: z.string().describe('{{FeatureName}} ID'),
 {{#each fields}}
   {{name}}: {{{zodResponseValidation}}},
 {{/each}}
-  createdAt: z.date().describe('创建时间'),
-  updatedAt: z.date().describe('更新时间'),
+  createdAt: z.date().describe('Created at'),
+  updatedAt: z.date().describe('Updated at'),
 });
 
-/** 分页列表输出契约（{ items, meta } 信封） */
+/** Paginated list output contract ({ items, meta } envelope) */
 export const {{FeatureName}}PageResourceSchema = paginatedEnvelopeSchema({{FeatureName}}ResourceSchema);
 
 export class {{FeatureName}}Entity {
@@ -53,10 +53,10 @@ export class {{FeatureName}}Entity {
   {{name}}: {{tsType}}{{#if isOptional}} | null{{/if}};
 {{/each}}
 
-  @ApiProperty({ example: '2024-01-15T10:30:00.000Z', description: '创建时间' })
+  @ApiProperty({ example: '2024-01-15T10:30:00.000Z', description: 'Created at' })
   createdAt: Date;
 
-  @ApiProperty({ example: '2024-01-15T10:30:00.000Z', description: '更新时间' })
+  @ApiProperty({ example: '2024-01-15T10:30:00.000Z', description: 'Updated at' })
   updatedAt: Date;
 
   constructor(partial: Partial<{{FeatureName}}Entity>) {

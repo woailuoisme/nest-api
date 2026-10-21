@@ -17,10 +17,11 @@ import {
   TIMESTAMP_TYPES,
   VARCHAR_TYPES,
 } from './field-mappings';
-import { buildApiProperty, escapeTsString, pluralize, toCamelCase, toPascalCase, toSnakeCase } from './string.utils';
+import { buildApiProperty } from './swagger.snippet';
 import type { FieldDef, FieldType, ModuleScope, TemplateContext, TemplateField } from './types';
+import { escapeTsString, pluralize, toCamelCase, toPascalCase, toSnakeCase } from './utils/string.util';
 
-// ─── Handlebars Helper 幂等注册 ─────────────────────────
+// ─── Idempotent Handlebars helper registration ──────────────────
 
 Handlebars.registerHelper('PascalCase', (str: string) => {
   return str ? str.charAt(0).toUpperCase() + str.slice(1) : '';
@@ -72,13 +73,13 @@ export interface RenderedArtifact {
 }
 
 /**
- * 纯内存模板渲染引擎 (Pure Transformation Engine)
+ * Pure in-memory template rendering engine (Pure Transformation Engine)
  *
- * 接收字段定义与上下文，返回内存中的渲染产物，零磁盘 I/O 依赖，极易单测。
+ * Takes field definitions and a context, returns in-memory rendered artifacts with zero disk I/O — trivially unit-testable.
  */
 export const TemplateRenderer = {
   /**
-   * 构建 Handlebars 上下文对象
+   * Build the Handlebars context object
    */
   buildContext(name: string, fieldDefs: FieldDef[], scope: ModuleScope = 'admin'): TemplateContext {
     const featureName = toCamelCase(name);
@@ -123,7 +124,7 @@ export const TemplateRenderer = {
   },
 
   /**
-   * 构建模板字段数组
+   * Build the template field array
    */
   buildTemplateFields(fieldDefs: FieldDef[]): TemplateField[] {
     return fieldDefs.map((f) => {
@@ -133,7 +134,7 @@ export const TemplateRenderer = {
       const tsType = cfg.tsType;
       const isOptional = f.required === false;
 
-      // 可选字段去掉 .notNull()
+      // optional fields drop .notNull()
       const drizzleType = isOptional
         ? cfg.drizzle.replace('%s', dbColumnName).replace('.notNull()', '')
         : cfg.drizzle.replace('%s', dbColumnName);
@@ -148,10 +149,10 @@ export const TemplateRenderer = {
 
       let zodFilterValidation = FILTER_ZOD_VALIDATORS[f.type] ?? 'z.string().optional()';
       if (description) {
-        zodFilterValidation += `.describe('搜索 ${escapeTsString(description)}')`;
+        zodFilterValidation += `.describe('Search ${escapeTsString(description)}')`;
       }
 
-      // 响应资源 schema：输出类型（无输入约束），可选列在实体上为 null
+      // response resource schema: output type (no input constraints); optional columns are null on the entity
       let zodResponseValidation = RESPONSE_ZOD_VALIDATORS[f.type] ?? 'z.string()';
       if (isOptional) {
         zodResponseValidation += '.nullable()';
@@ -180,7 +181,7 @@ export const TemplateRenderer = {
   },
 
   /**
-   * 渲染所有模板产物为内存字符串数组
+   * Render all template artifacts into in-memory strings
    */
   renderAll(tmplDir: string, ctx: TemplateContext): RenderedArtifact[] {
     const artifacts: RenderedArtifact[] = [];

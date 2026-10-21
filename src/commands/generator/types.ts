@@ -1,4 +1,4 @@
-/** 用户输入的原始字段定义 */
+/** Raw field definitions as provided by the user */
 export interface FieldDef {
   name: string;
   type: FieldType;
@@ -6,13 +6,13 @@ export interface FieldDef {
   required?: boolean;
 }
 
-/** 模块作用域：后台管理面 (admin) | 客户端业务面 (client) */
+/** Module scope: back-office (admin) | client-facing (client) */
 export type ModuleScope = 'admin' | 'client';
 
-/** 支持的字段类型 */
+/** Supported field types */
 export type FieldType = 'string' | 'email' | 'number' | 'float' | 'boolean' | 'text' | 'date';
 
-/** nest-commander 解析后的命令选项 */
+/** Command options parsed by nest-commander */
 export interface CommandOptions {
   name: string;
   scope?: ModuleScope;
@@ -22,7 +22,7 @@ export interface CommandOptions {
   delete?: boolean;
 }
 
-/** 传递给 Handlebars 模板的单个字段上下文 */
+/** Single field context passed to the Handlebars templates */
 export interface TemplateField {
   name: string;
   type: string;
@@ -35,13 +35,13 @@ export interface TemplateField {
   responseApiProperty: string;
   zodValidation: string;
   zodFilterValidation: string;
-  /** 响应资源 schema 校验器（输出类型，无输入约束） */
+  /** Response resource schema validator (output type, no input constraints) */
   zodResponseValidation: string;
   mockValue: string;
   createMockValue: string;
 }
 
-/** 传递给 Handlebars 模板的完整上下文 */
+/** Full context passed to the Handlebars templates */
 export interface TemplateContext {
   featureName: string;
   FeatureName: string;

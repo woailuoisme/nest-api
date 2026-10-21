@@ -153,7 +153,7 @@ export class RouteListCommand extends CommandRunner {
         const controllerName = controller.metatype.name;
         const actionStr = `${controllerName}#${methodName}`;
 
-        // NestJS 版本元数据：方法级优先，降级取 Controller 级，再降级默认 '1'
+        // NestJS version metadata: method-level wins, falls back to controller-level, then '1'
         const methodVersion = this.reflector.get<string | string[] | symbol | undefined>(
           VERSION_METADATA,
           targetCallback,
@@ -199,7 +199,7 @@ export class RouteListCommand extends CommandRunner {
       const prefix = excluded === '/' ? '/' : `/${excluded}`;
       return combined === prefix || combined.startsWith(`${prefix}/`);
     });
-    // VERSION_NEUTRAL 路由不添加版本前缀（如 /broadcasting/auth）
+    // VERSION_NEUTRAL routes get no version prefix (e.g. /broadcasting/auth)
     const isVersionNeutral = version === VERSION_NEUTRAL;
     if (!isExcluded && !isVersionNeutral) {
       combined = `/v1${combined}`;
@@ -241,9 +241,12 @@ export class RouteListCommand extends CommandRunner {
       return str + ' '.repeat(Math.max(0, length - actualLen));
     };
 
-    const topBorder = `┌${'─'.repeat(colWidths[0] + 2)}┬${'─'.repeat(colWidths[1] + 2)}┬${'─'.repeat(colWidths[2] + 2)}┬${'─'.repeat(colWidths[3] + 2)}┐`;
-    const midBorder = `├${'─'.repeat(colWidths[0] + 2)}┼${'─'.repeat(colWidths[1] + 2)}┼${'─'.repeat(colWidths[2] + 2)}┼${'─'.repeat(colWidths[3] + 2)}┤`;
-    const bottomBorder = `└${'─'.repeat(colWidths[0] + 2)}┴${'─'.repeat(colWidths[1] + 2)}┴${'─'.repeat(colWidths[2] + 2)}┴${'─'.repeat(colWidths[3] + 2)}┘`;
+    const rowSeparator = (left: string, middle: string, right: string) =>
+      `${left}${colWidths.map((width) => '─'.repeat(width + 2)).join(middle)}${right}`;
+
+    const topBorder = rowSeparator('┌', '┬', '┐');
+    const midBorder = rowSeparator('├', '┼', '┤');
+    const bottomBorder = rowSeparator('└', '┴', '┘');
 
     const headerLine = `│ ${BOLD}${pad(headers[0], colWidths[0])}${RESET_COLOR} │ ${BOLD}${pad(headers[1], colWidths[1])}${RESET_COLOR} │ ${BOLD}${pad(headers[2], colWidths[2])}${RESET_COLOR} │ ${BOLD}${pad(headers[3], colWidths[3])}${RESET_COLOR} │`;
 

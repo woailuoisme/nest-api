@@ -37,42 +37,42 @@ import { {{FeatureName}}Service } from './{{featureName}}.service';
 export class {{FeatureName}}Controller {
   constructor(private readonly {{featureName}}Service: {{FeatureName}}Service) {}
 
-  // TODO: 在 permissions.ts 添加 {{FeatureName}}Create 后，取消注释下行
+  // TODO: after adding {{FeatureName}}Create to permissions.ts, uncomment the line below
   // @Permissions(Permission.{{FeatureName}}Create)
   @Post()
   @HttpCode(HttpStatus.CREATED)
-  @ApiOperation({ summary: '创建{{description}}' })
-  @ApiSuccessResponse({{FeatureName}}ResourceSchema, { status: 201, description: '创建成功' })
+  @ApiOperation({ summary: 'Create {{description}}' })
+  @ApiSuccessResponse({{FeatureName}}ResourceSchema, { status: 201, description: 'Created successfully' })
   @SerializeOptions({ schema: {{FeatureName}}ResourceSchema })
   create(@Body({ schema: Create{{FeatureName}}Schema }) dto: Create{{FeatureName}}Request) {
     return this.{{featureName}}Service.create(dto);
   }
 
-  // TODO: 在 permissions.ts 添加 {{FeatureName}}Read 后，取消注释下行
+  // TODO: after adding {{FeatureName}}Read to permissions.ts, uncomment the line below
   // @Permissions(Permission.{{FeatureName}}Read)
   @Get()
-  @ApiOperation({ summary: '{{description}}列表' })
-  @ApiPageResponse({{FeatureName}}ResourceSchema, { description: '{{description}}列表' })
+  @ApiOperation({ summary: '{{description}} list' })
+  @ApiPageResponse({{FeatureName}}ResourceSchema, { description: '{{description}} list' })
   @SerializeOptions({ schema: {{FeatureName}}PageResourceSchema })
   findAll(@Query({ schema: Find{{FeatureName}}sSchema }) query: Find{{FeatureName}}sRequest) {
     return this.{{featureName}}Service.findAll(query);
   }
 
-  // TODO: 在 permissions.ts 添加 {{FeatureName}}Read 后，取消注释下行
+  // TODO: after adding {{FeatureName}}Read to permissions.ts, uncomment the line below
   // @Permissions(Permission.{{FeatureName}}Read)
   @Get(':id')
-  @ApiOperation({ summary: '{{description}}详情' })
-  @ApiSuccessResponse({{FeatureName}}ResourceSchema, { description: '查询成功' })
+  @ApiOperation({ summary: '{{description}} details' })
+  @ApiSuccessResponse({{FeatureName}}ResourceSchema, { description: 'Fetched successfully' })
   @SerializeOptions({ schema: {{FeatureName}}ResourceSchema })
   findOne(@Param('id', ParseUUIDPipe) id: string) {
     return this.{{featureName}}Service.findOne(id);
   }
 
-  // TODO: 在 permissions.ts 添加 {{FeatureName}}Update 后，取消注释下行
+  // TODO: after adding {{FeatureName}}Update to permissions.ts, uncomment the line below
   // @Permissions(Permission.{{FeatureName}}Update)
   @Patch(':id')
-  @ApiOperation({ summary: '更新{{description}}' })
-  @ApiSuccessResponse({{FeatureName}}ResourceSchema, { description: '更新成功' })
+  @ApiOperation({ summary: 'Update {{description}}' })
+  @ApiSuccessResponse({{FeatureName}}ResourceSchema, { description: 'Updated successfully' })
   @SerializeOptions({ schema: {{FeatureName}}ResourceSchema })
   update(
     @Param('id', ParseUUIDPipe) id: string,
@@ -81,12 +81,12 @@ export class {{FeatureName}}Controller {
     return this.{{featureName}}Service.update(id, dto);
   }
 
-  // TODO: 在 permissions.ts 添加 {{FeatureName}}Delete 后，取消注释下行
+  // TODO: after adding {{FeatureName}}Delete to permissions.ts, uncomment the line below
   // @Permissions(Permission.{{FeatureName}}Delete)
   @Delete(':id')
   @HttpCode(HttpStatus.NO_CONTENT)
-  @ApiOperation({ summary: '删除{{description}}' })
-  @ApiNoContentResponse({ description: '删除成功' })
+  @ApiOperation({ summary: 'Delete {{description}}' })
+  @ApiNoContentResponse({ description: 'Deleted successfully' })
   remove(@Param('id', ParseUUIDPipe) id: string) {
     return this.{{featureName}}Service.remove(id);
   }

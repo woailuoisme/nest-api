@@ -9,22 +9,22 @@ import { {{tableVariable}} } from '@/database/drizzle/schema/{{featureName}}.sch
 import { Create{{FeatureName}}Request, Find{{FeatureName}}sRequest, {{FeatureName}}Entity, Update{{FeatureName}}Request } from './{{featureName}}.dto';
 
 /**
- * {{FeatureName}} 业务逻辑层 — 直接依托 Drizzle 进行类型安全的数据存取，返回 Entity 对象。
+ * {{FeatureName}} service layer — type-safe data access via Drizzle, returning Entity objects.
  */
 @Injectable()
 export class {{FeatureName}}Service {
   constructor(@InjectDb() private readonly db: DrizzleDB) {}
 
-  /** 创建新记录 */
+  /** Create a new record */
   async create(dto: Create{{FeatureName}}Request) {
 {{#if hasUniqueFields}}
-    // 唯一性预检查
+    // uniqueness pre-check
 {{#each uniqueFields}}
     const existing = await this.db.query.{{../tableVariable}}.findFirst({
       where: eq({{../tableVariable}}.{{dbColumnName}}, dto.{{name}}),
     });
     if (existing) {
-      throw new ConflictException('{{description}}已存在');
+      throw new ConflictException('{{description}} already exists');
     }
 {{/each}}
 {{/if}}
@@ -40,7 +40,7 @@ export class {{FeatureName}}Service {
     return new {{FeatureName}}Entity(record);
   }
 
-  /** 分页查询列表 */
+  /** Paginated list query */
   async findAll(query: Find{{FeatureName}}sRequest) {
     const {
       page = PAGINATION.DEFAULT_PAGE,
@@ -87,28 +87,28 @@ export class {{FeatureName}}Service {
     );
   }
 
-  /** 根据 ID 查找单条记录 */
+  /** Find a single record by ID */
   async findOne(id: string) {
     const record = await this.db.query.{{tableVariable}}.findFirst({
       where: eq({{tableVariable}}.id, id),
     });
     if (!record) {
-      throw new NotFoundException('记录未找到');
+      throw new NotFoundException('Record not found');
     }
     return new {{FeatureName}}Entity(record);
   }
 
-  /** 根据 ID 原子更新 */
+  /** Atomic update by ID */
   async update(id: string, dto: Update{{FeatureName}}Request) {
 {{#if hasUniqueFields}}
-    // 唯一性预检查
+    // uniqueness pre-check
 {{#each uniqueFields}}
     if (dto.{{name}} !== undefined) {
       const existing = await this.db.query.{{../tableVariable}}.findFirst({
         where: eq({{../tableVariable}}.{{dbColumnName}}, dto.{{name}}),
       });
       if (existing && existing.id !== id) {
-        throw new ConflictException('{{description}}已被其他记录占用');
+        throw new ConflictException('{{description}} already taken by another record');
       }
     }
 {{/each}}
@@ -125,12 +125,12 @@ export class {{FeatureName}}Service {
       .returning();
 
     if (!record) {
-      throw new NotFoundException('记录未找到');
+      throw new NotFoundException('Record not found');
     }
     return new {{FeatureName}}Entity(record);
   }
 
-  /** 根据 ID 原子删除 */
+  /** Atomic delete by ID */
   async remove(id: string) {
     const [record] = await this.db
       .delete({{tableVariable}})
@@ -138,8 +138,8 @@ export class {{FeatureName}}Service {
       .returning();
 
     if (!record) {
-      throw new NotFoundException('记录未找到');
+      throw new NotFoundException('Record not found');
     }
-    return { message: '删除成功' };
+    return { message: 'Deleted successfully' };
   }
 }

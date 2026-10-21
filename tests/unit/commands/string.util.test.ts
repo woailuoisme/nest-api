@@ -1,8 +1,14 @@
 import { describe, expect, it } from 'vitest';
 
-import { escapeTsString, pluralize, toCamelCase, toPascalCase, toSnakeCase } from '@/commands/generator/string.utils';
+import {
+  escapeTsString,
+  pluralize,
+  toCamelCase,
+  toPascalCase,
+  toSnakeCase,
+} from '@/commands/generator/utils/string.util';
 
-describe('string.utils（CRUD 生成器命名转换契约）', () => {
+describe('string.util（CRUD 生成器命名转换契约）', () => {
   it('基础命名转换：大小写边界与分隔符', () => {
     expect(toSnakeCase('UserProfile')).toBe('user_profile');
     expect(toSnakeCase('user-profile')).toBe('user_profile');

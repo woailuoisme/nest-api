@@ -9,8 +9,32 @@ interface SearchImportOptions {
   batchSize?: number;
 }
 
+type SearchableDef = (typeof SEARCHABLE_REGISTRY)[string];
+
+/** Resolve a model name into its searchable definition; logs available models and returns null when missing/unknown */
+function resolveModel(
+  logger: Logger,
+  rawModel: string | undefined,
+): { modelName: string; def: SearchableDef; indexName: string } | null {
+  const available = Object.keys(SEARCHABLE_REGISTRY).join(', ');
+  const modelName = rawModel?.toLowerCase();
+
+  if (!modelName) {
+    logger.error(`Missing model argument. Available models: ${available}`);
+    return null;
+  }
+
+  const def = SEARCHABLE_REGISTRY[modelName];
+  if (!def) {
+    logger.error(`Unknown model "${modelName}". Available models: ${available}`);
+    return null;
+  }
+
+  return { modelName, def, indexName: def.index ?? def.indexName ?? modelName };
+}
+
 /**
- * search:import 命令 — 全量导入指定模型数据至搜索索引
+ * search:import — bulk import a model's records into the search index
  * @example just cmd search:import user --batch-size 500
  */
 @Command({
@@ -30,36 +54,28 @@ export class SearchImportCommand extends CommandRunner {
   }
 
   async run(passedParams: string[], options?: SearchImportOptions): Promise<void> {
-    const modelName = passedParams[0]?.toLowerCase();
-    if (!modelName) {
-      this.logger.error(`Missing model argument. Available models: ${Object.keys(SEARCHABLE_REGISTRY).join(', ')}`);
-      return;
-    }
+    const resolved = resolveModel(this.logger, passedParams[0]);
+    if (!resolved) return;
 
-    const def = SEARCHABLE_REGISTRY[modelName];
-    if (!def) {
-      this.logger.error(
-        `Unknown model "${modelName}". Available models: ${Object.keys(SEARCHABLE_REGISTRY).join(', ')}`,
-      );
-      return;
-    }
-
+    const { modelName, def, indexName } = resolved;
     const batchSize = options?.batchSize ?? 500;
-    const indexName = def.index ?? def.indexName ?? modelName;
 
     this.logger.log(`Starting import for model "${modelName}" into search index "${indexName}"...`);
 
-    // 1. 同步配置
+    // 1. Sync index settings
     if (def.settings) {
       await this.searchService.updateSettings(indexName, def.settings);
       this.logger.log(`Index settings synced for "${indexName}".`);
     }
 
-    // 2. 游标分批读取与导入
+    // 2. Cursor-paginated batched import
     if (!def.cursorLoader) {
       this.logger.error(`cursorLoader is not defined on searchable definition for "${modelName}".`);
       return;
     }
+
+    const transform = (record: unknown) =>
+      def.toSearchable ? def.toSearchable(record) : def.toSearchableArray(record);
 
     let afterId: string | number | undefined;
     let totalImported = 0;
@@ -70,8 +86,6 @@ export class SearchImportCommand extends CommandRunner {
         break;
       }
 
-      const transform = (record: unknown) =>
-        def.toSearchable ? def.toSearchable(record) : def.toSearchableArray(record);
       const documents = records.map(transform);
 
       await this.searchService.addDocuments(indexName, documents, def.primaryKey ?? 'id');
@@ -98,7 +112,7 @@ export class SearchImportCommand extends CommandRunner {
 }
 
 /**
- * search:flush 命令 — 清空指定模型的搜索索引文档
+ * search:flush — delete all documents from a model's search index
  * @example just cmd search:flush user
  */
 @Command({
@@ -115,21 +129,10 @@ export class SearchFlushCommand extends CommandRunner {
   }
 
   async run(passedParams: string[]): Promise<void> {
-    const modelName = passedParams[0]?.toLowerCase();
-    if (!modelName) {
-      this.logger.error(`Missing model argument. Available models: ${Object.keys(SEARCHABLE_REGISTRY).join(', ')}`);
-      return;
-    }
+    const resolved = resolveModel(this.logger, passedParams[0]);
+    if (!resolved) return;
 
-    const def = SEARCHABLE_REGISTRY[modelName];
-    if (!def) {
-      this.logger.error(
-        `Unknown model "${modelName}". Available models: ${Object.keys(SEARCHABLE_REGISTRY).join(', ')}`,
-      );
-      return;
-    }
-
-    const indexName = def.index ?? def.indexName ?? modelName;
+    const { indexName } = resolved;
     this.logger.log(`Flushing all documents from index "${indexName}"...`);
     await this.searchService.deleteAllDocuments(indexName);
     this.logger.log(`Successfully flushed all documents from index "${indexName}".`);
@@ -137,7 +140,7 @@ export class SearchFlushCommand extends CommandRunner {
 }
 
 /**
- * search:sync-settings 命令 — 将定义中的可搜索/可过滤/排序配置推送到搜索引擎
+ * search:sync-settings — push searchable/filterable/sortable settings to the search engine
  * @example just cmd search:sync-settings [model]
  */
 @Command({
@@ -174,7 +177,7 @@ export class SearchSyncSettingsCommand extends CommandRunner {
       return;
     }
 
-    // 全量同步所有注册的实体配置
+    // Sync every registered entity's settings
     const processedIndexes = new Set<string>();
     for (const [key, def] of Object.entries(SEARCHABLE_REGISTRY)) {
       const indexName = def.index ?? def.indexName ?? key;

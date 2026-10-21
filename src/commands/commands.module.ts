@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { DiscoveryModule } from '@nestjs/core';
 
+import { AppInitCommand } from './app-init.command';
 import { DbSeedCommand } from './db-seed.command';
 import { CrudGenerateCommand } from './generator/crud-generate.command';
 import { CrudGeneratorService } from './generator/crud-generator.service';
@@ -14,6 +15,7 @@ import { SearchFlushCommand, SearchImportCommand, SearchSyncSettingsCommand } fr
     JwtSecretCommand,
     RouteListCommand,
     DbSeedCommand,
+    AppInitCommand,
     CrudGenerateCommand,
     CrudGeneratorService,
     SearchImportCommand,
@@ -24,6 +26,7 @@ import { SearchFlushCommand, SearchImportCommand, SearchSyncSettingsCommand } fr
     JwtSecretCommand,
     RouteListCommand,
     DbSeedCommand,
+    AppInitCommand,
     CrudGenerateCommand,
     SearchImportCommand,
     SearchFlushCommand,
