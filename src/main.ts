@@ -34,14 +34,12 @@ async function bootstrap() {
   const config = app.get(ConfigService);
   const port = config.get<number>('PORT') ?? 3000;
   const appUrl = config.get<string>('APP_URL') ?? `http://localhost:${port}`;
-  const isWorkerEmbedded = config.get<boolean>('WORKER_EMBEDDED');
 
   await app.listen(port, NETWORK.HOST_BINDING);
 
   app.get(PinoLoggerService).logStartupSummary({
     appUrl,
     timezone,
-    isWorkerEmbedded,
     panels,
   });
 }

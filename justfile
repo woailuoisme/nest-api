@@ -11,30 +11,20 @@ set dotenv-load
 default:
     @just --list
 
-# 启动开发服务器（单进程内嵌 Worker，watch 模式）
+# 启动开发服务器（API + Worker 双进程，watch 模式）
 [group('dev')]
 dev:
-    kill -9 $(lsof -ti:${PORT:-4300} 2>/dev/null) 2>/dev/null || true; WORKER_EMBEDDED=true nest start --watch
-
-# 并发启动应用与 Worker（两个独立进程）
-[group('dev')]
-dev-all:
-    concurrently -k -n app,worker -c bgBlue.bold,bgMagenta.bold -p "[{name}]" -t "HH:mm:ss" "nest start --watch" "nest start --entryFile workers/worker.main --watch"
+    kill -9 $(lsof -ti:${PORT:-4300} 2>/dev/null) 2>/dev/null || true; concurrently -k -n app,worker -c bgBlue.bold,bgMagenta.bold -p "[{name}]" -t "HH:mm:ss" "nest start --watch" "nest start --entryFile workers/worker.main --watch"
 
 # 构建生产产物（SWC）
 [group('dev')]
 build:
     nest build
 
-# 启动生产构建（dist/main.js，不内嵌 Worker）
+# 启动生产构建（dist/main.js，仅 HTTP API）
 [group('dev')]
 start:
     node dist/main.js
-
-# 启动生产构建并内嵌 Worker（单进程）
-[group('dev')]
-start-embedded:
-    WORKER_EMBEDDED=true node dist/main.js
 
 # 仅启动 Worker（消费队列，不提供 HTTP）
 [group('dev')]

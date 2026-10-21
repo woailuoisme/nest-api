@@ -13,38 +13,32 @@ function envOf(overrides: Record<string, unknown>) {
   });
 }
 
-describe('envBoolean (APP_DEBUG / WORKER_EMBEDDED)', () => {
+describe('envBoolean (APP_DEBUG)', () => {
   it('字符串 "false" 解析为 false（Laravel FILTER_VALIDATE_BOOLEAN 语义）', () => {
-    const config = envOf({ APP_DEBUG: 'false', WORKER_EMBEDDED: 'false' });
+    const config = envOf({ APP_DEBUG: 'false' });
     expect(config.APP_DEBUG).toBe(false);
-    expect(config.WORKER_EMBEDDED).toBe(false);
   });
 
   it('字符串 "true" 解析为 true', () => {
-    const config = envOf({ APP_DEBUG: 'true', WORKER_EMBEDDED: 'true' });
+    const config = envOf({ APP_DEBUG: 'true' });
     expect(config.APP_DEBUG).toBe(true);
-    expect(config.WORKER_EMBEDDED).toBe(true);
   });
 
   it('大小写不敏感（"TRUE"/"False"）', () => {
-    const config = envOf({ APP_DEBUG: 'TRUE', WORKER_EMBEDDED: '1' });
+    const config = envOf({ APP_DEBUG: 'TRUE' });
     expect(config.APP_DEBUG).toBe(true);
-    expect(config.WORKER_EMBEDDED).toBe(true);
   });
 
   it('"0"/"off"/空串均解析为 false', () => {
-    const config = envOf({ APP_DEBUG: '0', WORKER_EMBEDDED: '0' });
+    const config = envOf({ APP_DEBUG: '0' });
     expect(config.APP_DEBUG).toBe(false);
-    expect(config.WORKER_EMBEDDED).toBe(false);
-    const empty = envOf({ APP_DEBUG: '', WORKER_EMBEDDED: '' });
+    const empty = envOf({ APP_DEBUG: '' });
     expect(empty.APP_DEBUG).toBe(false);
-    expect(empty.WORKER_EMBEDDED).toBe(false);
   });
 
   it('未配置时回退默认 false', () => {
     const config = envOf({});
     expect(config.APP_DEBUG).toBe(false);
-    expect(config.WORKER_EMBEDDED).toBe(false);
   });
 });
 
@@ -134,7 +128,6 @@ describe('Smart Defaults & Derivations', () => {
     expect(config.SCOUT_DRIVER).toBe('noop');
     expect(config.BETTER_AUTH_URL).toBe('http://localhost:4300');
     expect(config.HTTP_TIMEOUT_MS).toBe(15_000);
-    expect(config.WORKER_EMBEDDED).toBe(false);
     expect(config.MEDIA_QUEUE_ENABLED).toBe(true);
     expect(config.SWAGGER_ENABLED).toBe(true);
   });

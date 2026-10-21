@@ -96,15 +96,9 @@ export class PinoLoggerService implements LoggerService {
     }
   }
 
-  /** 输出应用引导启动摘要（服务地址、时区、Worker 状态、挂载的运维面板，紧凑双行输出） */
-  logStartupSummary(params: {
-    appUrl: string;
-    timezone: string;
-    isWorkerEmbedded?: boolean;
-    panels: { label: string; url: string }[];
-  }): void {
-    const workerTag = params.isWorkerEmbedded ? ' [Worker: active]' : '';
-    this.log(`[App] Server is running: ${params.appUrl} (timezone=${params.timezone})${workerTag}`);
+  /** 输出应用引导启动摘要（服务地址、时区、挂载的运维面板，紧凑双行输出） */
+  logStartupSummary(params: { appUrl: string; timezone: string; panels: { label: string; url: string }[] }): void {
+    this.log(`[App] Server is running: ${params.appUrl} (timezone=${params.timezone})`);
     if (params.panels.length > 0) {
       const panelList = params.panels.map((p) => `${p.label}: ${p.url}`).join(' | ');
       this.log(`[App] ${panelList}`);

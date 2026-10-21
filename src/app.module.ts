@@ -7,7 +7,6 @@ import { ThrottlerGuard, ThrottlerModule, type ThrottlerStorage } from '@nestjs/
 import { I18nModule } from 'nestjs-i18n';
 
 import { CasbinService } from '@/common/auth/casbin/casbin.service';
-import { isTruthyEnv } from '@/common/constants/app.constants';
 import { AccessControlGuard } from '@/common/guards/access-control.guard';
 import { AdminPrefixGuard } from '@/common/guards/admin-prefix.guard';
 import { BetterAuthGuard } from '@/common/guards/better-auth.guard';
@@ -33,10 +32,6 @@ import { IotModule } from './iot/iot.module';
 import { JobsModule } from './jobs/jobs.module';
 import { RealtimeModule } from './realtime/realtime.module';
 import { LoggerModule } from './setup/logger/logger.module';
-import { WorkerModule } from './workers/worker.module';
-
-// 模块装饰器求值阶段 ConfigService 尚不可用，直接读取 process.env 判定内嵌 Worker
-const isWorkerEmbedded = isTruthyEnv(process.env.WORKER_EMBEDDED);
 
 @Module({
   imports: [
@@ -80,7 +75,6 @@ const isWorkerEmbedded = isTruthyEnv(process.env.WORKER_EMBEDDED);
     RealtimeModule,
     JobsModule,
     CommandsModule,
-    ...(isWorkerEmbedded ? [WorkerModule] : []),
   ],
   providers: [
     // 权限判定引擎（策略由 ROLE_PERMISSIONS 生成，守卫按需注入）

@@ -66,8 +66,7 @@ LABEL org.opencontainers.image.title="Nest API" \
 # 生产环境契约规范
 ENV NODE_ENV=production \
   APP_ENV=production \
-  PORT=4400 \
-  WORKER_EMBEDDED=false
+  PORT=4400
 
 # 1. 注入 init 进程与统一调度脚本
 COPY --from=prod-deps /sbin/tini /sbin/tini

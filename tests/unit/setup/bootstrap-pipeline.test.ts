@@ -53,16 +53,13 @@ describe('Bootstrap Pipeline & Lifecycle Helpers', () => {
     service.logStartupSummary({
       appUrl: 'http://localhost:3000',
       timezone: 'UTC',
-      isWorkerEmbedded: true,
       panels: [
         { label: 'API Docs', url: 'http://localhost:3000/docs' },
         { label: 'Admin Docs', url: 'http://localhost:3000/docs/admin' },
       ],
     });
 
-    expect(logSpy).toHaveBeenCalledWith(
-      '[App] Server is running: http://localhost:3000 (timezone=UTC) [Worker: active]',
-    );
+    expect(logSpy).toHaveBeenCalledWith('[App] Server is running: http://localhost:3000 (timezone=UTC)');
     expect(logSpy).toHaveBeenCalledWith(
       '[App] API Docs: http://localhost:3000/docs | Admin Docs: http://localhost:3000/docs/admin',
     );

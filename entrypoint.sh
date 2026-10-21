@@ -8,7 +8,7 @@ fi
 
 case "$1" in
   api|"")
-    # 默认启动 HTTP API 服务（支持 WORKER_EMBEDDED 内嵌模式）
+    # 默认启动 HTTP API 服务
     exec bun run dist/main.js
     ;;
   worker)

@@ -5,9 +5,8 @@
   "type": "module",
   "scripts": {
     "build": "nest build",
-    "start": "WORKER_EMBEDDED=true node dist/main.js",
-    "dev": "WORKER_EMBEDDED=true nest start --watch",
-    "dev:all": "concurrently -k -n app,worker -c bgBlue.bold,bgMagenta.bold -p \"[{name}]\" \"nest start --watch\" \"nest start --entryFile workers/worker.main --watch\"",
+    "start": "node dist/main.js",
+    "start:worker": "node dist/workers/worker.main.js",
     "cli": "node dist/cli.js",
     "test": "vitest run --config vitest.config.mts",
     "test:watch": "vitest --config vitest.config.mts",
