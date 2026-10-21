@@ -259,15 +259,12 @@ export const ArtifactWriter = {
 
       next = lines
         .join('\n')
-        .replace(
-          /export const (CLIENT_FEATURE_MODULES|CLIENT_API_MODULES) = \[([^\]]*)\]/,
-          (_m, constName: string, list: string) => {
-            const items = compact(list.split(',').map((s) => s.trim()));
-            items.push(moduleName);
-            return `export const ${constName} = [${items.join(', ')}]`;
-          },
-        )
-        .replace(/export const (FEATURE_MODULES|API_MODULES) = \[([^\]]*)\]/, (_m, constName: string, list: string) => {
+        .replace(/export const CLIENT_FEATURE_MODULES = \[([^\]]*)\]/, (_m, list: string) => {
+          const items = compact(list.split(',').map((s) => s.trim()));
+          items.push(moduleName);
+          return `export const CLIENT_FEATURE_MODULES = [${items.join(', ')}]`;
+        })
+        .replace(/export const FEATURE_MODULES = \[([^\]]*)\]/, (_m, list: string) => {
           const items = compact(list.split(',').map((s) => s.trim()));
           // insert before AdminModule
           const adminIdx = items.indexOf('AdminModule');
@@ -276,7 +273,7 @@ export const ArtifactWriter = {
           } else {
             items.push(moduleName);
           }
-          return `export const ${constName} = [${items.join(', ')}]`;
+          return `export const FEATURE_MODULES = [${items.join(', ')}]`;
         });
       next = `${next.trimEnd()}\n${exportLine}\n`;
     } else {
@@ -284,22 +281,19 @@ export const ArtifactWriter = {
         .split('\n')
         .filter((line) => line.trim() !== importLine && line.trim() !== exportLine)
         .join('\n')
-        .replace(
-          /export const (CLIENT_FEATURE_MODULES|CLIENT_API_MODULES) = \[([^\]]*)\]/,
-          (_m, constName: string, list: string) => {
-            const items = list
-              .split(',')
-              .map((s) => s.trim())
-              .filter((s) => s && s !== moduleName);
-            return `export const ${constName} = [${items.join(', ')}]`;
-          },
-        )
-        .replace(/export const (FEATURE_MODULES|API_MODULES) = \[([^\]]*)\]/, (_m, constName: string, list: string) => {
+        .replace(/export const CLIENT_FEATURE_MODULES = \[([^\]]*)\]/, (_m, list: string) => {
           const items = list
             .split(',')
             .map((s) => s.trim())
             .filter((s) => s && s !== moduleName);
-          return `export const ${constName} = [${items.join(', ')}]`;
+          return `export const CLIENT_FEATURE_MODULES = [${items.join(', ')}]`;
+        })
+        .replace(/export const FEATURE_MODULES = \[([^\]]*)\]/, (_m, list: string) => {
+          const items = list
+            .split(',')
+            .map((s) => s.trim())
+            .filter((s) => s && s !== moduleName);
+          return `export const FEATURE_MODULES = [${items.join(', ')}]`;
         });
     }
 

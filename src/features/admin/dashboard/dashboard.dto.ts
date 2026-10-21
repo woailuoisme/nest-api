@@ -28,5 +28,3 @@ export interface AlertMetricPayload {
   title: string;
   message: string;
 }
-
-export type DashboardMetricPayload = SystemMetricPayload | BusinessMetricPayload | AlertMetricPayload;

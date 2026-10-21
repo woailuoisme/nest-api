@@ -11,6 +11,7 @@ import { SearchFlushCommand, SearchImportCommand, SearchSyncSettingsCommand } fr
 
 @Module({
   imports: [DiscoveryModule],
+  // nest-commander 通过 DiscoveryModule 发现全部 @Command 提供者，命令类无需导出给任何消费方
   providers: [
     JwtSecretCommand,
     RouteListCommand,
@@ -18,16 +19,6 @@ import { SearchFlushCommand, SearchImportCommand, SearchSyncSettingsCommand } fr
     AppInitCommand,
     CrudGenerateCommand,
     CrudGeneratorService,
-    SearchImportCommand,
-    SearchFlushCommand,
-    SearchSyncSettingsCommand,
-  ],
-  exports: [
-    JwtSecretCommand,
-    RouteListCommand,
-    DbSeedCommand,
-    AppInitCommand,
-    CrudGenerateCommand,
     SearchImportCommand,
     SearchFlushCommand,
     SearchSyncSettingsCommand,

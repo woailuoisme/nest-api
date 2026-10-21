@@ -11,26 +11,35 @@ interface SearchImportOptions {
 
 type SearchableDef = (typeof SEARCHABLE_REGISTRY)[string];
 
+/** 已注册模型清单（错误提示用） */
+function availableModels(): string {
+  return Object.keys(SEARCHABLE_REGISTRY).join(', ');
+}
+
+/** 索引名解析：显式 index > 兼容 indexName > 注册键 */
+function indexNameOf(def: SearchableDef, fallback: string): string {
+  return def.index ?? def.indexName ?? fallback;
+}
+
 /** Resolve a model name into its searchable definition; logs available models and returns null when missing/unknown */
 function resolveModel(
   logger: Logger,
   rawModel: string | undefined,
 ): { modelName: string; def: SearchableDef; indexName: string } | null {
-  const available = Object.keys(SEARCHABLE_REGISTRY).join(', ');
   const modelName = rawModel?.toLowerCase();
 
   if (!modelName) {
-    logger.error(`Missing model argument. Available models: ${available}`);
+    logger.error(`Missing model argument. Available models: ${availableModels()}`);
     return null;
   }
 
   const def = SEARCHABLE_REGISTRY[modelName];
   if (!def) {
-    logger.error(`Unknown model "${modelName}". Available models: ${available}`);
+    logger.error(`Unknown model "${modelName}". Available models: ${availableModels()}`);
     return null;
   }
 
-  return { modelName, def, indexName: def.index ?? def.indexName ?? modelName };
+  return { modelName, def, indexName: indexNameOf(def, modelName) };
 }
 
 /**
@@ -159,35 +168,30 @@ export class SearchSyncSettingsCommand extends CommandRunner {
   async run(passedParams: string[]): Promise<void> {
     const modelName = passedParams[0]?.toLowerCase();
 
-    if (modelName) {
-      const def = SEARCHABLE_REGISTRY[modelName];
-      if (!def) {
-        this.logger.error(
-          `Unknown model "${modelName}". Available models: ${Object.keys(SEARCHABLE_REGISTRY).join(', ')}`,
-        );
-        return;
-      }
-      const indexName = def.index ?? def.indexName ?? modelName;
-      if (def.settings) {
-        await this.searchService.updateSettings(indexName, def.settings);
-        this.logger.log(`Successfully synced settings for index "${indexName}".`);
-      } else {
-        this.logger.warn(`No settings found for model "${modelName}".`);
-      }
+    if (modelName && !SEARCHABLE_REGISTRY[modelName]) {
+      this.logger.error(`Unknown model "${modelName}". Available models: ${availableModels()}`);
       return;
     }
 
-    // Sync every registered entity's settings
+    // 指定模型时只处理它，否则遍历全部注册项；按索引名去重避免重复推送
+    const targets: [string, SearchableDef][] = modelName
+      ? [[modelName, SEARCHABLE_REGISTRY[modelName]]]
+      : Object.entries(SEARCHABLE_REGISTRY);
     const processedIndexes = new Set<string>();
-    for (const [key, def] of Object.entries(SEARCHABLE_REGISTRY)) {
-      const indexName = def.index ?? def.indexName ?? key;
+
+    for (const [key, def] of targets) {
+      const indexName = indexNameOf(def, key);
       if (processedIndexes.has(indexName)) continue;
       processedIndexes.add(indexName);
 
-      if (def.settings) {
-        await this.searchService.updateSettings(indexName, def.settings);
-        this.logger.log(`Successfully synced settings for index "${indexName}".`);
+      if (!def.settings) {
+        // 仅在显式指定模型时警告：全量遍历时无配置属正常状态
+        if (modelName) this.logger.warn(`No settings found for model "${modelName}".`);
+        continue;
       }
+
+      await this.searchService.updateSettings(indexName, def.settings);
+      this.logger.log(`Successfully synced settings for index "${indexName}".`);
     }
   }
 }

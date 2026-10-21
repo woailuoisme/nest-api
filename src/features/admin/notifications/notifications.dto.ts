@@ -1,7 +1,6 @@
 import { z } from 'zod';
 
 export const NotificationTypeSchema = z.enum(['info', 'warning', 'success', 'error']);
-export type NotificationType = z.infer<typeof NotificationTypeSchema>;
 
 // strict: 未知字段当前静默丢弃（z.object strip）；新增写接口应改用 z.strictObject
 export const SendNotificationSchema = z.object({
@@ -23,7 +22,5 @@ export const NotificationEntitySchema = z.object({
   timestamp: z.number().describe('生成时间戳 (毫秒)'),
   metadata: z.record(z.string(), z.unknown()).optional().describe('附加结构化元数据'),
 });
-
-export type NotificationEntity = z.infer<typeof NotificationEntitySchema>;
 
 export type NotificationPayload = z.infer<typeof NotificationEntitySchema>;

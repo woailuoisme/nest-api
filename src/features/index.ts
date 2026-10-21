@@ -13,11 +13,6 @@ import { SystemModule } from '@/features/system/system.module';
 export const CLIENT_FEATURE_MODULES = [AuthModule, UsersModule, PaymentsModule] as const;
 
 /**
- * 系统/基础设施模块清单（健康检查、根探针等 VERSION_NEUTRAL 系统端点）
- */
-export const SYSTEM_FEATURE_MODULES = [SystemModule] as const;
-
-/**
  * 管理后台领域模块清单（供 Admin API 文档生成与管理面隔离）
  */
 export const ADMIN_FEATURE_MODULES = [
@@ -35,12 +30,6 @@ export const ADMIN_FEATURE_MODULES = [
  * AdminModule 为管理面边界聚合（物理位于 `src/features/admin/`），作为唯一管理入口纳入本清单。
  */
 export const FEATURE_MODULES = [AuthModule, UsersModule, PaymentsModule, SystemModule, AdminModule] as const;
-
-/** 向后兼容别名 */
-export const API_MODULES = FEATURE_MODULES;
-export const CLIENT_API_MODULES = CLIENT_FEATURE_MODULES;
-export const ADMIN_API_MODULES = ADMIN_FEATURE_MODULES;
-export const SYSTEM_API_MODULES = SYSTEM_FEATURE_MODULES;
 
 export * from '@/features/admin/admin.module';
 export * from '@/features/admin/dashboard/dashboard.module';
