@@ -27,6 +27,3 @@ export const idempotencyKeys = pgTable(
   },
   (table) => [index('idempotency_keys_expires_at_idx').on(table.expiresAt)],
 );
-
-export type IdempotencyKeyRecord = typeof idempotencyKeys.$inferSelect;
-export type NewIdempotencyKeyRecord = typeof idempotencyKeys.$inferInsert;

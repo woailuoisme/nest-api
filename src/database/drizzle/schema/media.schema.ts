@@ -43,6 +43,3 @@ export const media = pgTable(
     index('media_model_order_idx').on(table.modelType, table.modelId, table.orderColumn),
   ],
 );
-
-export type Media = typeof media.$inferSelect;
-export type NewMedia = typeof media.$inferInsert;
