@@ -2,7 +2,7 @@
 trigger: always_on
 ---
 
-# 编程行为与严谨纪律准则 (Coding Discipline & Behavior Guidelines)
+# CLAUDE.md
 
 Behavioral guidelines to reduce common LLM coding mistakes. Merge with project-specific instructions as needed.
 
@@ -31,7 +31,7 @@ Before implementing:
 
 Ask yourself: "Would a senior engineer say this is overcomplicated?" If yes, simplify.
 
-## 3. Surgical Changes & No File-by-File Iteration
+## 3. Surgical Changes
 
 **Touch only what you must. Clean up only your own mess.**
 
@@ -41,7 +41,6 @@ When editing existing code:
 - Don't refactor things that aren't broken.
 - Match existing style, even if you'd do it differently.
 - If you notice unrelated dead code, mention it - don't delete it.
-- **严禁逐个文件手动重复修改 (No File-by-File Iterative Edits)**: 严禁针对相同模式的代码使用单文件编辑工具轮询修改多个文件。所有跨文件或语法级修改必须统一交由 `ast-grep` 批量精准执行。
 
 When your changes create orphans:
 
@@ -50,14 +49,7 @@ When your changes create orphans:
 
 The test: Every changed line should trace directly to the user's request.
 
-## 4. AST-Grep Mandatory for Syntax & Refactoring
-
-**Use `ast-grep` for all structural changes. Never use regex or iterative single-file edits.**
-
-- All imports migration, function signature changes, type renames, and API refactors **must strictly use `ast-grep`**.
-- Follow the 4-step workflow: Identify pattern → Block single-file edits → Test in scratch/stdin → Apply with `rtk ast-grep scan --update-all`.
-
-## 5. Goal-Driven Execution
+## 4. Goal-Driven Execution
 
 **Define success criteria. Loop until verified.**
 
