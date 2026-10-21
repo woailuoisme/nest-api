@@ -39,15 +39,6 @@ export const REDACT_PATHS = [
   'req.body.deviceSecret',
 ];
 
-/** HTTP 请求日志关键结构接口 */
-export interface HttpAccessLog {
-  method: string;
-  url: string;
-  statusCode: number;
-  duration: number;
-  ip: string;
-}
-
 /** 请求 ID 生成所需的请求结构（IncomingMessage 与 Http2ServerRequest 均满足） */
 export type RequestIdSource = {
   headers?: Record<string, unknown>;
