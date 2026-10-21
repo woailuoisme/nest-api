@@ -26,10 +26,6 @@ export const REALTIME_CHANNELS = {
   SSE_IOT_ALARMS: 'sse:iot:alarms',
 } as const;
 
-// 兼容别名导出
-export const WS_CHANNELS = REALTIME_CHANNELS;
-export const SSE_CHANNELS = REALTIME_CHANNELS;
-
 /** 可订阅工业设备遥测频道的角色（普通用户不具工业数据可见性） */
 const DEVICE_TELEMETRY_ROLES: readonly Role[] = [Role.OPERATOR, Role.ADMIN, Role.SUPER_ADMIN];
 

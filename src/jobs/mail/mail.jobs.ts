@@ -45,9 +45,6 @@ export enum MailJobName {
 /** 邮件语言 */
 export type MailLocale = 'zh' | 'en';
 
-/** 邮件模板名（对应 templates/*.hbs） */
-export type MailTemplateName = 'verify-email' | 'reset-password' | 'welcome';
-
 /** 邮件任务数据载荷（welcome 无 token） */
 export interface MailJobData {
   to: string;

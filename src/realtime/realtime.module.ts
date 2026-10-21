@@ -94,7 +94,3 @@ function createCentrifugoClientOptions(config: ConfigService<EnvConfig, true>): 
   ],
 })
 export class RealtimeModule {}
-
-// 兼容别名导出
-export const WebsocketModule = RealtimeModule;
-export const SseModule = RealtimeModule;

@@ -128,9 +128,3 @@ export class RealtimeController {
     return this.channelsService.listRegisteredChannels();
   }
 }
-
-// 兼容别名导出
-export const WebsocketController = RealtimeController;
-export type WebsocketController = RealtimeController;
-export const SseController = RealtimeController;
-export type SseController = RealtimeController;

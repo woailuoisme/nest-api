@@ -17,7 +17,6 @@ export const DeviceIdSchema = z
   .describe('设备唯一标识符 (UUID / 序列号)');
 
 export const DeviceStatusEnum = z.enum(['running', 'idle', 'warning', 'fault']);
-export type DeviceStatus = z.infer<typeof DeviceStatusEnum>;
 
 export const DeviceTelemetrySchema = z.object({
   voltage: z.number().describe('工作电压 (V)'),

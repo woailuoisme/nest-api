@@ -97,8 +97,6 @@ export interface MqttMessageContext {
   userProperties?: Record<string, string | string[]>;
 }
 
-export type MqttContext = MqttMessageContext;
-
 /**
  * @MqttSubscribe 装饰器写入的元数据（供 MqttExplorerService 扫描读取）
  */

@@ -136,16 +136,3 @@ export class CentrifugoProxyResponseDto {
   @ApiPropertyOptional({ description: '鉴权失败时的错误对象', type: CentrifugoProxyErrorDto })
   error?: CentrifugoProxyErrorDto;
 }
-
-// 兼容别名导出，确保历史引用零侵入
-export type WebsocketTokenQueryDto = RealtimeTokenQueryDto;
-export type WebsocketTokenResponseDto = RealtimeTokenResponseDto;
-export type WebsocketSubscribeDto = RealtimeSubscribeDto;
-export type WebsocketSubscribeResponseDto = RealtimeSubscribeResponseDto;
-export type WebsocketChannelInfoDto = RealtimeChannelInfoDto;
-
-export type SseTokenQueryDto = RealtimeTokenQueryDto;
-export type SseTokenResponseDto = RealtimeTokenResponseDto;
-export type SseSubscribeDto = RealtimeSubscribeDto;
-export type SseSubscribeResponseDto = RealtimeSubscribeResponseDto;
-export type SseChannelInfoDto = RealtimeChannelInfoDto;

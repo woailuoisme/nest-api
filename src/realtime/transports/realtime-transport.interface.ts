@@ -1,7 +1,6 @@
 import type { RealtimeEnvelope } from '../dto/realtime.dto';
 
 export const REALTIME_PRIMARY_TRANSPORT = 'REALTIME_PRIMARY_TRANSPORT';
-export const REALTIME_TRANSPORTS = 'REALTIME_TRANSPORTS';
 
 /**
  * 实时传输层统一契约 (Transport Seam)
