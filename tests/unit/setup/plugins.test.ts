@@ -83,12 +83,14 @@ describe('registerFastifyPlugins', () => {
     expect(mockReply.header).toHaveBeenCalledWith('x-request-id', 'req-unique-999');
 
     // 2. 验证 onResponse Hook 触发 logHttp 并提取 url path
+    //    访问日志的 ip 必须取 Fastify 归一化后的 request.ip（遵循 TRUST_PROXY），而非原始 XFF
     const onResponseHook = hooks.onResponse[0];
     const completedReq = {
       method: 'GET',
       url: '/api/v1/users?token=secret123&page=1',
+      ip: '192.168.1.100',
       raw: {
-        headers: { 'x-forwarded-for': '192.168.1.100' },
+        headers: { 'x-forwarded-for': '1.2.3.4' },
       },
       headers: { 'x-request-id': 'req-unique-999' },
     };

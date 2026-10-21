@@ -270,6 +270,19 @@ describe('微信支付 v3 real 驱动', () => {
     expect(error.wepayCode).toBe('WEPAY_RESPONSE_SIGNATURE_INVALID');
   });
 
+  it('应答缺少签名头时应拒绝解析（fail-closed，防上游被剥离签名头伪造成功应答）', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => fakeResponse(JSON.stringify({ code_url: 'weixin://unsigned' }), 200)),
+    );
+
+    const error = (await driver
+      .createNative({ outTradeNo: 'ORDER-SIG-MISSING', description: '测试商品', amount: { total: 100 } })
+      .catch((caught: unknown) => caught as WepayException)) as unknown as WepayException;
+
+    expect(error.wepayCode).toBe('WEPAY_RESPONSE_HEADERS_MISSING');
+  });
+
   it('请求超时应转译为 504 网关超时', async () => {
     vi.stubGlobal(
       'fetch',

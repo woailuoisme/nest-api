@@ -1,4 +1,3 @@
-import type { IncomingMessage } from 'node:http';
 import { hostname } from 'node:os';
 import { Writable } from 'node:stream';
 
@@ -47,13 +46,6 @@ export interface HttpAccessLog {
   statusCode: number;
   duration: number;
   ip: string;
-}
-
-/** 提取客户端真实 IP（空/纯空白头值回退至 socket，避免写入空串污染日志） */
-export function extractIp(req: IncomingMessage): string {
-  const forwarded = req.headers['x-forwarded-for'];
-  const value = Array.isArray(forwarded) ? forwarded.join(', ') : forwarded;
-  return value?.trim() || req.socket?.remoteAddress || '-';
 }
 
 /** 请求 ID 生成所需的请求结构（IncomingMessage 与 Http2ServerRequest 均满足） */

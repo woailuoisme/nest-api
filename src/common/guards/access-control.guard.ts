@@ -15,8 +15,12 @@ import { ROLES_KEY } from '@/common/decorators/roles.decorator';
  * 1. 无 `@Roles()` / `@Permissions()` 约束 → 放行（覆盖 90%+ 常规路由）；
  * 2. `@Public()` → 放行；
  * 3. 取 `user.role`，缺失即拒绝；
- * 4. `@Roles() ` → 角色成员校验；
+ * 4. `@Roles() ` → 角色成员校验（声明即生效，不做管理员隐式放行）；
  * 5. `@Permissions()` → 交由 Casbin 引擎判定（策略源 `ROLE_PERMISSIONS` → `policy.csv`）。
+ *
+ * 管理员在角色维度不再享有隐式通行权：`@Roles(Role.OPERATOR)` 只对 OPERATOR 生效。
+ * 需要管理者参与时显式声明 `@Roles(Role.OPERATOR, Role.ADMIN, Role.SUPER_ADMIN)`，
+ * 否则未来的「仅超管可见」端点会被静默放开。权限维度由 Casbin 策略自然继承，不受影响。
  */
 @Injectable()
 export class AccessControlGuard implements CanActivate {
@@ -43,9 +47,7 @@ export class AccessControlGuard implements CanActivate {
     const userRole = user?.role as Role | undefined;
     if (!userRole) return false;
 
-    // 管理员角色保留全部角色访问权（权限仍由 Casbin 策略判定）
-    const isAdminRole = userRole === Role.SUPER_ADMIN || userRole === Role.ADMIN;
-    if (requiredRoles?.length && !isAdminRole && !requiredRoles.includes(userRole)) {
+    if (requiredRoles?.length && !requiredRoles.includes(userRole)) {
       return false;
     }
 

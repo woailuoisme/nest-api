@@ -20,13 +20,12 @@ end
 `;
 
 /**
- * 原子续租：仅当锁仍属于持有者时才重新计时（长事务心跳）。
+ * 原子续租：仅当锁值仍等于持有的 token 时才延长过期时间
  *
- * 锁 TTL 是「进程崩溃自动释放」的上界，而不是「业务处理时长」的上界；
- * 不在处理期间续租时，超过 TTL 的请求会让重试请求重新抢到锁并行执行，
- * 这正是幂等拦截器要防的重复扣款场景。
+ * KEYS[1] = 锁键，ARGV[1] = 持有的 token，ARGV[2] = 新的 TTL（毫秒）
+ * 返回 1 表示续租成功，0 表示已失去锁（被过期后其他实例抢占），调用方必须停止续租并告警。
  */
-export const RENEW_LOCK_LUA_SCRIPT = `
+export const RENEW_LUA_SCRIPT = `
 if redis.call("get", KEYS[1]) == ARGV[1] then
   return redis.call("pexpire", KEYS[1], ARGV[2])
 else

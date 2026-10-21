@@ -1,12 +1,11 @@
 import { existsSync, readdirSync } from 'node:fs';
-import type { IncomingMessage } from 'node:http';
 import { join } from 'node:path';
 import { Writable } from 'node:stream';
 
 import pino from 'pino';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { createPinoLogger, createRequestId, extractIp, REDACT_PATHS, redactUrl } from '@/setup/logger';
+import { createPinoLogger, createRequestId, REDACT_PATHS, redactUrl } from '@/setup/logger';
 
 /**
  * pino 把落点流与基字段挂在内部 symbol 上，官方 d.ts 未暴露索引签名，故测试内做最小透传访问。
@@ -59,26 +58,6 @@ describe('logger.config', () => {
     it('无任何 ID 时生成有效 UUID', () => {
       const id = createRequestId({ headers: {} });
       expect(id).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i);
-    });
-  });
-
-  describe('extractIp', () => {
-    it('优先从 x-forwarded-for 获取客户端真实 IP', () => {
-      const mockReq = {
-        headers: { 'x-forwarded-for': '203.0.113.195, 70.41.3.18' },
-        socket: { remoteAddress: '10.0.0.1' },
-      } as unknown as IncomingMessage;
-
-      expect(extractIp(mockReq)).toBe('203.0.113.195, 70.41.3.18');
-    });
-
-    it('无 x-forwarded-for 时回退至 socket remoteAddress', () => {
-      const mockReq = {
-        headers: {},
-        socket: { remoteAddress: '127.0.0.1' },
-      } as unknown as IncomingMessage;
-
-      expect(extractIp(mockReq)).toBe('127.0.0.1');
     });
   });
 

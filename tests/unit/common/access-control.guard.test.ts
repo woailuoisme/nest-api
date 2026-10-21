@@ -59,7 +59,7 @@ describe('AccessControlGuard', () => {
   });
 
   describe('@Roles() — 角色级约束', () => {
-    it('ADMIN 与 SUPER_ADMIN 用户在任意角色限制下均应直接放行', async () => {
+    it('角色声明即生效：未声明的管理角色同样被拦截（不再隐式放行）', async () => {
       const adminCtx = createMockContext({ role: Role.ADMIN });
       const superAdminCtx = createMockContext({ role: Role.SUPER_ADMIN });
       vi.spyOn(reflector, 'getAllAndOverride').mockImplementation((key) => {
@@ -67,8 +67,22 @@ describe('AccessControlGuard', () => {
         return undefined;
       });
 
+      await expect(guard.canActivate(adminCtx)).resolves.toBe(false);
+      await expect(guard.canActivate(superAdminCtx)).resolves.toBe(false);
+    });
+
+    it('显式声明包含管理员时，管理角色正常放行', async () => {
+      const adminCtx = createMockContext({ role: Role.ADMIN });
+      const superAdminCtx = createMockContext({ role: Role.SUPER_ADMIN });
+      const operatorCtx = createMockContext({ role: Role.OPERATOR });
+      vi.spyOn(reflector, 'getAllAndOverride').mockImplementation((key) => {
+        if (key === ROLES_KEY) return [Role.OPERATOR, Role.ADMIN, Role.SUPER_ADMIN];
+        return undefined;
+      });
+
       await expect(guard.canActivate(adminCtx)).resolves.toBe(true);
       await expect(guard.canActivate(superAdminCtx)).resolves.toBe(true);
+      await expect(guard.canActivate(operatorCtx)).resolves.toBe(true);
     });
 
     it('拥有允许角色的用户应成功放行', async () => {

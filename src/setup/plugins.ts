@@ -14,7 +14,7 @@ import { applyQueryTokenAsBearer } from '@/common/auth/request-token.util';
 import { PATHS, ROUTES } from '@/common/constants/app.constants';
 import { RequestContext } from '@/common/context';
 import { resolveErrorEnvelope } from '@/common/filters/http-exception.filter';
-import { extractIp, PinoLoggerService } from '@/setup/logger';
+import { PinoLoggerService } from '@/setup/logger';
 
 import { isAppShuttingDown } from './lifecycle';
 
@@ -104,7 +104,9 @@ export async function registerFastifyPlugins(app: NestFastifyApplication): Promi
       url,
       statusCode: reply.statusCode,
       duration: Number(reply.elapsedTime.toFixed(1)),
-      ip: extractIp(request.raw),
+      // 必须用 Fastify 归一化后的 `request.ip`：它遵循 TRUST_PROXY 配置（默认不信任 XFF），
+      // 而直读原始 X-Forwarded-For 会让客户端任意伪造访问日志来源，并与限流/幂等的作用域不一致
+      ip: request.ip,
     });
   });
 

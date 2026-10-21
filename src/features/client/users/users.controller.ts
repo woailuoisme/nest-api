@@ -1,6 +1,7 @@
 import {
   BadRequestException,
   Controller,
+  ForbiddenException,
   Get,
   HttpCode,
   HttpStatus,
@@ -17,6 +18,7 @@ import { Throttle } from '@nestjs/throttler';
 
 import { ALLOWED_MIME_TYPES, UPLOAD } from '@/common/constants/app.constants';
 import { Permission } from '@/common/constants/permissions';
+import { Role } from '@/common/constants/roles';
 import { CurrentUser, type CurrentUserPayload } from '@/common/decorators/current-user.decorator';
 import { Permissions } from '@/common/decorators/permissions.decorator';
 import { ApiSuccessResponse } from '@/common/decorators/swagger-response.decorator';
@@ -90,13 +92,29 @@ export class UsersController {
     return this.usersService.findOne(user.id);
   }
 
-  /** 根据用户 ID 获取指定用户详情 */
+  /**
+   * 根据用户 ID 获取指定用户详情
+   *
+   * `UserRead` 已授予全部角色（含普通 USER，见 `ROLE_PERMISSIONS`），因此必须在方法内
+   * 叠加归属校验：否则任意登录用户都能靠枚举 UUIDv7 读取他人邮箱与角色（水平越权）。
+   */
   @Get(':id')
   @Permissions(Permission.UserRead)
   @ApiOperation({ summary: '用户详情' })
   @ApiSuccessResponse(UserResourceSchema, { description: '用户信息获取成功' })
   @SerializeOptions({ schema: UserResourceSchema })
-  findOne(@Param('id', ParseUUIDPipe) id: string): Promise<UserEntity> {
+  findOne(@Param('id', ParseUUIDPipe) id: string, @CurrentUser() current: CurrentUserPayload): Promise<UserEntity> {
+    if (!this.canReadUser(current, id)) {
+      throw new ForbiddenException('无权查看其他用户信息');
+    }
     return this.usersService.findOne(id);
+  }
+
+  /** 自助面仅允许「本人」或「管理角色」读取用户详情 */
+  private canReadUser(current: CurrentUserPayload, targetId: string): boolean {
+    if (current.id === targetId) {
+      return true;
+    }
+    return current.role === Role.OPERATOR || current.role === Role.ADMIN || current.role === Role.SUPER_ADMIN;
   }
 }

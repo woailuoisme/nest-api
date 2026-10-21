@@ -505,19 +505,16 @@ export class RealWepayDriver implements IWepayDriver {
   /**
    * 校验微信应答签名
    *
-   * 证书列表接口存在凭据自举问题（验签须先拿到证书）故跳过；未携带签名头的应答
-   * （如部分文件流）不阻断主流程。
+   * 本方法所有调用方均为业务 API（证书自举走 `signedRawGet`、账单文件下载以 `hash_value` 校验，
+   * 两者都不经过这里），故一律 fail-closed：APIv3 对全部 API 应答都会签名，缺失签名头只能
+   * 意味着被中间环节剥离（代理/网关/中间人），继续解析等于接受未鉴权数据。
    */
   private async verifyResponseSignature(urlPath: string, response: RawWepayResponse): Promise<void> {
-    if (urlPath.startsWith(WEPAY_API_PATHS.CERTIFICATES)) {
-      return;
-    }
-
     const signature = response.headers.get(WEPAY_HEADERS.SIGNATURE);
     const timestamp = response.headers.get(WEPAY_HEADERS.TIMESTAMP);
     const nonce = response.headers.get(WEPAY_HEADERS.NONCE);
     if (!signature || !timestamp || !nonce) {
-      return;
+      throw new WepayException('WEPAY_RESPONSE_HEADERS_MISSING', `微信支付应答缺少签名头（${urlPath}），拒绝解析`);
     }
 
     const publicKey = await this.resolveVerificationKey(response.headers.get(WEPAY_HEADERS.SERIAL) ?? undefined);

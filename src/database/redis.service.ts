@@ -6,7 +6,7 @@ import type Redis from 'ioredis';
 
 import { INJECTION_TOKENS } from '@/common/constants/app.constants';
 
-import { UNLOCK_LUA_SCRIPT } from './lua-scripts';
+import { UNLOCK_LUA_SCRIPT, RENEW_LUA_SCRIPT } from './lua-scripts';
 
 const REDIS_CLIENT = INJECTION_TOKENS.REDIS_CLIENT;
 
@@ -41,10 +41,12 @@ export class RedisService {
   /**
    * 分布式锁 — 支持高并发集群环境下的安全互斥执行。
    *
-   * 采用 Redis 原生 SET NX PX + Lua 原子安全释放，杜绝锁被其他实例意外释放的问题。
+   * 采用 Redis 原生 SET NX PX + Lua 原子安全释放，并在临界区执行期间按 `ttlMs / 3`
+   * 周期续租：临界区耗时可能超过 `ttlMs`，不续租会让锁先过期、第二个副本随即抢锁成功，
+   * 互斥在多副本下静默失效（双方都以为自己持锁）。
    *
    * @param key 锁键名（如 'schedule:token-cleanup'）
-   * @param ttlMs 锁超时时间（毫秒，防止实例崩溃导致死锁）
+   * @param ttlMs 锁超时时间（毫秒，防止实例崩溃导致死锁；同时作为续租基准）
    * @param fn 获得锁后执行的业务逻辑
    * @returns 若成功抢占锁并执行，返回业务结果；若未能抢占到锁，返回 null
    */
@@ -58,9 +60,26 @@ export class RedisService {
       return null;
     }
 
+    const renewIntervalMs = Math.max(Math.floor(ttlMs / 3), 1_000);
+    const renewTimer = setInterval(() => {
+      this.client
+        .eval(RENEW_LUA_SCRIPT, 1, lockKey, lockToken, ttlMs)
+        .then((renewed) => {
+          if (Number(renewed) === 0) {
+            this.logger.warn(`分布式锁 [${lockKey}] 续租失败：租约已被其他实例接管，临界区互斥已失效`);
+            clearInterval(renewTimer);
+          }
+        })
+        .catch((err) => {
+          this.logger.warn(`分布式锁 [${lockKey}] 续租异常: ${String(err)}`);
+        });
+    }, renewIntervalMs);
+    renewTimer.unref?.();
+
     try {
       return await fn();
     } finally {
+      clearInterval(renewTimer);
       try {
         await this.client.eval(UNLOCK_LUA_SCRIPT, 1, lockKey, lockToken);
       } catch (err) {

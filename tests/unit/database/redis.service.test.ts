@@ -64,6 +64,32 @@ describe('RedisService', () => {
       await expect(redisService.withLock('cron:token-cleanup', 5000, callback)).rejects.toThrow('Job Crashed');
       expect(mockRedisClient.eval).toHaveBeenCalledTimes(1);
     });
+
+    it('临界区执行超过 ttl/3 时应自动续租，避免锁提前过期导致互斥失效', async () => {
+      vi.useFakeTimers();
+      try {
+        mockRedisClient.set.mockResolvedValue('OK');
+        mockRedisClient.eval.mockResolvedValue(1);
+
+        const callback = vi.fn(() => new Promise<string>((resolve) => setTimeout(() => resolve('done'), 5000)));
+        const pending = redisService.withLock('cron:token-cleanup', 9000, callback);
+
+        // ttlMs / 3 = 3000ms 时触发续租（5 个参数：脚本、键数、键、token、ttl）
+        await vi.advanceTimersByTimeAsync(3000);
+        expect(mockRedisClient.eval).toHaveBeenCalledWith(
+          expect.stringContaining('pexpire'),
+          1,
+          'lock:cron:token-cleanup',
+          expect.any(String),
+          9000,
+        );
+
+        await vi.advanceTimersByTimeAsync(2000);
+        await expect(pending).resolves.toBe('done');
+      } finally {
+        vi.useRealTimers();
+      }
+    });
   });
 
   describe('remember() — 自动缓存读写', () => {

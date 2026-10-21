@@ -1,8 +1,24 @@
 import { InjectQueue } from '@nestjs/bullmq';
 import { Injectable } from '@nestjs/common';
-import type { Queue } from 'bullmq';
+import type { JobsOptions, Queue } from 'bullmq';
 
 import { MAIL_QUEUE } from '@/common/constants/queues';
+
+/**
+ * 邮件任务统一重试与保留策略
+ *
+ * SMTP 的限流、连接抖动与上游维护均属瞬态故障；不重试会静默丢掉验证码与密码重置邮件，
+ * 用户侧表现为「没收到邮件」且无法自助恢复。策略与 `SEARCH_JOB_OPTIONS` 保持一致。
+ */
+const MAIL_JOB_OPTIONS: JobsOptions = {
+  attempts: 3,
+  backoff: {
+    type: 'exponential',
+    delay: 2000,
+  },
+  removeOnComplete: 100,
+  removeOnFail: 500,
+};
 
 /**
  * 邮件队列契约 — 类型 + 生产者（MailJobs）二合一，生产/消费两侧共用。
@@ -47,16 +63,16 @@ export class MailJobs {
 
   /** 投递邮箱验证邮件 */
   queueVerificationEmail(to: string, name: string, token: string, locale: MailLocale) {
-    return this.queue.add(MailJobName.VerifyEmail, { to, name, token, locale });
+    return this.queue.add(MailJobName.VerifyEmail, { to, name, token, locale }, MAIL_JOB_OPTIONS);
   }
 
   /** 投递密码重置邮件 */
   queuePasswordResetEmail(to: string, name: string, token: string, locale: MailLocale) {
-    return this.queue.add(MailJobName.ResetPassword, { to, name, token, locale });
+    return this.queue.add(MailJobName.ResetPassword, { to, name, token, locale }, MAIL_JOB_OPTIONS);
   }
 
   /** 投递欢迎邮件（注册后，无 token） */
   queueWelcomeEmail(to: string, name: string, locale: MailLocale) {
-    return this.queue.add(MailJobName.Welcome, { to, name, locale });
+    return this.queue.add(MailJobName.Welcome, { to, name, locale }, MAIL_JOB_OPTIONS);
   }
 }

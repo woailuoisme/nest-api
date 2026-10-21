@@ -226,6 +226,11 @@ export const WEPAY_ERROR_MAP: Readonly<Record<string, WepayErrorDescriptor>> = {
     category: 'auth',
     description: '微信支付应答验签失败',
   },
+  WEPAY_RESPONSE_HEADERS_MISSING: {
+    status: HttpStatus.BAD_GATEWAY,
+    category: 'auth',
+    description: '微信支付应答缺少签名请求头（疑似被中间环节剥离）',
+  },
   WEPAY_CERTIFICATE_UNRESOLVED: {
     status: HttpStatus.INTERNAL_SERVER_ERROR,
     category: 'auth',

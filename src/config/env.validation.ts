@@ -212,8 +212,13 @@ export const envSchema = z
     CENTRIFUGO_PUBLIC_WS_URL: z.string().optional(),
     CENTRIFUGO_PUBLIC_SSE_URL: z.string().optional(),
     // Centrifugo Proxy 回调共享密钥（≥16 字符）：配置后后端强制校验该头，拒绝非网关来源。
-    // 需与网关侧静态头（CENTRIFUGO_PROXY_STATIC_HTTP_HEADERS）成对配置；未配置时端点不校验（仅本地开发可接受）。
+    // 需与网关侧静态头（CENTRIFUGO_PROXY_STATIC_HTTP_HEADERS）成对配置；
+    // 未配置时端点不校验（仅本地开发可接受）；生产环境一旦启用 REALTIME_URL 即强制必填（见 superRefine）。
     CENTRIFUGO_PROXY_SECRET: emptyAsUndefined(z.string().min(16).optional()),
+    // 服务端调用 Centrifugo HTTP API 的单次上限（毫秒）。与 SMS_/WEPAY_/MINIPROGRAM_TIMEOUT_MS 同构：
+    // 出站超时按上游各配一个，不复用请求级的 HTTP_TIMEOUT_MS —— 两者相等会让上游超时与请求超时同时触发、互相掩盖归因。
+    // 必须小于 HTTP_TIMEOUT_MS，否则上游调用会先耗尽整个请求预算。
+    REALTIME_TIMEOUT_MS: z.coerce.number().int().positive().max(30_000).default(5_000),
     // 全文搜索驱动（Laravel Scout SCOUT_DRIVER）：noop (空驱动/禁用) 或 meilisearch
     SCOUT_DRIVER: emptyAsUndefined(z.enum(['noop', 'meilisearch']).optional()),
     // 统一全文搜索 DSN (例如: meilisearch://masterKey@localhost:7700)
@@ -316,6 +321,15 @@ export const envSchema = z
         code: 'custom',
         path: ['BETTER_AUTH_SECRET'],
         message: '生产环境禁止使用公开默认密钥，请执行 just cmd jwt:secret 重新生成',
+      });
+    }
+
+    // 启用 realtime 却缺共享密钥时，`/realtime/proxy/subscribe` 对公网完全开放（验签 fail-open）
+    if (data.REALTIME_URL && !data.CENTRIFUGO_PROXY_SECRET) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['CENTRIFUGO_PROXY_SECRET'],
+        message: '启用 REALTIME_URL 时生产环境必须配置 CENTRIFUGO_PROXY_SECRET（≥16 字符），否则代理回调端点验签失效',
       });
     }
 
