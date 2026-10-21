@@ -173,15 +173,15 @@ just dev
 
 ## 🛠️ 常用命令 (Justfile)
 
-同一个镜像承载三种进程类型，由 `entrypoint.sh` 的 verb 唯一确定（不存在由 env 二次决定的空间）：
+同一个镜像承载三种进程类型，由镜像 `CMD` / 编排器 args 指定的 CLI 子命令唯一确定（不存在由 env 二次决定的空间）：
 
 | verb     | 本地命令          | 容器命令                     | 用途                                    |
 | :------- | :---------------- | :--------------------------- | :-------------------------------------- |
-| `serve` | `just serve` | 默认（`CMD ["serve"]`） | HTTP API，队列由独立 worker 消费 |
-| `worker` | `just worker` | `command: ["worker"]` | 消费队列与定时任务，不提供 HTTP |
-| `cli` | `just cli <命令>` | `command: ["cli", "<命令>"]` | 一次性 CLI，如 `route:list` / `db:seed` |
+| `serve`  | `just serve`      | 默认（`CMD ["serve"]`）      | HTTP API，队列由独立 worker 消费        |
+| `worker` | `just worker`     | `command: ["worker"]`        | 消费队列与定时任务，不提供 HTTP         |
+| `cli`    | `just cli <命令>` | `command: ["cli", "<命令>"]` | 一次性 CLI，如 `route:list` / `db:seed` |
 
-> 启动前门统一为 `dist/cli.js`：容器 verb 与本地 `just` 均落到同一 CLI 命令（`serve` 含别名 `server`），引导体集中在 `src/bootstrap/`；`src/main.ts` / `src/workers/worker.main.ts` 历史入口已删除。
+> 启动前门统一为 `dist/cli.js`：镜像 `ENTRYPOINT` 直接 exec `bun run dist/cli.js`，本地 `just` 也走同一 CLI 命令（`serve` 含别名 `server`），引导体集中在 `src/bootstrap/`。`entrypoint.sh`、`src/main.ts`、`src/workers/worker.main.ts` 均已删除；容器内需要额外命令时用 `docker run --entrypoint` 覆盖。
 
 ```bash
 # --- 开发与运行 ---

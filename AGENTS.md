@@ -281,7 +281,7 @@ BullMQ 队列由 `AuthModule → MailJobs` 依赖，CLI 模块也需 `BullModule
 
 - **`.env`**: 本地开发，不入库。
 - **`secret.ini`**: 部署用 VPS/SSH 凭据，`scripts/sync-secrets.sh` 同步到 GitHub Secrets (见 `secret.example.ini`)。
-- **Docker**: 根目录 `Dockerfile` 多阶段构建 (oven/bun:1.4-alpine)，生产镜像不含源码与 devDeps（**故运行时代码不得静态导入 devDependency**）。启动前门统一为 `dist/cli.js`：`entrypoint.sh` 的 verb（`serve` / `worker` / `cli`）全部转发到同一 CLI 命令，**不存在由 env 二次分叉的空间**：`serve` 只提供 HTTP，队列消费恒由独立 `worker` 进程承担。交付编排：根 `docker-compose.yml` 以 `x-app: &app` 锚点 + `build: .` 启动 `api` 与 `worker` 双服务，`deploy/docker-compose.yml` 以 `include: ../docker-compose.yml` 汇入并聚合 `centrifugo/`、`imgproxy/`、`meilisearch/`、`mosquitto/`、`otelcol/`。容器栈环境变量统一读 `deploy/.env`（service hostname DSN），根 `.env` 仅本地开发。
+- **Docker**: 根目录 `Dockerfile` 多阶段构建 (oven/bun:1.4-alpine)，生产镜像不含源码与 devDeps（**故运行时代码不得静态导入 devDependency**）。启动前门统一为 `dist/cli.js`：镜像 `ENTRYPOINT` 为 `tini -- bun run dist/cli.js`，`CMD` 默认 `serve`，`worker` 通过编排器 args 覆写（**已无 shell 分发脚本**，需诊断命令时用 `docker run --entrypoint`），**不存在由 env 二次分叉的空间**：`serve` 只提供 HTTP，队列消费恒由独立 `worker` 进程承担。交付编排：根 `docker-compose.yml` 以 `x-app: &app` 锚点 + `build: .` 启动 `api` 与 `worker` 双服务，`deploy/docker-compose.yml` 以 `include: ../docker-compose.yml` 汇入并聚合 `centrifugo/`、`imgproxy/`、`meilisearch/`、`mosquitto/`、`otelcol/`。容器栈环境变量统一读 `deploy/.env`（service hostname DSN），根 `.env` 仅本地开发。
 
 ## 易踩坑
 

@@ -29,7 +29,7 @@ services:
   worker:
     <<: *app
     container_name: worker
-    # 独立队列消费进程 (entrypoint.sh worker → dist/cli.js worker)
+    # 独立队列消费进程（镜像 CMD 的 args 覆写为 worker → bun run dist/cli.js worker）
     command: ['worker']
 
 networks:

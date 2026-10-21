@@ -68,9 +68,8 @@ ENV NODE_ENV=production \
   APP_ENV=production \
   PORT=4400
 
-# 1. 注入 init 进程与统一调度脚本
+# 1. 注入 init 进程（PID 1 信号转发与僵尸进程回收）
 COPY --from=prod-deps /sbin/tini /sbin/tini
-COPY --chmod=755 entrypoint.sh /usr/local/bin/entrypoint.sh
 
 # 2. CIS 安全基线：核心代码与依赖保持 root:root 只读属主，防范 RCE 篡改；仅存储目录赋予应用用户写权限
 COPY --from=prod-deps /app/node_modules ./node_modules
@@ -85,5 +84,7 @@ EXPOSE 4400
 # 配置优雅停机信号，经由 tini 传递至 NestJS 触发 shutdown hooks 与连接池释放
 STOPSIGNAL SIGTERM
 
-ENTRYPOINT ["/sbin/tini", "--", "entrypoint.sh"]
+# 唯一启动前门：dist/cli.js。进程类型由 CMD / 编排器 args 决定（serve | worker），
+# 不再经 shell 脚本分发；需额外命令时用 `docker run --entrypoint` 覆盖
+ENTRYPOINT ["/sbin/tini", "--", "bun", "run", "dist/cli.js"]
 CMD ["serve"]
