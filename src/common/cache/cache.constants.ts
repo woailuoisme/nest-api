@@ -19,6 +19,3 @@ export const NULL_CACHE_SENTINEL = '__CACHE_NIL_SENTINEL__';
 
 /** L1 内存存储实例独立注入令牌 */
 export const CACHE_L1_STORE = 'CACHE_L1_STORE';
-
-/** 默认 Singleflight 超时阈值 (毫秒)：15 秒 */
-export const DEFAULT_SINGLEFLIGHT_TIMEOUT_MS = 15 * 1000;

@@ -126,10 +126,8 @@ export class CacheService implements OnModuleInit, OnModuleDestroy {
       return;
     }
 
-    if (msg.key) {
-      this.l1Store?.delete(msg.key);
-      this.logger.debug(`Evicted local L1 key [${msg.key}] triggered by instance [${msg.originInstanceId}]`);
-    }
+    this.l1Store?.delete(msg.key);
+    this.logger.debug(`Evicted local L1 key [${msg.key}] triggered by instance [${msg.originInstanceId}]`);
   }
 
   /**
@@ -273,19 +271,5 @@ export class CacheService implements OnModuleInit, OnModuleDestroy {
     } catch (error) {
       this.logger.warn(`Failed to broadcast cache invalidation for key [${key}]: ${String(error)}`);
     }
-  }
-
-  /**
-   * 提供对底层 cache-manager 原始门面的直接访问
-   */
-  getRawManager(): Cache {
-    return this.cacheManager;
-  }
-
-  /**
-   * 提供对底层 L1 内存存储 Keyv 实例的直接访问（用于测试或自省）
-   */
-  getL1Store(): Keyv | undefined {
-    return this.l1Store;
   }
 }

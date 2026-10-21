@@ -2,13 +2,7 @@ import { Readable } from 'node:stream';
 
 import { describe, expect, it } from 'vitest';
 
-import {
-  buildMediaPath,
-  buildVariantPath,
-  computeFileHash,
-  getUtcDateString,
-  slugify,
-} from '@/common/media/strategies/naming.strategy';
+import { buildMediaPath, computeFileHash, getUtcDateString, slugify } from '@/common/media/strategies/naming.strategy';
 import type { UploadedFile } from '@/common/storage/interfaces/upload.interface';
 
 function memoryFile(originalname = 'Avatar Image.png', buffer = Buffer.from('test-image-content')): UploadedFile {
@@ -97,13 +91,6 @@ describe('naming.strategy', () => {
       const file = memoryFile('avatar.jpg');
       const path = await buildMediaPath(file, { prefix: 'avatars' }, undefined, '.webp');
       expect(path).toMatch(/^avatars\/\d{8}\/[0-9a-f-]{36}\.webp$/);
-    });
-  });
-
-  describe('buildVariantPath()', () => {
-    it('为主要路径生成指定规格的缩略图路径', () => {
-      expect(buildVariantPath('media/20260820/abc.webp', 'thumb', 'webp')).toBe('media/20260820/abc_thumb.webp');
-      expect(buildVariantPath('avatars/12/34/sha.png', 'small', 'webp')).toBe('avatars/12/34/sha_small.webp');
     });
   });
 });

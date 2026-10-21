@@ -2,11 +2,6 @@ import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 
 import { CursorPageMetaResource, PageMetaResource } from './pagination.dto';
 
-export class ApiResponseResource<T = unknown> {
-  @ApiProperty({ description: 'Response payload data' })
-  data: T;
-}
-
 export class ApiErrorDebugDetailsResource {
   @ApiProperty({
     example: 'UniqueViolationException',

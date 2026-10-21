@@ -106,14 +106,3 @@ export async function buildMediaPath(
     }
   }
 }
-
-/**
- * 为主文件路径生成变体/缩略图路径
- * 例如: media/20260813/abc.webp + 'thumb' + '.webp' → media/20260813/abc_thumb.webp
- */
-export function buildVariantPath(mainPath: string, variantName: string, format = 'webp'): string {
-  const parsed = parse(mainPath);
-  const ext = format.startsWith('.') ? format : `.${format}`;
-  const dir = parsed.dir ? `${parsed.dir}/` : '';
-  return `${dir}${parsed.name}_${variantName}${ext}`;
-}

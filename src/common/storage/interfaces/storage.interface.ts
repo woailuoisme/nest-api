@@ -1,6 +1,4 @@
-import type { StorageDisk, StoragePutOptions } from '@nestjs/storage';
-
-export type PutOptions = StoragePutOptions;
+import type { StorageDisk } from '@nestjs/storage';
 
 /**
  * 存储磁盘契约

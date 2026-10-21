@@ -35,9 +35,6 @@ export const MINIPROGRAM_QR_WIDTH_MIN = 280;
 /** 小程序码宽度上限（官方 1280px） */
 export const MINIPROGRAM_QR_WIDTH_MAX = 1280;
 
-/** 小程序码宽度默认值（官方 430px） */
-export const MINIPROGRAM_QR_WIDTH_DEFAULT = 430;
-
 /** 不限制小程序码的 scene 最大可见字符数（官方 32） */
 export const MINIPROGRAM_UNLIMITED_SCENE_MAX_LENGTH = 32;
 
@@ -88,18 +85,6 @@ export const MINIPROGRAM_API_PATHS = {
   SUBSCRIBE_SEND: '/cgi-bin/message/subscribe/send',
 } as const;
 
-/** 内容安全场景枚举（小程序支持的四个场景） */
-export const MINIPROGRAM_CONTENT_SCENES = {
-  /** 资料 */
-  PROFILE: 1,
-  /** 评论 */
-  COMMENT: 2,
-  /** 论坛 */
-  FORUM: 3,
-  /** 社交日志 */
-  SOCIAL_LOG: 4,
-} as const;
-
 /** 内容安全建议值：pass 通过、review 建议人工审核、risky 违规 */
 export const MINIPROGRAM_CONTENT_SUGGESTS = {
   PASS: 'pass',
@@ -126,13 +111,6 @@ export const MINIPROGRAM_SUBSCRIBE_STATES = {
   DEVELOPER: 'developer',
   TRIAL: 'trial',
   FORMAL: 'formal',
-} as const;
-
-/** 小程序码 env_version：打开的小程序版本 */
-export const MINIPROGRAM_QR_ENV_VERSIONS = {
-  RELEASE: 'release',
-  TRIAL: 'trial',
-  DEVELOP: 'develop',
 } as const;
 
 /** 订阅消息语言类型 */

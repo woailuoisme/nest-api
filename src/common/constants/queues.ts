@@ -4,9 +4,6 @@
  * 避免队列名散落各文件导致不一致。
  */
 
-/** 默认队列名（BullMQ 默认队列，registerQueue 未显式命名时使用） */
-export const DEFAULT_QUEUE = 'default';
-
 /** 演示队列名 */
 export const DEMO_QUEUE = 'demo';
 

@@ -2,9 +2,6 @@ import { createHash } from 'node:crypto';
 
 import { appName } from '@/common/constants/app.constants';
 
-/** 短信服务商（默认 smsbao） */
-export type SmsProvider = 'smsbao' | 'aliyun';
-
 export interface SmsOtpInput {
   /** 目标手机号，接受 E.164（+8613800138000）或大陆 11 位 */
   phone: string;

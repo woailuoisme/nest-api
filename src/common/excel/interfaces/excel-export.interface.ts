@@ -1,5 +1,3 @@
-import type * as ExcelJS from 'exceljs';
-
 /**
  * 导出数据集合的数据源接口
  * 支持同步数组和 AsyncIterable 两种数据源，
@@ -34,15 +32,9 @@ export interface WithTitle {
   title(): string;
 }
 
-/** 自定义工作表样式（流式模式下传入的是 stream.xlsx.WorksheetWriter，不支持完整 Cells API） */
-export interface WithStyles {
-  styles(worksheet: ExcelJS.Worksheet): void;
-}
-
 /** Excel 导出组合类型 */
 export type ExcelExportable<T = unknown> = FromCollection<T> &
   Partial<WithHeadings> &
   Partial<WithMapping<T>> &
   Partial<WithColumnWidths> &
-  Partial<WithTitle> &
-  Partial<WithStyles>;
+  Partial<WithTitle>;
