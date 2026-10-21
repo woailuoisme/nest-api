@@ -3,7 +3,7 @@
  *
  * 覆盖：用户 CRUD、分页搜索、头像更新
  */
-import { ConflictException, NotFoundException } from '@nestjs/common';
+import { ConflictException, ForbiddenException, NotFoundException } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 import { range } from 'es-toolkit';
 import { createMockDrizzleDb } from 'tests/mocks/drizzle.mock';
@@ -207,19 +207,77 @@ describe('UsersService (Admin)', () => {
   });
 
   describe('changeRole() — 变更用户角色', () => {
-    it('应更新角色并返回 UserEntity', async () => {
+    /** 具备委任权限的调用者（勿使用 ADMIN：同/超权一律拒绝） */
+    const superAdmin = { id: 'admin-uuid-1', role: Role.SUPER_ADMIN };
+
+    it('应写入目标角色并返回 UserEntity', async () => {
+      db._stubs.findFirstUser.mockResolvedValue({ id: 'user-uuid-1', role: Role.USER });
       db._stubs.updateReturning.mockResolvedValue([{ ...mockUser, role: 'ADMIN' }]);
 
-      const result = await usersService.changeRole('user-uuid-1', Role.ADMIN);
+      const result = await usersService.changeRole(superAdmin, 'user-uuid-1', Role.ADMIN);
 
-      expect(db.update).toHaveBeenCalled();
+      expect(db._stubs.updateSet).toHaveBeenCalledWith(expect.objectContaining({ role: Role.ADMIN }));
       expect(result.role).toBe(Role.ADMIN);
     });
 
     it('用户不存在时应抛出 NotFoundException', async () => {
-      db._stubs.updateReturning.mockResolvedValue([]);
+      db._stubs.findFirstUser.mockResolvedValue(null);
 
-      await expect(usersService.changeRole('non-existent', Role.ADMIN)).rejects.toBeInstanceOf(NotFoundException);
+      await expect(usersService.changeRole(superAdmin, 'non-existent', Role.ADMIN)).rejects.toBeInstanceOf(
+        NotFoundException,
+      );
+      expect(db._stubs.updateReturning).not.toHaveBeenCalled();
+    });
+
+    it('禁止变更自己的角色', async () => {
+      await expect(usersService.changeRole(superAdmin, superAdmin.id, Role.USER)).rejects.toBeInstanceOf(
+        ForbiddenException,
+      );
+    });
+
+    it('禁止授予同级或更高角色（防提权）', async () => {
+      db._stubs.findFirstUser.mockResolvedValue({ id: 'user-uuid-1', role: Role.USER });
+      const admin = { id: 'admin-uuid-2', role: Role.ADMIN };
+      await expect(usersService.changeRole(admin, 'user-uuid-1', Role.SUPER_ADMIN)).rejects.toBeInstanceOf(
+        ForbiddenException,
+      );
+      await expect(usersService.changeRole(admin, 'user-uuid-1', Role.ADMIN)).rejects.toBeInstanceOf(
+        ForbiddenException,
+      );
+    });
+
+    it('禁止降级同级或更高角色的账号（否则 ADMIN 可搞降 SUPER_ADMIN）', async () => {
+      db._stubs.findFirstUser.mockResolvedValue({ id: 'target-uuid', role: Role.SUPER_ADMIN });
+      const admin = { id: 'admin-uuid-2', role: Role.ADMIN };
+
+      await expect(usersService.changeRole(admin, 'target-uuid', Role.USER)).rejects.toBeInstanceOf(ForbiddenException);
+    });
+
+    it('同级 ADMIN 之间也不得互相变更', async () => {
+      db._stubs.findFirstUser.mockResolvedValue({ id: 'target-uuid', role: Role.ADMIN });
+      const admin = { id: 'admin-uuid-2', role: Role.ADMIN };
+
+      await expect(usersService.changeRole(admin, 'target-uuid', Role.USER)).rejects.toBeInstanceOf(ForbiddenException);
+    });
+
+    it('SUPER_ADMIN 可以委任/降级同级 SUPER_ADMIN', async () => {
+      db._stubs.findFirstUser.mockResolvedValue({ id: 'target-uuid', role: Role.SUPER_ADMIN });
+      db._stubs.updateReturning.mockResolvedValue([{ ...mockUser, role: Role.SUPER_ADMIN }]);
+
+      const result = await usersService.changeRole(superAdmin, 'target-uuid', Role.SUPER_ADMIN);
+
+      expect(result.role).toBe(Role.SUPER_ADMIN);
+    });
+
+    it('目标角色为未知值/null 时 fail-closed（不得静默当作最低权重放行）', async () => {
+      const admin = { id: 'admin-uuid-2', role: Role.ADMIN };
+
+      for (const role of [null, 'ghost_role']) {
+        db._stubs.findFirstUser.mockResolvedValue({ id: 'target-uuid', role });
+        await expect(usersService.changeRole(admin, 'target-uuid', Role.USER)).rejects.toBeInstanceOf(
+          ForbiddenException,
+        );
+      }
     });
   });
 

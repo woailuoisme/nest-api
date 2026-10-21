@@ -26,20 +26,20 @@ topic read $SYS/#
 # 2. 工业设备（一机一密：用户名 = deviceId，密码由 mosquitto_passwd 写入 password.txt）
 # ─────────────────────────────────────────────────────────────
 # 仅能访问「自身 deviceId」所在子树（遥测/状态/告警上报 + 自身指令接收）
-# 说明：租户层级用 + 通配是为了兼容 devices/{tenantId}/{deviceId}/... 的主题布局；
-#      越权面已被限制为「同名 deviceId 跨租户」，如要求绝对隔离请改为按设备逐条 user 规则
+# 说明：租户层级用 + 通配是为了兼容 devices/{tenantId}/{deviceId}/... 的主题布局。
+#      由于 ACL 文件无法读取 JWT claim，租户隔离的强度取决于「设备与租户的绑定由服务端注册表固化」
+#      （IOT_DEVICE_TENANTS），而非 broker 侧校验。要获得绝对隔离，请由台账脚本生成逐设备 user 规则。
 pattern readwrite devices/+/%u/#
 
-# 接收平台下发的控制指令（当前主题布局 devices/{deviceId}/command 无租户层级）
-pattern read devices/%u/command
+# 控制指令与遥测共用同一租户层级：devices/{tenantId}/{deviceId}/command
+# 已由上方 readwrite 规则覆盖，无需单独声明 read 规则
 
 # 仅能向平台 RPC 回复通道写入定向回执（app/rpc/{podId}/reply），无法订阅该通道
 pattern write app/rpc/+/reply
 
 # ─────────────────────────────────────────────────────────────
-# 3. 可选：按租户细化（规模较大时建议由脚本从设备台账生成）
+# 3. 绝对隔离推荐形态（由设备台账脚本逐条生成，不使用通配）
 # ─────────────────────────────────────────────────────────────
 # user cnc-001
 # topic readwrite devices/factory-alpha/cnc-001/#
-# topic read devices/cnc-001/command
 # topic write app/rpc/+/reply

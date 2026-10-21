@@ -47,36 +47,50 @@ describe('RealtimeChannelsService', () => {
   });
 
   describe('工业设备遥测推流频道鉴权', () => {
-    it('规范模式：合法用户且具备 deviceId 时允许订阅', () => {
-      const allowed = service.authorizeDeviceTelemetry(mockUser, { deviceId: 'dev_001' });
+    const operator: CurrentUserPayload = { ...mockUser, role: Role.OPERATOR };
+
+    it('规范模式：运营级用户且具备 deviceId 时允许订阅', () => {
+      const allowed = service.authorizeDeviceTelemetry(operator, { deviceId: 'dev_001' });
       expect(allowed).toBe(true);
     });
 
+    it('规范模式：普通用户不得订阅工业设备遥测', () => {
+      expect(service.authorizeDeviceTelemetry(mockUser, { deviceId: 'dev_001' })).toBe(false);
+    });
+
     it('规范模式：未传 deviceId 或未登录时拒绝订阅', () => {
-      expect(service.authorizeDeviceTelemetry(mockUser, {} as Record<string, string>)).toBe(false);
+      expect(service.authorizeDeviceTelemetry(operator, {} as Record<string, string>)).toBe(false);
       expect(service.authorizeDeviceTelemetry(null as unknown as CurrentUserPayload, { deviceId: 'dev_001' })).toBe(
         false,
       );
     });
 
-    it('兼容模式 (WebSocket / SSE)：具备 deviceId 时允许订阅', () => {
-      expect(service.authorizeWsDeviceTelemetry(mockUser, { deviceId: 'dev_001' })).toBe(true);
-      expect(service.authorizeSseDeviceTelemetry(mockUser, { deviceId: 'dev_001' })).toBe(true);
+    it('兼容模式 (WebSocket / SSE)：同样按角色收敛', () => {
+      expect(service.authorizeWsDeviceTelemetry(operator, { deviceId: 'dev_001' })).toBe(true);
+      expect(service.authorizeSseDeviceTelemetry(operator, { deviceId: 'dev_001' })).toBe(true);
+      expect(service.authorizeWsDeviceTelemetry(mockUser, { deviceId: 'dev_001' })).toBe(false);
     });
   });
 
   describe('工业设备告警广播频道鉴权', () => {
-    it('规范模式：登录用户允许订阅告警频道', () => {
-      expect(service.authorizeIotAlarms(mockUser)).toBe(true);
+    const operator: CurrentUserPayload = { ...mockUser, role: Role.OPERATOR };
+
+    it('规范模式：运营级以上用户允许订阅告警频道', () => {
+      expect(service.authorizeIotAlarms(operator)).toBe(true);
+    });
+
+    it('规范模式：普通用户不得订阅（告警含设备与租户信息）', () => {
+      expect(service.authorizeIotAlarms(mockUser)).toBe(false);
     });
 
     it('规范模式：未登录用户拒绝订阅', () => {
       expect(service.authorizeIotAlarms(null as unknown as CurrentUserPayload)).toBe(false);
     });
 
-    it('兼容模式 (WebSocket / SSE)：登录用户允许订阅', () => {
-      expect(service.authorizeWsIotAlarms(mockUser)).toBe(true);
-      expect(service.authorizeSseIotAlarms(mockUser)).toBe(true);
+    it('兼容模式 (WebSocket / SSE)：同样按角色收敛', () => {
+      expect(service.authorizeWsIotAlarms(operator)).toBe(true);
+      expect(service.authorizeSseIotAlarms(operator)).toBe(true);
+      expect(service.authorizeWsIotAlarms(mockUser)).toBe(false);
     });
   });
 

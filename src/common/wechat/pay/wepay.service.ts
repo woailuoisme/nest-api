@@ -5,6 +5,7 @@ import { resolve } from 'node:path';
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 
+import { isProductionEnv } from '@/common/constants/app.constants';
 import type { EnvConfig } from '@/config/env.validation';
 
 import { loadPrivateKey } from './crypto/signer';
@@ -215,6 +216,14 @@ export class WepayService {
 
   /** 装配 mock 驱动：未配置凭证时的本地与测试降级 */
   private createMockDriver(notifyUrl: string | undefined): IWepayDriver {
+    // 生产环境跑 mock 意味着真实回调会验签失败、下单只产生假数据：
+    // 必须留下启动期 error 日志（健康探针另会标记 degraded），不能只靠一行 debug
+    if (isProductionEnv()) {
+      this.logger.error(
+        '微信支付运行在 mock 驱动（WEPAY_* 凭证不完整或显式关闭）：真实支付回调将全部验签失败，请立即补齐凭证',
+      );
+    }
+
     return new MockWepayDriver({
       appid: this.configService.get('WEPAY_APPID') || MOCK_APPID,
       mchid: this.configService.get('WEPAY_MCHID') || MOCK_MCHID,

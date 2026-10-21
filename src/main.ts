@@ -46,4 +46,10 @@ async function bootstrap() {
   });
 }
 
-bootstrap();
+bootstrap().catch((error: unknown) => {
+  // 引导失败必须以非零码退出：否则编排器会看到一个「健康」但永不服务的容器
+  process.stderr.write(
+    `[Bootstrap] 应用启动失败: ${error instanceof Error ? (error.stack ?? error.message) : String(error)}\n`,
+  );
+  process.exit(1);
+});

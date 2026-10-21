@@ -1,4 +1,4 @@
-import { ConflictException, Injectable, NotFoundException } from '@nestjs/common';
+import { ConflictException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { hashPassword } from 'better-auth/crypto';
 import { desc, eq } from 'drizzle-orm';
 import { pick } from 'es-toolkit';
@@ -15,6 +15,29 @@ import { account, user } from '@/database/drizzle/schema';
 import { userSearchable } from '@/database/search/user.searchable';
 
 import { CreateUserRequest, FindUsersRequest, SearchUsersRequest, UpdateUserRequest, UserEntity } from './users.dto';
+
+/** 角色权重：用于阻止越级授权（低权限持有者不得授予/剥夺同级及以上角色） */
+const ROLE_RANK: Record<Role, number> = {
+  [Role.USER]: 0,
+  [Role.OPERATOR]: 1,
+  [Role.ADMIN]: 2,
+  [Role.SUPER_ADMIN]: 3,
+};
+
+/**
+ * 解析角色权重（fail-closed）。
+ *
+ * `user.role` 是自由文本列（可空、无 CHECK 约束），可能包含历史值、小写值或
+ * 仅存在于 better-auth 的角色。直接下标取值会得到 `undefined`，而 `undefined >= n` 为 false，
+ * 会让「不得变更同级/更高角色」的检查静默失效——因此未知角色一律视为无权重并拒绝。
+ */
+function rankOf(role: string | null): number {
+  const rank = role === null ? undefined : ROLE_RANK[role as Role];
+  if (rank === undefined) {
+    throw new ForbiddenException(`Unsupported role: ${String(role)}`);
+  }
+  return rank;
+}
 
 @Injectable()
 export class UsersService {
@@ -118,8 +141,39 @@ export class UsersService {
     return this.applyUserUpdate(id, { ...pick(dto, ['name', 'email']), updatedAt: new Date() });
   }
 
-  /** 变更用户角色 — 仅具备权限的管理员可调用 */
-  async changeRole(id: string, role: Role) {
+  /**
+   * 变更用户角色 —— 三层防护：
+   * 1. 路由层 `@Roles(ADMIN, SUPER_ADMIN)` 拒绝 OPERATOR 进入；
+   * 2. 服务层校验「不得自改」与「不得越级授予」；
+   * 3. 服务层还校验目标**当前**角色不得等于/高于调用者，
+   *    否则 ADMIN 可把一个 SUPER_ADMIN 降级为 USER（同级互相降权）= 变相提权。
+   */
+  async changeRole(actor: { id: string; role: Role }, id: string, role: Role) {
+    if (actor.id === id) {
+      throw new ForbiddenException('Cannot change your own role');
+    }
+
+    const target = await this.db.query.user.findFirst({
+      columns: { id: true, role: true },
+      where: eq(user.id, id),
+    });
+    if (!target) {
+      throw new NotFoundException('User not found');
+    }
+
+    const actorRank = rankOf(actor.role);
+    const currentRank = rankOf(target.role);
+    const nextRank = ROLE_RANK[role];
+    // 同级操作默认拒绝：仅 SUPER_ADMIN 之间可以互相委任/降级
+    const peerSuperAdmin = actor.role === Role.SUPER_ADMIN && target.role === Role.SUPER_ADMIN;
+
+    if (currentRank >= actorRank && !peerSuperAdmin) {
+      throw new ForbiddenException('Cannot modify a user at or above your own role');
+    }
+    if (nextRank >= actorRank && !(actor.role === Role.SUPER_ADMIN && role === Role.SUPER_ADMIN)) {
+      throw new ForbiddenException('Cannot assign a role at or above your own');
+    }
+
     return this.applyUserUpdate(id, { role, updatedAt: new Date() });
   }
 

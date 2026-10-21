@@ -1,7 +1,7 @@
 import { Writable } from 'node:stream';
 
 import { context, trace, type Span } from '@opentelemetry/api';
-import { AsyncHooksContextManager } from '@opentelemetry/context-async-hooks';
+import { AsyncLocalStorageContextManager } from '@opentelemetry/context-async-hooks';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { createPinoLogger } from '@/setup/logger';
@@ -27,7 +27,7 @@ const capture = (): { stream: Writable; lines: string[] } => {
 describe('logger.config traceMixin (OTel 日志-链路关联)', () => {
   // 测试环境无 NodeSDK，需显式注册 context manager 才能使 context.with 传播活动 span
   beforeEach(() => {
-    context.setGlobalContextManager(new AsyncHooksContextManager());
+    context.setGlobalContextManager(new AsyncLocalStorageContextManager());
   });
   afterEach(() => {
     context.disable();

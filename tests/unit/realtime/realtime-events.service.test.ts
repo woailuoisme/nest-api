@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { Role } from '@/common/constants/roles';
 import type { CurrentUserPayload } from '@/common/decorators/current-user.decorator';
+import type { DrizzleDB } from '@/database/drizzle/drizzle.service';
 import type { RealtimeService } from '@/realtime';
 import { REALTIME_CHANNELS } from '@/realtime/channels/realtime-channels.service';
 import { RealtimeEventsService } from '@/realtime/realtime-events.service';
@@ -17,6 +18,8 @@ describe('RealtimeEventsService', () => {
     getWsUrl: ReturnType<typeof vi.fn>;
     getSseUrl: ReturnType<typeof vi.fn>;
   };
+
+  let mockDb: { query: { user: { findFirst: ReturnType<typeof vi.fn> } } };
 
   const mockUser: CurrentUserPayload = {
     id: 'usr_abc123',
@@ -41,7 +44,18 @@ describe('RealtimeEventsService', () => {
       getSseUrl: vi.fn().mockReturnValue('http://127.0.0.1:8000/connection/sse'),
     };
 
-    service = new RealtimeEventsService(mockRealtimeService as unknown as RealtimeService);
+    mockDb = {
+      query: {
+        user: {
+          findFirst: vi.fn().mockResolvedValue(null),
+        },
+      },
+    };
+
+    service = new RealtimeEventsService(
+      mockRealtimeService as unknown as RealtimeService,
+      mockDb as unknown as DrizzleDB,
+    );
   });
 
   describe('createConnectionToken', () => {
@@ -74,7 +88,8 @@ describe('RealtimeEventsService', () => {
   });
 
   describe('handleProxySubscribe', () => {
-    it('当鉴权通过时，应返回成功的 result 空对象', async () => {
+    it('当鉴权通过时，应返回成功的 result 空对象，且身份取自数据库', async () => {
+      mockDb.query.user.findFirst.mockResolvedValue({ id: 'usr_abc123', email: 'test@example.com', role: Role.USER });
       mockRealtimeService.canSubscribe.mockResolvedValueOnce({ authorized: true });
       const result = await service.handleProxySubscribe({
         channel: 'private:notifications.usr_abc123',
@@ -83,13 +98,33 @@ describe('RealtimeEventsService', () => {
       });
 
       expect(mockRealtimeService.canSubscribe).toHaveBeenCalledWith(
-        expect.objectContaining({ id: 'usr_abc123' }),
+        expect.objectContaining({ id: 'usr_abc123', role: Role.USER }),
         'private:notifications.usr_abc123',
       );
       expect(result).toEqual({ result: {} });
     });
 
+    it('未知用户应直接拒绝，且不得进入频道鉴权', async () => {
+      mockDb.query.user.findFirst.mockResolvedValue(null);
+
+      const result = await service.handleProxySubscribe({
+        channel: 'private:admin.orders',
+        user: 'ghost-user',
+      });
+
+      expect(mockRealtimeService.canSubscribe).not.toHaveBeenCalled();
+      expect(result).toEqual({ error: { code: 103, message: 'Permission denied' } });
+    });
+
+    it('未携带用户标识时应直接拒绝', async () => {
+      const result = await service.handleProxySubscribe({ channel: 'private:admin.orders', user: '' });
+
+      expect(mockRealtimeService.canSubscribe).not.toHaveBeenCalled();
+      expect(result).toEqual({ error: { code: 103, message: 'Unauthenticated' } });
+    });
+
     it('当鉴权拒绝时，应返回包含 103 错误码的标准 error 对象', async () => {
+      mockDb.query.user.findFirst.mockResolvedValue({ id: 'usr_regular', email: 'u@example.com', role: Role.USER });
       mockRealtimeService.canSubscribe.mockResolvedValueOnce({
         authorized: false,
         reason: 'Forbidden to join channel',

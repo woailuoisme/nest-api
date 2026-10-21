@@ -7,7 +7,7 @@ import {
 } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
 import type { FastifyReply, FastifyRequest } from 'fastify';
-import { catchError, concatMap, type Observable, of, throwError } from 'rxjs';
+import { catchError, concatMap, finalize, type Observable, of, throwError } from 'rxjs';
 
 import { IDEMPOTENT_KEY, type IdempotentOptions } from './idempotency.decorator';
 import { IdempotencyService } from './idempotency.service';
@@ -102,6 +102,12 @@ export class IdempotencyInterceptor implements NestInterceptor {
     // 8. 成功持有锁：进入处理管道并在完成后持久化缓存与安全释放互斥锁
     const { cacheKey, lockKey, lockToken } = result;
 
+    // 长事务心跳：处理耗时可能超过锁 TTL（S3 上传 / 第三方调用），
+    // 不续租会让同 Key 的重试在锁到期后并行执行，制造重复副作用。
+    // 停止必须挂在 finalize 上：客户端中断（退订）不会触发 concatMap / catchError，
+    // 否则定时器会活过请求、在进程生命周期内持续对一个已失效的锁发起 EVAL。
+    const stopHeartbeat = this.idempotencyService.startLockHeartbeat({ lockKey, lockToken, lockTtlMs });
+
     return next.handle().pipe(
       concatMap(async (responseBody) => {
         const statusCode = res.statusCode || 200;
@@ -130,6 +136,8 @@ export class IdempotencyInterceptor implements NestInterceptor {
         this.idempotencyService.fail({ lockKey, lockToken }).catch(() => {});
         return throwError(() => error);
       }),
+      // 覆盖 complete / error / unsubscribe 三条路径
+      finalize(stopHeartbeat),
     );
   }
 

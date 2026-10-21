@@ -1,5 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { OnEvent } from '@nestjs/event-emitter';
+import { eq } from 'drizzle-orm';
 
 import { Role } from '@/common/constants/roles';
 import type { CurrentUserPayload } from '@/common/decorators/current-user.decorator';
@@ -11,6 +12,8 @@ import {
   type IotTelemetryReceivedEvent,
 } from '@/common/events';
 import type { NotificationBroadcastEvent, NotificationSentEvent } from '@/common/events/notification.event';
+import { type DrizzleDB, InjectDb } from '@/database/drizzle/drizzle.service';
+import { user } from '@/database/drizzle/schema';
 
 import { REALTIME_CHANNELS } from './channels/realtime-channels.service';
 import type {
@@ -30,7 +33,10 @@ import { RealtimeService } from './realtime.service';
 export class RealtimeEventsService {
   private readonly logger = new Logger(RealtimeEventsService.name);
 
-  constructor(private readonly realtimeService: RealtimeService) {}
+  constructor(
+    private readonly realtimeService: RealtimeService,
+    @InjectDb() private readonly db: DrizzleDB,
+  ) {}
 
   /**
    * 为客户端签发连接 Token（支持指定协议返回对应的连接端点 URL）
@@ -62,20 +68,39 @@ export class RealtimeEventsService {
 
   /**
    * 处理 Centrifugo 反向代理订阅鉴权 (Proxy Subscribe Webhook 模式)
+   *
+   * 安全约束：webhook 载荷来自网关而非浏览器，但其中的 `channel` 与客户端订阅请求同源，
+   * 因此**不得**从载荷重建用户画像（`subscribe.data` 完全由客户端控制）。
+   * `user` 是 Centrifugo 依据连接 Token subject 注入的标识，必须以它为唯一身份源回查数据库，
+   * 角色一律取自库内真实值。
    */
   async handleProxySubscribe(dto: CentrifugoProxySubscribeDto): Promise<CentrifugoProxyResponseDto> {
-    // Proxy 模式下 Centrifugo 会在订阅附带载荷中透传用户画像（email / role）
-    const userData = (dto.data ?? {}) as Record<string, unknown>;
+    const userId = dto.user?.trim();
+    if (!userId) {
+      this.logger.warn(`[Realtime] Centrifugo Proxy 订阅鉴权拒绝: 请求未携带连接用户标识, channel=[${dto.channel}]`);
+      return { error: { code: 103, message: 'Unauthenticated' } };
+    }
+
+    const foundUser = await this.db.query.user.findFirst({
+      columns: { id: true, email: true, role: true },
+      where: eq(user.id, userId),
+    });
+
+    if (!foundUser) {
+      this.logger.warn(`[Realtime] Centrifugo Proxy 订阅鉴权拒绝: 未知用户 user=[${userId}]`);
+      return { error: { code: 103, message: 'Permission denied' } };
+    }
+
     const userPayload: CurrentUserPayload = {
-      id: dto.user || '',
-      email: (userData.email as string) || '',
-      role: (userData.role as Role) || Role.USER,
+      id: foundUser.id,
+      email: foundUser.email,
+      role: foundUser.role as Role,
     };
 
     const authResult = await this.realtimeService.canSubscribe(userPayload, dto.channel);
     if (!authResult.authorized) {
       this.logger.warn(
-        `[Realtime] Centrifugo Proxy 订阅鉴权拒绝: channel=[${dto.channel}], user=[${dto.user}], reason=${authResult.reason}`,
+        `[Realtime] Centrifugo Proxy 订阅鉴权拒绝: channel=[${dto.channel}], user=[${userId}], reason=${authResult.reason}`,
       );
       return {
         error: {
@@ -85,7 +110,7 @@ export class RealtimeEventsService {
       };
     }
 
-    this.logger.debug(`[Realtime] Centrifugo Proxy 订阅鉴权通过: channel=[${dto.channel}], user=[${dto.user}]`);
+    this.logger.debug(`[Realtime] Centrifugo Proxy 订阅鉴权通过: channel=[${dto.channel}], user=[${userId}]`);
     return {
       result: {},
     };

@@ -4,12 +4,14 @@ import { Injectable, Logger, RequestTimeoutException, ServiceUnavailableExceptio
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import { delay } from 'es-toolkit';
 
+import { appName } from '@/common/constants/app.constants';
 import { IOT_EVENTS, type IotCommandExecutedEvent } from '@/common/events';
 
 import { MqttCtx, MqttParams, MqttPayload, MqttSubscribe } from '../decorators';
 import type { CommandResponseEntity } from '../dto/iot.dto';
 import type { MqttMessageContext } from '../transports/interfaces/mqtt.interface';
 import { MqttService } from '../transports/mqtt.service';
+import { IotDeviceCredentialService } from './iot-device-credential.service';
 
 /** 指令审计历史内存保留上限（保留最新 N 条） */
 export const MAX_COMMAND_HISTORY = 500;
@@ -51,6 +53,7 @@ export class IotCommandService {
   constructor(
     private readonly mqttService: MqttService,
     private readonly eventEmitter: EventEmitter2,
+    private readonly deviceCredentials: IotDeviceCredentialService,
   ) {}
 
   /**
@@ -75,7 +78,9 @@ export class IotCommandService {
     }
 
     const startTime = Date.now();
-    const targetTopic = `devices/${deviceId}/command`;
+    // 主题必须携带租户：与遥测布局保持一致，否则不同租户的同名设备会共享同一条指令通道
+    const tenantId = this.deviceCredentials.resolveTenant(deviceId);
+    const targetTopic = `devices/${tenantId}/${deviceId}/command`;
     const payload: CommandMessagePayload = {
       command,
       params,
@@ -104,7 +109,7 @@ export class IotCommandService {
         timeoutMs,
         qos: 1,
         userProperties: {
-          dispatchedBy: 'NestForge-IotHub',
+          dispatchedBy: `${appName()}-IotHub`,
           dispatchedAt: String(startTime),
         },
       });
@@ -149,7 +154,7 @@ export class IotCommandService {
    * 监听所有设备的下发指令。若接收到的请求携带 MQTT 5.0 `responseTopic` 与 `correlationData`，
    * 则模拟执行该工业动作并在 50ms 内原路回执，验证端到端 RPC 闭环。
    */
-  @MqttSubscribe('devices/:deviceId/command', { qos: 1 })
+  @MqttSubscribe('devices/:tenantId/:deviceId/command', { qos: 1 })
   async handleMockDeviceCommand(
     @MqttPayload() payload: CommandMessagePayload,
     @MqttParams('deviceId') deviceId: string,

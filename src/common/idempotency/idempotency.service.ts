@@ -11,7 +11,7 @@ import {
 } from '@nestjs/common';
 import { delay } from 'es-toolkit';
 
-import { UNLOCK_LUA_SCRIPT } from '@/database/lua-scripts';
+import { RENEW_LOCK_LUA_SCRIPT, UNLOCK_LUA_SCRIPT } from '@/database/lua-scripts';
 import { RedisService } from '@/database/redis.service';
 
 /** 解锁 Lua 脚本：安全核对 Token，防止误删他人的锁 */
@@ -327,6 +327,38 @@ export class IdempotencyService {
    */
   async fail(params: { lockKey: string; lockToken: string }): Promise<void> {
     await this.releaseLock(params.lockKey, params.lockToken);
+  }
+
+  /**
+   * 启动锁续租心跳（长事务防过期）。
+   *
+   * 排他锁的 TTL 只用于「进程崩溃后自动释放」，与业务耗时无关：
+   * 不续租时，超过 TTL 的慢请求会让同 Key 的重试重新抢到锁并行执行，
+   * 缓存回写再互相覆盖 —— 这正是幂等拦截器存在的意义所在。
+   *
+   * @returns 停止函数，**必须**在 complete / fail 后调用（推荐 `try/finally`）
+   */
+  startLockHeartbeat(params: { lockKey: string; lockToken: string; lockTtlMs?: number }): () => void {
+    const lockTtlMs = params.lockTtlMs ?? IdempotencyService.DEFAULT_LOCK_TTL_MS;
+    // 三分之一节奏续租：单次续租失败（网络抖动）仍有两次重试机会而不丢锁
+    const intervalMs = Math.max(Math.floor(lockTtlMs / 3), 1_000);
+
+    const timer = setInterval(() => {
+      void this.renewLock(params.lockKey, params.lockToken, lockTtlMs);
+    }, intervalMs);
+    // 心跳不得单独维持事件循环，避免阻塞进程退出
+    timer.unref?.();
+
+    return () => clearInterval(timer);
+  }
+
+  /** 原子续租锁（Token 不匹配即视为已失去执行权，仅告警不抛错） */
+  private async renewLock(lockKey: string, lockToken: string, lockTtlMs: number): Promise<void> {
+    try {
+      await this.redis.getClient().eval(RENEW_LOCK_LUA_SCRIPT, 1, lockKey, lockToken, String(lockTtlMs));
+    } catch (error) {
+      this.logger.warn(`Failed to renew idempotency lock for ${lockKey}: ${String(error)}`);
+    }
   }
 
   /** 读取并反序列化已缓存的响应对象 */

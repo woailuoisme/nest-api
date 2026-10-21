@@ -50,9 +50,11 @@ function buildService(options: { acquired?: boolean; completeRejects?: boolean; 
       }
     }),
     fail: vi.fn(async () => undefined),
+    // 长事务锁续租心跳：返回停止函数（业务侧在 finally 中调用）
+    startLockHeartbeat: vi.fn(() => vi.fn()),
   } as unknown as IdempotencyService;
 
-  const emitter = { emit: vi.fn() } as unknown as EventEmitter2;
+  const emitter = { emitAsync: vi.fn(async () => []) } as unknown as EventEmitter2;
 
   return { service: new PaymentsService(wepay, idempotency, emitter), idempotency, emitter, wepay };
 }
@@ -79,11 +81,11 @@ describe('支付回调处理服务', () => {
       }),
     );
 
-    expect(context.emitter.emit).toHaveBeenCalledWith(
+    expect(context.emitter.emitAsync).toHaveBeenCalledWith(
       PAYMENT_EVENTS.NOTIFY_RECEIVED,
       expect.objectContaining({ notifyId: 'notify-1', eventType: 'TRANSACTION.SUCCESS' }),
     );
-    expect(context.emitter.emit).toHaveBeenCalledWith(
+    expect(context.emitter.emitAsync).toHaveBeenCalledWith(
       PAYMENT_EVENTS.SUCCEEDED,
       expect.objectContaining({
         outTradeNo: 'ORDER-1',
@@ -102,7 +104,7 @@ describe('支付回调处理服务', () => {
 
     await duplicate.service.handleWepayNotify({}, '{}');
 
-    expect(duplicate.emitter.emit).not.toHaveBeenCalled();
+    expect(duplicate.emitter.emitAsync).not.toHaveBeenCalled();
     expect(duplicate.idempotency.complete).not.toHaveBeenCalled();
   });
 
@@ -111,7 +113,7 @@ describe('支付回调处理服务', () => {
 
     await refunded.service.handleWepayNotify({}, '{}');
 
-    expect(refunded.emitter.emit).toHaveBeenCalledWith(
+    expect(refunded.emitter.emitAsync).toHaveBeenCalledWith(
       PAYMENT_EVENTS.REFUNDED,
       expect.objectContaining({
         outTradeNo: 'ORDER-1',
@@ -120,7 +122,7 @@ describe('支付回调处理服务', () => {
         amount: { total: 100, refund: 50 },
       }),
     );
-    expect(refunded.emitter.emit).not.toHaveBeenCalledWith(PAYMENT_EVENTS.SUCCEEDED, expect.anything());
+    expect(refunded.emitter.emitAsync).not.toHaveBeenCalledWith(PAYMENT_EVENTS.SUCCEEDED, expect.anything());
   });
 
   it('退款异常回调应发布 ABNORMAL 状态的退款未成功事件', async () => {
@@ -128,7 +130,7 @@ describe('支付回调处理服务', () => {
 
     await abnormal.service.handleWepayNotify({}, '{}');
 
-    expect(abnormal.emitter.emit).toHaveBeenCalledWith(
+    expect(abnormal.emitter.emitAsync).toHaveBeenCalledWith(
       PAYMENT_EVENTS.REFUND_FAILED,
       expect.objectContaining({
         outTradeNo: 'ORDER-1',
@@ -138,7 +140,7 @@ describe('支付回调处理服务', () => {
         amount: { total: 100, refund: 50 },
       }),
     );
-    expect(abnormal.emitter.emit).not.toHaveBeenCalledWith(PAYMENT_EVENTS.REFUNDED, expect.anything());
+    expect(abnormal.emitter.emitAsync).not.toHaveBeenCalledWith(PAYMENT_EVENTS.REFUNDED, expect.anything());
   });
 
   it('退款关闭回调应发布 CLOSED 状态的退款未成功事件', async () => {
@@ -146,11 +148,11 @@ describe('支付回调处理服务', () => {
 
     await closed.service.handleWepayNotify({}, '{}');
 
-    expect(closed.emitter.emit).toHaveBeenCalledWith(
+    expect(closed.emitter.emitAsync).toHaveBeenCalledWith(
       PAYMENT_EVENTS.REFUND_FAILED,
       expect.objectContaining({ status: 'CLOSED', outRefundNo: 'REFUND-1' }),
     );
-    expect(closed.emitter.emit).not.toHaveBeenCalledWith(PAYMENT_EVENTS.REFUNDED, expect.anything());
+    expect(closed.emitter.emitAsync).not.toHaveBeenCalledWith(PAYMENT_EVENTS.REFUNDED, expect.anything());
   });
 
   it('资源结构与事件类型不匹配时应只发布收妥事件', async () => {
@@ -167,9 +169,9 @@ describe('支付回调处理服务', () => {
 
     await mismatched.service.handleWepayNotify({}, '{}');
 
-    expect(mismatched.emitter.emit).toHaveBeenCalledWith(PAYMENT_EVENTS.NOTIFY_RECEIVED, expect.anything());
-    expect(mismatched.emitter.emit).not.toHaveBeenCalledWith(PAYMENT_EVENTS.REFUNDED, expect.anything());
-    expect(mismatched.emitter.emit).not.toHaveBeenCalledWith(PAYMENT_EVENTS.SUCCEEDED, expect.anything());
+    expect(mismatched.emitter.emitAsync).toHaveBeenCalledWith(PAYMENT_EVENTS.NOTIFY_RECEIVED, expect.anything());
+    expect(mismatched.emitter.emitAsync).not.toHaveBeenCalledWith(PAYMENT_EVENTS.REFUNDED, expect.anything());
+    expect(mismatched.emitter.emitAsync).not.toHaveBeenCalledWith(PAYMENT_EVENTS.SUCCEEDED, expect.anything());
   });
 
   it('落库完成阶段失败时应释放幂等锁并上抛，令微信重投', async () => {
@@ -185,6 +187,6 @@ describe('支付回调处理服务', () => {
 
     await expect(context.service.handleWepayNotify({}, '{}')).rejects.toThrowError('验签失败');
     expect(context.idempotency.acquire).not.toHaveBeenCalled();
-    expect(context.emitter.emit).not.toHaveBeenCalled();
+    expect(context.emitter.emitAsync).not.toHaveBeenCalled();
   });
 });

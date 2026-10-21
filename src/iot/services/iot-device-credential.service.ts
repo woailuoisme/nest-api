@@ -5,6 +5,8 @@ import { ConfigService } from '@nestjs/config';
 
 import type { EnvConfig } from '@/config/env.validation';
 
+import { DEFAULT_TENANT_ID } from '../dto/iot.dto';
+
 /** 设备凭证校验失败统一文案：绝不区分「设备不存在」与「密钥错误」 */
 const INVALID_CREDENTIAL_MESSAGE = '设备凭证无效';
 
@@ -48,18 +50,47 @@ function parseCredentialTable(raw: string, pepper: string, logger: Logger): Map<
 }
 
 /**
+ * 解析设备租户归属表 (deviceId:tenantId，英文逗号分隔)
+ * 租户是**服务端事实**，不得由请求体声明，否则同设备可在任意租户命名空间发布数据
+ */
+function parseTenantTable(raw: string, logger: Logger): Map<string, string> {
+  const table = new Map<string, string>();
+
+  for (const entry of raw.split(',')) {
+    const trimmed = entry.trim();
+    if (!trimmed) continue;
+
+    const separatorIndex = trimmed.indexOf(':');
+    const deviceId = separatorIndex > 0 ? trimmed.slice(0, separatorIndex).trim() : '';
+    const tenantId = separatorIndex > 0 ? trimmed.slice(separatorIndex + 1).trim() : '';
+
+    if (!deviceId || !tenantId) {
+      logger.warn('忽略 IOT_DEVICE_TENANTS 中的非法条目 (应为 deviceId:tenantId 格式)');
+      continue;
+    }
+
+    table.set(deviceId, tenantId);
+  }
+
+  return table;
+}
+
+/**
  * 工业设备接入凭证服务 (一机一密换票)
  *
  * 职责边界：
  * 1. 恒定时间校验设备预置密钥，未知设备与密钥错误返回同一语义；
  * 2. 与业务鉴权密钥域隔离，签发设备 JWT 一律使用独立的 IOT_JWT_SECRET；
- * 3. 密钥缺失时 fail fast（绝不回退到硬编码默认值），避免弱密钥伪造设备身份。
+ * 3. 密钥缺失时 fail fast（绝不回退到硬编码默认值），避免弱密钥伪造设备身份；
+ * 4. 租户归属由服务端注册表 (`IOT_DEVICE_TENANTS`) 决定，不接受调用方自报。
  */
 @Injectable()
 export class IotDeviceCredentialService {
   private readonly logger = new Logger(IotDeviceCredentialService.name);
   /** deviceId -> 凭证摘要 */
   private readonly credentials: Map<string, Buffer>;
+  /** deviceId -> 租户归属（服务端注册表） */
+  private readonly tenants: Map<string, string>;
   private readonly pepper: string;
   private readonly jwtSecret: string | null;
   private readonly tokenTtlSeconds: number;
@@ -67,6 +98,7 @@ export class IotDeviceCredentialService {
   constructor(configService: ConfigService<EnvConfig, true>) {
     this.pepper = configService.get('IOT_DEVICE_PEPPER');
     this.credentials = parseCredentialTable(configService.get('IOT_DEVICE_CREDENTIALS'), this.pepper, this.logger);
+    this.tenants = parseTenantTable(configService.get('IOT_DEVICE_TENANTS'), this.logger);
     this.jwtSecret = configService.get('IOT_JWT_SECRET') ?? null;
     this.tokenTtlSeconds = configService.get('IOT_TOKEN_TTL_SECONDS');
 
@@ -103,5 +135,14 @@ export class IotDeviceCredentialService {
   /** 获取设备凭据有效期 (秒) */
   getTokenTtlSeconds(): number {
     return this.tokenTtlSeconds;
+  }
+
+  /**
+   * 解析设备租户归属：未在注册表登记的设备一律归入 `default`。
+   *
+   * 调用方（换票 / 指令下发）必须使用本方法，而非请求体或 topic 中的租户字段。
+   */
+  resolveTenant(deviceId: string): string {
+    return this.tenants.get(deviceId) ?? DEFAULT_TENANT_ID;
   }
 }

@@ -1,9 +1,8 @@
-import * as crypto from 'node:crypto';
-
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 
 import type { CurrentUserPayload } from '@/common/decorators/current-user.decorator';
+import { signHs256Jwt } from '@/common/utils/jwt.util';
 import type { EnvConfig } from '@/config/env.validation';
 
 import { RealtimeChannel } from '../channels/channel.constants';
@@ -53,26 +52,8 @@ function buildUnavailableHealth(status: 'down' | 'degraded', error: string): Cen
 /**
  * 原生安全 Base64URL 编码（零外部依赖）
  */
-function toBase64Url(input: string | Buffer): string {
-  const buf = typeof input === 'string' ? Buffer.from(input, 'utf8') : input;
-  return buf.toString('base64url');
-}
-
-/**
- * 原生 HS256 JWT 签名生成器
- */
-export function signHs256Jwt(payload: Record<string, unknown>, secret: string): string {
-  const header = { alg: 'HS256', typ: 'JWT' };
-  const headerB64 = toBase64Url(JSON.stringify(header));
-  const payloadB64 = toBase64Url(JSON.stringify(payload));
-  const signatureInput = `${headerB64}.${payloadB64}`;
-
-  const hmac = crypto.createHmac('sha256', secret);
-  hmac.update(signatureInput);
-  const signatureB64 = toBase64Url(hmac.digest());
-
-  return `${signatureInput}.${signatureB64}`;
-}
+// 签名实现收敛至共享工具，此处保留导出以维持既有公开面
+export { signHs256Jwt };
 
 /**
  * 解析统一 Centrifugo DSN 连接串
@@ -140,6 +121,16 @@ export class CentrifugoTransport implements RealtimeTransport {
 
   getConfig(): CentrifugoConfig | null {
     return this.config;
+  }
+
+  /**
+   * 是否已完成 DSN 解析（`REALTIME_URL` 缺失或解析失败时为 false）。
+   *
+   * 供上层区分「驱动已配置」与「驱动仅被实例化」——避免诊断接口把一个未接线的
+   * 传输层报告为可用。
+   */
+  isConfigured(): boolean {
+    return this.config !== null;
   }
 
   /**

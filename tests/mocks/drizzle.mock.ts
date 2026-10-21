@@ -23,6 +23,14 @@ export function createMockDrizzleDb() {
   const findFirstOAuth = vi.fn();
   const execute = vi.fn().mockResolvedValue([]);
 
+  // `limit()` 结果同时支持 `.offset()` 链式调用、`await` 与 Promise 组合子
+  const limitResult = {
+    offset: vi.fn().mockResolvedValue([]),
+    then: (onFulfilled: (rows: unknown[]) => unknown, onRejected?: (error: unknown) => unknown) =>
+      Promise.resolve([]).then(onFulfilled, onRejected),
+    catch: (onRejected: (error: unknown) => unknown) => Promise.resolve([]).catch(onRejected),
+  };
+
   const mockDb: any = {
     query: {
       user: {
@@ -44,9 +52,7 @@ export function createMockDrizzleDb() {
       from: vi.fn().mockReturnValue({
         where: vi.fn().mockReturnThis(),
         orderBy: vi.fn().mockReturnThis(),
-        limit: vi.fn().mockReturnValue({
-          offset: vi.fn().mockResolvedValue([]),
-        }),
+        limit: vi.fn().mockReturnValue(limitResult),
       }),
     }),
     transaction: vi.fn(async (cb: (tx: any) => Promise<any>) => cb(mockDb)),

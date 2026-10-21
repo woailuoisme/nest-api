@@ -1,5 +1,6 @@
 import { Injectable } from '@nestjs/common';
 
+import { Role } from '@/common/constants/roles';
 import type { CurrentUserPayload } from '@/common/decorators/current-user.decorator';
 
 import type { RealtimeChannelInfoDto } from '../dto/realtime.dto';
@@ -28,6 +29,9 @@ export const REALTIME_CHANNELS = {
 // 兼容别名导出
 export const WS_CHANNELS = REALTIME_CHANNELS;
 export const SSE_CHANNELS = REALTIME_CHANNELS;
+
+/** 可订阅工业设备遥测频道的角色（普通用户不具工业数据可见性） */
+const DEVICE_TELEMETRY_ROLES: readonly Role[] = [Role.OPERATOR, Role.ADMIN, Role.SUPER_ADMIN];
 
 /**
  * 统一实时频道定义与鉴权管理服务 (RealtimeChannelsService)
@@ -63,11 +67,14 @@ export class RealtimeChannelsService {
 
   /**
    * 工业设备实时遥测与状态推流频道鉴权（规范模式）
+   *
+   * 设备遥测属于工业运营数据，至少需要运营级以上角色；
+   * 待用户-租户归属建模完成后，应进一步限制为「本租户设备」。
    */
   @ChannelAuth(REALTIME_CHANNELS.DEVICE_TELEMETRY)
   authorizeDeviceTelemetry(user: CurrentUserPayload, params: Record<string, string>): boolean {
     if (!user || !params?.deviceId) return false;
-    return true;
+    return DEVICE_TELEMETRY_ROLES.includes(user.role);
   }
 
   /**
@@ -87,11 +94,15 @@ export class RealtimeChannelsService {
   }
 
   /**
-   * 全局工业设备告警广播频道鉴权（规范模式）
+   * 全局工业设备告警广播频道鉴权
+   *
+   * 告警载荷含设备标识、租户与运行参数，与遥测同级敏感，
+   * 因此与 `authorizeDeviceTelemetry` 保持同一角色基线（OPERATOR 及以上）。
    */
   @ChannelAuth(REALTIME_CHANNELS.IOT_ALARMS)
   authorizeIotAlarms(user: CurrentUserPayload): boolean {
-    return Boolean(user?.id);
+    if (!user?.id) return false;
+    return DEVICE_TELEMETRY_ROLES.includes(user.role);
   }
 
   /**

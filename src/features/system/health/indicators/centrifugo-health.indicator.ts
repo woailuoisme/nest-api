@@ -20,13 +20,15 @@ export class CentrifugoHealthIndicator {
 
   async isHealthy(key = 'centrifugo'): Promise<HealthIndicatorResult> {
     const indicator = this.healthIndicatorService.check(key);
+    // 驱动名取自服务层：未配置 REALTIME_URL 时报告 `none`，与「已配置但不可达」区分开
+    const driver = this.realtimeService.getDriver();
 
     try {
       const healthStatus = await this.realtimeService.checkHealth();
 
       if (healthStatus.status === 'up') {
         return indicator.up({
-          driver: 'centrifugo',
+          driver,
           nodes: healthStatus.nodesCount,
           clients: healthStatus.totalClients,
           channels: healthStatus.totalChannels,
@@ -37,13 +39,16 @@ export class CentrifugoHealthIndicator {
       // 软依赖降级处理：报告 degraded 警告，但避免触发 Terminus 503 熔断
       return indicator.up({
         state: 'degraded',
-        driver: 'centrifugo',
-        message: healthStatus.error ?? 'Centrifugo is unreachable',
+        driver,
+        message:
+          driver === 'none'
+            ? '未配置 REALTIME_URL：实时广播为空操作'
+            : (healthStatus.error ?? 'Centrifugo is unreachable'),
       });
     } catch (error) {
       return indicator.up({
         state: 'degraded',
-        driver: 'centrifugo',
+        driver,
         message: (error as Error).message,
       });
     }

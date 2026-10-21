@@ -15,7 +15,10 @@ import {
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 
 import { Permission } from '@/common/constants/permissions';
+import { Role } from '@/common/constants/roles';
+import { CurrentUser, type CurrentUserPayload } from '@/common/decorators/current-user.decorator';
 import { Permissions } from '@/common/decorators/permissions.decorator';
+import { Roles } from '@/common/decorators/roles.decorator';
 import {
   ApiNoContentResponse,
   ApiPageResponse,
@@ -100,16 +103,18 @@ export class AdminUsersController {
     return this.usersService.update(id, dto);
   }
 
-  /** 变更指定用户的系统角色 */
+  /** 变更指定用户的系统角色 — 仅 ADMIN / SUPER_ADMIN 可操作，且不得越级或自改 */
   @Patch(':id/role')
+  @Roles(Role.ADMIN, Role.SUPER_ADMIN)
   @ApiOperation({ summary: '变更角色' })
   @ApiSuccessResponse(UserResourceSchema, { description: '用户角色更新成功' })
   @SerializeOptions({ schema: UserResourceSchema })
   changeRole(
+    @CurrentUser() actor: CurrentUserPayload,
     @Param('id', ParseUUIDPipe) id: string,
     @Body({ schema: ChangeRoleSchema }) dto: ChangeRoleRequest,
   ): Promise<UserEntity> {
-    return this.usersService.changeRole(id, dto.role);
+    return this.usersService.changeRole(actor, id, dto.role);
   }
 
   /** 根据用户 ID 物理删除指定用户（需 UserDelete 权限） */

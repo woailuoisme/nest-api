@@ -19,6 +19,8 @@ import {
 
 /** 测试用设备凭证表（与下方换票用例中的 deviceId/deviceSecret 严格对应） */
 const DEVICE_CREDENTIALS = 'cnc-001:secret123456,plc-token-test:secret-key-12345';
+/** 测试用设备租户注册表（设备 token 的租户只能来源于此） */
+const DEVICE_TENANTS = 'cnc-001:factory-a,plc-token-test:tenant-test';
 const DEVICE_PEPPER = 'test-iot-device-pepper-16chars';
 const IOT_JWT_SECRET = 'test-iot-jwt-secret-32-characters-minimum';
 const TOKEN_TTL_SECONDS = 3600;
@@ -27,6 +29,7 @@ const TOKEN_TTL_SECONDS = 3600;
 function createCredentialService(overrides: Record<string, unknown> = {}): IotDeviceCredentialService {
   const values: Record<string, unknown> = {
     IOT_DEVICE_CREDENTIALS: DEVICE_CREDENTIALS,
+    IOT_DEVICE_TENANTS: DEVICE_TENANTS,
     IOT_DEVICE_PEPPER: DEVICE_PEPPER,
     IOT_JWT_SECRET,
     IOT_TOKEN_TTL_SECONDS: TOKEN_TTL_SECONDS,
@@ -70,6 +73,7 @@ describe('工业物联网特性服务与控制器 (IoT Feature)', () => {
     commandService = new IotCommandService(
       mockMqttService as unknown as MqttService,
       mockEventEmitter as unknown as EventEmitter2,
+      createCredentialService(),
     );
     controller = new IotController(telemetryService, commandService);
   });
@@ -93,7 +97,7 @@ describe('工业物联网特性服务与控制器 (IoT Feature)', () => {
 
       telemetryService.handleTelemetry(sampleTelemetry, 'tenant-1', 'plc-1', mockContext);
 
-      const shadow = telemetryService.getDeviceShadow('plc-1');
+      const shadow = telemetryService.getDeviceShadow('tenant-1', 'plc-1');
       expect(shadow).toBeDefined();
       expect(shadow?.deviceId).toBe('plc-1');
       expect(shadow?.tenantId).toBe('tenant-1');
@@ -142,7 +146,7 @@ describe('工业物联网特性服务与控制器 (IoT Feature)', () => {
 
       telemetryService.handleDeviceStatus({ status: 'offline', reason: 'Connection Lost (LWT)' }, 'tenant-1', 'plc-1');
 
-      const shadow = telemetryService.getDeviceShadow('plc-1');
+      const shadow = telemetryService.getDeviceShadow('tenant-1', 'plc-1');
       expect(shadow?.online).toBe(false);
 
       expect(mockEventEmitter.emit).toHaveBeenCalledWith(
@@ -157,13 +161,22 @@ describe('工业物联网特性服务与控制器 (IoT Feature)', () => {
     });
 
     it('查询不存在的设备影子应返回 null', () => {
-      expect(telemetryService.getDeviceShadow('non-existent')).toBeNull();
+      expect(telemetryService.getDeviceShadow('tenant-1', 'non-existent')).toBeNull();
     });
 
     it('getDeviceShadowOrFail 查询不存在设备应抛出 NotFoundException，存在时应返回影子', () => {
-      expect(() => telemetryService.getDeviceShadowOrFail('non-existent')).toThrow(NotFoundException);
+      expect(() => telemetryService.getDeviceShadowOrFail('tenant-1', 'non-existent')).toThrow(NotFoundException);
       telemetryService.recordTelemetry('tenant-1', 'plc-1', sampleTelemetry);
-      expect(telemetryService.getDeviceShadowOrFail('plc-1').deviceId).toBe('plc-1');
+      expect(telemetryService.getDeviceShadowOrFail('tenant-1', 'plc-1').deviceId).toBe('plc-1');
+    });
+
+    it('同名设备在不同租户下不得互相覆盖', () => {
+      telemetryService.recordTelemetry('tenant-a', 'plc-1', sampleTelemetry);
+      telemetryService.recordTelemetry('tenant-b', 'plc-1', { ...sampleTelemetry, temperature: 99 });
+
+      expect(telemetryService.getDeviceShadow('tenant-a', 'plc-1')?.telemetry?.temperature).toBe(65.2);
+      expect(telemetryService.getDeviceShadow('tenant-b', 'plc-1')?.telemetry?.temperature).toBe(99);
+      expect(telemetryService.listDeviceShadows('tenant-a')).toHaveLength(1);
     });
 
     it('listDeviceShadows 应返回所有活跃设备影子列表', () => {
@@ -196,7 +209,6 @@ describe('工业物联网特性服务与控制器 (IoT Feature)', () => {
       const res = telemetryService.issueDeviceToken({
         deviceId: 'cnc-001',
         deviceSecret: 'secret123456',
-        tenantId: 'factory-a',
       });
 
       expect(res.token.split('.')).toHaveLength(3); // 标准 JWT 三段式
@@ -312,7 +324,8 @@ describe('工业物联网特性服务与控制器 (IoT Feature)', () => {
       const result = await commandService.sendCommand('plc-1', 'setSpeed', { rpm: 1500 });
 
       expect(mockMqttService.request).toHaveBeenCalledWith(
-        'devices/plc-1/command',
+        // 未在 IOT_DEVICE_TENANTS 登记的设备归入 default 租户
+        'devices/default/plc-1/command',
         expect.objectContaining({
           command: 'setSpeed',
           params: { rpm: 1500 },
@@ -410,7 +423,7 @@ describe('工业物联网特性服务与控制器 (IoT Feature)', () => {
 
   describe('IotController (REST 控制器)', () => {
     it('getShadow 查询不存在的设备时应抛出 NotFoundException', () => {
-      expect(() => controller.getShadow('missing-dev')).toThrow(NotFoundException);
+      expect(() => controller.getShadow('missing-dev', {})).toThrow(NotFoundException);
     });
 
     it('mockTelemetry 在 MQTT 连接时应向 Broker 发送遥测并更新影子', async () => {
@@ -441,7 +454,6 @@ describe('工业物联网特性服务与控制器 (IoT Feature)', () => {
       const res = controller.issueDeviceToken({
         deviceId: 'plc-token-test',
         deviceSecret: 'secret-key-12345',
-        tenantId: 'tenant-test',
       });
 
       expect(res.token).toBeDefined();

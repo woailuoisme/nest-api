@@ -11,6 +11,44 @@ export const APP_ENV_VALUES = {
   TESTING: 'testing',
 } as const;
 
+/**
+ * 本地默认数据库连接（仅非生产环境使用）。
+ *
+ * 生产环境必须显式配置 `DB_URL`，缺省由 env 校验中止启动，绝不会静默回退到本值。
+ * 本文件零依赖，drizzle-kit 等根级工具可直接相对引入。
+ */
+export const DEFAULT_DB_URL = 'postgresql://postgres:postgres@localhost:5432/nest-api';
+
+/** 应用名默认值：`APP_NAME` 未配置（或为空）时使用 */
+export const DEFAULT_APP_NAME = 'nest-api';
+
+/**
+ * 公开的开发用 Better Auth 密钥（曾长期作为 schema 默认值与 `.env.example` 预置值）。
+ *
+ * 仅限非生产环境：生产环境除「必填」外还必须校验「不得等于此值」，
+ * 否则从旧模板拷贝 `.env` 的部署会带着公开密钥静默上线。
+ */
+export const DEV_ONLY_AUTH_SECRET = 'nestforge-better-auth-secret-key-32-chars!';
+
+/**
+ * 公开的开发用 IoT 设备胡椒值（Pepper）。
+ *
+ * 与 `DEV_ONLY_AUTH_SECRET` 同理：生产环境必须显式配置且不得等于此值，
+ * 否则设备密钥摘要会在所有「拷模板上线」的部署间共享同一个胡椒，令摘要抗暴破能力归零。
+ */
+export const DEV_ONLY_IOT_PEPPER = 'nestforge-iot-device-pepper-v1';
+
+/**
+ * 应用名（品牌唯一来源）：由 `APP_NAME` 决定，默认 `nest-api`。
+ *
+ * 日志 / OTel 服务名 / 邮件发件人 / 短信正文 / 2FA 发行方 / IoT 指令标记统一引用此函数，
+ * 不再各自写死。直接读 `process.env`：上述消费方大多在 ConfigModule 生效之前或之外构建，
+ * 与 `isProductionEnv()` 同属引导期可用的零依赖读取（各入口首行均 `import 'dotenv/config'`）。
+ */
+export function appName(): string {
+  return process.env.APP_NAME?.trim() || DEFAULT_APP_NAME;
+}
+
 /** 是否为生产环境（模块工厂阶段 ConfigService 不可用，统一读 process.env 判定） */
 export function isProductionEnv(): boolean {
   return process.env.APP_ENV === APP_ENV_VALUES.PRODUCTION;

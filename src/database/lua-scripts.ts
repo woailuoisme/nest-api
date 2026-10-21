@@ -20,6 +20,21 @@ end
 `;
 
 /**
+ * 原子续租：仅当锁仍属于持有者时才重新计时（长事务心跳）。
+ *
+ * 锁 TTL 是「进程崩溃自动释放」的上界，而不是「业务处理时长」的上界；
+ * 不在处理期间续租时，超过 TTL 的请求会让重试请求重新抢到锁并行执行，
+ * 这正是幂等拦截器要防的重复扣款场景。
+ */
+export const RENEW_LOCK_LUA_SCRIPT = `
+if redis.call("get", KEYS[1]) == ARGV[1] then
+  return redis.call("pexpire", KEYS[1], ARGV[2])
+else
+  return 0
+end
+`;
+
+/**
  * 原子限流计数（单次往返完成全部读改写，杜绝多副本下的读-改-写竞态）
  *
  * KEYS[1] = 窗口计数键，KEYS[2] = 封禁键；ARGV = ttl / limit / blockDuration（均毫秒）

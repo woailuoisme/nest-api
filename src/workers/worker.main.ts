@@ -21,4 +21,10 @@ async function bootstrap(): Promise<void> {
   setupWorkerShutdownHooks(app);
 }
 
-bootstrap();
+bootstrap().catch((error: unknown) => {
+  // Worker 引导失败同样必须非零退出，避免队列长期无人消费而告警沉默
+  process.stderr.write(
+    `[Bootstrap] Worker 启动失败: ${error instanceof Error ? (error.stack ?? error.message) : String(error)}\n`,
+  );
+  process.exit(1);
+});

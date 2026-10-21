@@ -16,10 +16,10 @@
 
 ### 1.1 服务端点信息
 
-| 环境 | 物理 WebSocket 端点 | 反向代理路径 (WSS) |
-| :--- | :--- | :--- |
-| **本地联调** | `ws://localhost:8000/connection/websocket` | - |
-| **生产环境** | - | `wss://api.yourdomain.com/connection/websocket` |
+| 环境         | 物理 WebSocket 端点                        | 反向代理路径 (WSS)                              |
+| :----------- | :----------------------------------------- | :---------------------------------------------- |
+| **本地联调** | `ws://localhost:8000/connection/websocket` | -                                               |
+| **生产环境** | -                                          | `wss://api.yourdomain.com/connection/websocket` |
 
 ---
 
@@ -50,13 +50,13 @@ stateDiagram-v2
 
 ### 2.1 频道分类与准入规则
 
-| 频道前缀 | 鉴权机制 | 客户端换票要求 | 典型场景 |
-| :--- | :--- | :--- | :--- |
-| **`user#${userId}`** | 网关本地验签 (User-Bound) | **无需申请 Token**，网关直接比对 `userId === JWT.sub` | 个人通知红点、私信、审批流转、被踢下线通知 |
-| **`public:${name}`** | 全网公开可读 (Open Channel) | **无需申请 Token**，任何合法长连接均可订阅 | 系统维护公告、全员大厅广播 |
-| **`room:${roomId}`** | 资源成员鉴权 (Resource ACL) | **双模式支持**（推荐 Proxy Webhook 自动鉴权） | 协同白板、协作文档、多人在线名单 |
-| **`admin:${topic}`** | 角色权限强校验 (RBAC) | **双模式支持**（推荐 Proxy Webhook 自动鉴权） | 实时监控大屏、服务器告警指标、系统审计事件 |
-| **`device:${deviceId}`** | 物联网设备鉴权 (IoT ACL) | **双模式支持**（推荐 Proxy Webhook 自动鉴权） | 工业设备遥测直推、物联数据影子监控 |
+| 频道前缀                 | 鉴权机制                    | 客户端换票要求                                        | 典型场景                                   |
+| :----------------------- | :-------------------------- | :---------------------------------------------------- | :----------------------------------------- |
+| **`user#${userId}`**     | 网关本地验签 (User-Bound)   | **无需申请 Token**，网关直接比对 `userId === JWT.sub` | 个人通知红点、私信、审批流转、被踢下线通知 |
+| **`public:${name}`**     | 全网公开可读 (Open Channel) | **无需申请 Token**，任何合法长连接均可订阅            | 系统维护公告、全员大厅广播                 |
+| **`room:${roomId}`**     | 资源成员鉴权 (Resource ACL) | **双模式支持**（推荐 Proxy Webhook 自动鉴权）         | 协同白板、协作文档、多人在线名单           |
+| **`admin:${topic}`**     | 角色权限强校验 (RBAC)       | **双模式支持**（推荐 Proxy Webhook 自动鉴权）         | 实时监控大屏、服务器告警指标、系统审计事件 |
+| **`device:${deviceId}`** | 物联网设备鉴权 (IoT ACL)    | **双模式支持**（推荐 Proxy Webhook 自动鉴权）         | 工业设备遥测直推、物联数据影子监控         |
 
 ---
 
@@ -98,7 +98,7 @@ flowchart TD
 
 在传统 WebSocket 架构中，向用户推送个人消息往往容易产生“多倍放大”问题（例如同一事件同时推给 `user#${userId}`、`private:notifications`、`private:user.${userId}` 等多个冗余频道）。
 
-NestForge 确立**规范化单一推流原则**：
+本规范确立**规范化单一推流原则**：
 
 - **个人通知频道唯一规范**：一律由 `RealtimeService.sendToUser(userId, ...)` 下发至 `user#${userId}` 专属通道；Centrifugo 网关集群在传输层自动向该用户的所有多端设备长连接扇出（Fan-out），彻底消除应用层克隆与网络流量倍增。
 - **广播通知频道唯一规范**：全站广播统一下发至 `public:notifications`。
@@ -149,6 +149,7 @@ graph TD
 
 ```typescript
 import { Injectable } from '@nestjs/common';
+
 import { RealtimeService } from '@/realtime';
 
 @Injectable()
@@ -172,6 +173,7 @@ export class OrderService {
 
 ```typescript
 import { Injectable } from '@nestjs/common';
+
 import { RealtimeService } from '@/realtime';
 
 @Injectable()
@@ -223,14 +225,14 @@ sequenceDiagram
 
 #### 核心领域事件对照表
 
-| 领域事件名称 | 事件载荷类型 | 自动路由频道 | 说明 |
-| :--- | :--- | :--- | :--- |
-| **`notification.sent`** | `NotificationSentEvent` | `user#${userId}` | 自动向目标用户唯一规范个人频道推流 |
-| **`notification.broadcast`** | `NotificationBroadcastEvent` | `public:notifications` | 自动向全员公开通知频道推流 |
-| **`iot.device.telemetry`** | `IotTelemetryReceivedEvent` | `device:${deviceId}` | 自动向设备专属遥测频道推流 |
-| **`iot.device.status`** | `IotDeviceStatusChangedEvent` | `device:${deviceId}` | 自动向设备状态变更频道推流 |
-| **`iot.device.alarm`** | `IotAlarmTriggeredEvent` | `device:${deviceId}` & `admin:iot-alarms` | 同时向设备频道与管理员告警大屏分发 |
-| **`iot.device.command`** | `IotCommandExecutedEvent` | `device:${deviceId}` | 指令下发执行回执推流 |
+| 领域事件名称                 | 事件载荷类型                  | 自动路由频道                              | 说明                               |
+| :--------------------------- | :---------------------------- | :---------------------------------------- | :--------------------------------- |
+| **`notification.sent`**      | `NotificationSentEvent`       | `user#${userId}`                          | 自动向目标用户唯一规范个人频道推流 |
+| **`notification.broadcast`** | `NotificationBroadcastEvent`  | `public:notifications`                    | 自动向全员公开通知频道推流         |
+| **`iot.device.telemetry`**   | `IotTelemetryReceivedEvent`   | `device:${deviceId}`                      | 自动向设备专属遥测频道推流         |
+| **`iot.device.status`**      | `IotDeviceStatusChangedEvent` | `device:${deviceId}`                      | 自动向设备状态变更频道推流         |
+| **`iot.device.alarm`**       | `IotAlarmTriggeredEvent`      | `device:${deviceId}` & `admin:iot-alarms` | 同时向设备频道与管理员告警大屏分发 |
+| **`iot.device.command`**     | `IotCommandExecutedEvent`     | `device:${deviceId}`                      | 指令下发执行回执推流               |
 
 ---
 
@@ -242,6 +244,7 @@ sequenceDiagram
 
 ```typescript
 import { Injectable } from '@nestjs/common';
+
 import type { CurrentUserPayload } from '@/common/decorators/current-user.decorator';
 import { ChannelAuth } from '@/realtime';
 
@@ -253,10 +256,7 @@ export class CollaborationService {
    * @param params 从频道名称中提取的命名参数映射
    */
   @ChannelAuth('room:{roomId}')
-  async authorizeRoom(
-    user: CurrentUserPayload,
-    params: { roomId: string },
-  ): Promise<boolean> {
+  async authorizeRoom(user: CurrentUserPayload, params: { roomId: string }): Promise<boolean> {
     // 自定义业务权限判断：校验用户是否具备进入该房间的权限
     return this.isUserInRoom(user.id, params.roomId);
   }
@@ -288,6 +288,7 @@ export class CollaborationService {
 
 ```typescript
 import { Injectable } from '@nestjs/common';
+
 import { PresenceService } from '@/realtime';
 
 @Injectable()
@@ -1100,16 +1101,16 @@ Centrifugo 使用基于 JSON 的协议帧通信。借助 [Bruno](https://www.use
 
 在 Bruno 集合中创建环境（如 `Development`），配置以下变量：
 
-| 变量名 | 初始值 / 示例值 | 说明 |
-| :--- | :--- | :--- |
-| `baseUrl` | `http://localhost:3000` | NestJS 业务服务 HTTP 基础地址 |
-| `wsUrl` | `ws://localhost:8000/connection/websocket` | Centrifugo 物理 WebSocket 连接地址 |
-| `email` | `admin@example.com` | 测试用户登录邮箱 |
-| `password` | `Admin123456!` | 测试用户登录密码 |
-| `bearerToken` | `""` | 业务认证 Token（登录接口自动填充） |
-| `userId` | `""` | 当前登录用户 UUID（登录接口自动填充） |
-| `realtimeToken` | `""` | Centrifugo 长连接凭证（获取 Token 接口自动填充） |
-| `subscriptionToken` | `""` | 私有频道准入凭证（模式 B 换票接口自动填充） |
+| 变量名              | 初始值 / 示例值                            | 说明                                             |
+| :------------------ | :----------------------------------------- | :----------------------------------------------- |
+| `baseUrl`           | `http://localhost:3000`                    | NestJS 业务服务 HTTP 基础地址                    |
+| `wsUrl`             | `ws://localhost:8000/connection/websocket` | Centrifugo 物理 WebSocket 连接地址               |
+| `email`             | `admin@example.com`                        | 测试用户登录邮箱                                 |
+| `password`          | `Admin123456!`                             | 测试用户登录密码                                 |
+| `bearerToken`       | `""`                                       | 业务认证 Token（登录接口自动填充）               |
+| `userId`            | `""`                                       | 当前登录用户 UUID（登录接口自动填充）            |
+| `realtimeToken`     | `""`                                       | Centrifugo 长连接凭证（获取 Token 接口自动填充） |
+| `subscriptionToken` | `""`                                       | 私有频道准入凭证（模式 B 换票接口自动填充）      |
 
 ---
 
@@ -1164,6 +1165,7 @@ Centrifugo 使用基于 JSON 的协议帧通信。借助 [Bruno](https://www.use
 #### 请求 3 (单元测试/免长连接直测)：模拟 Centrifugo Proxy Webhook 鉴权 (`POST /v1/realtime/proxy/subscribe`)
 
 > 💡 **开发者福利**：无需启动 Centrifugo 容器即可在本地直接验证 NestJS 后端频道授权规则是否符合预期！
+
 - **URL**: `{{baseUrl}}/v1/realtime/proxy/subscribe`
 - **Method**: `POST`
 - **Headers**: `Content-Type: application/json`
@@ -1338,33 +1340,35 @@ Centrifugo 服务端将按设定的周期（默认 25 秒）自动向客户端�
 
 ### 6.1 Centrifugo 网关错误码 (100~110)
 
-| 错误码 | 错误名称 | 发生原因 | 推荐排查与恢复动作 |
-| :--- | :--- | :--- | :--- |
-| **100** | `Internal Error` | 网关内部异常或 Redis 引擎通信中断 | 检查 Centrifugo 服务端日志及 Redis 容器连通性。 |
-| **102** | `Bad Request` | 连接参数格式错误或缺失必需字段 | 检查握手 URL、Token 结构与 JSON 序列化格式。 |
+| 错误码  | 错误名称                              | 发生原因                                                  | 推荐排查与恢复动作                                                                 |
+| :------ | :------------------------------------ | :-------------------------------------------------------- | :--------------------------------------------------------------------------------- |
+| **100** | `Internal Error`                      | 网关内部异常或 Redis 引擎通信中断                         | 检查 Centrifugo 服务端日志及 Redis 容器连通性。                                    |
+| **102** | `Bad Request`                         | 连接参数格式错误或缺失必需字段                            | 检查握手 URL、Token 结构与 JSON 序列化格式。                                       |
 | **103** | `Unknown Channel / Permission Denied` | 订阅了网关未放行的非法频道前缀，或 Proxy Webhook 回调拒绝 | 1. 检查频道命名；2. 若为受控频道，检查 NestJS 后端 `@ChannelAuth` 是否拒绝或抛错。 |
-| **105** | `Channel Limit Exceeded` | 单连接订阅频道数超过网关上限 (默认 128) | 检查客户端是否存在死循环订阅或重复订阅未注销的内存泄漏。 |
-| **109** | `Token Expired` | Connection 或 Subscription JWT 已过期 | 重新调用业务 API 获取新鲜 Token 并发起重连。 |
-| **110** | `Expired` | 长连接因心跳超时断开 | SDK 内部会自动重连；移动端注意排查后台休眠对网络心跳的冻结。 |
+| **105** | `Channel Limit Exceeded`              | 单连接订阅频道数超过网关上限 (默认 128)                   | 检查客户端是否存在死循环订阅或重复订阅未注销的内存泄漏。                           |
+| **109** | `Token Expired`                       | Connection 或 Subscription JWT 已过期                     | 重新调用业务 API 获取新鲜 Token 并发起重连。                                       |
+| **110** | `Expired`                             | 长连接因心跳超时断开                                      | SDK 内部会自动重连；移动端注意排查后台休眠对网络心跳的冻结。                       |
 
 ---
 
 ### 6.2 WebSocket 断开状态码 (3000~3503)
 
-| Close Code | 含义 | 是否自动重连 | 客户端说明与处理 |
-| :--- | :--- | :--- | :--- |
-| **3000** | `Normal Disconnect` | 否 | 客户端主动调用 `client.disconnect()` 关闭连接。 |
-| **3001** | `Shutdown` | 是 | 网关服务器优雅重启或维护，客户端自动退避重连。 |
-| **3501** | `Force Disconnect` | 否 | 用户被管理员在后台强制下线，**客户端应清理本地认证状态并跳转登录页**。 |
-| **3502** | `Force User Disconnect`| 否 | 同一账号在其他设备登录或密码变更失效，提示用户重新登录。 |
-| **3503** | `Session Expired` | 否 | 用户业务 Session 会话过期，需刷新登录凭据。 |
+| Close Code | 含义                    | 是否自动重连 | 客户端说明与处理                                                       |
+| :--------- | :---------------------- | :----------- | :--------------------------------------------------------------------- |
+| **3000**   | `Normal Disconnect`     | 否           | 客户端主动调用 `client.disconnect()` 关闭连接。                        |
+| **3001**   | `Shutdown`              | 是           | 网关服务器优雅重启或维护，客户端自动退避重连。                         |
+| **3501**   | `Force Disconnect`      | 否           | 用户被管理员在后台强制下线，**客户端应清理本地认证状态并跳转登录页**。 |
+| **3502**   | `Force User Disconnect` | 否           | 同一账号在其他设备登录或密码变更失效，提示用户重新登录。               |
+| **3503**   | `Session Expired`       | 否           | 用户业务 Session 会话过期，需刷新登录凭据。                            |
 
 ---
 
 ### 6.3 常见排障场景自查清单
 
 1. **Proxy Webhook 鉴权报错 103 (Permission Denied)**：
-   - 检查 `deploy/centrifugo/config.yaml` 中 `proxy_subscribe_endpoint` 是否指向正确的 NestJS 实例地址（Docker 容器网络通常为 `http://app:3000/v1/realtime/proxy/subscribe`，本地直跑为 `http://localhost:3000/v1/realtime/proxy/subscribe`）；
+   - 检查 `deploy/centrifugo/config.yaml` 中 `proxy_subscribe.url` 是否指向正确的 NestJS 实例地址（Docker 容器网络通常为 `http://app:3000/v1/realtime/proxy/subscribe`，本地直跑为 `http://localhost:3000/v1/realtime/proxy/subscribe`）；
+   - 若后端配置了 `CENTRIFUGO_PROXY_SECRET`，网关侧必须同步配置静态头（Centrifugo ≥5.0.2）：`CENTRIFUGO_PROXY_STATIC_HTTP_HEADERS={"X-Centrifugo-Proxy-Secret":"<同一密钥>"}`；否则回调因 401 被拒、所有订阅失败；
+   - 注意：Proxy webhook 载荷中的客户端 `subscribe.data` 完全可控，后端**只**以 Centrifugo 注入的 `user`（连接 JWT 的 sub）回查数据库获取身份与角色；
    - 在 NestJS 服务端查看日志 `[Realtime] Centrifugo Proxy 订阅鉴权拒绝`，确认是否缺失对应频道的 `@ChannelAuth` 规则；
    - 本地可直接在 Bruno 中调用 `POST /v1/realtime/proxy/subscribe` 单独排查后端业务规则。
 

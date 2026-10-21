@@ -37,7 +37,6 @@ describe('Centrifugo 容器真实集成测试 (Live Integration)', () => {
     const mockConfigService = {
       get: (key: string) => {
         if (key === 'REALTIME_URL') return REALTIME_TEST_DSN;
-        if (key === 'BROADCAST_DRIVER') return 'centrifugo';
         return undefined;
       },
     } as unknown as ConfigService<any, true>;
@@ -137,7 +136,7 @@ describe('Centrifugo 容器真实集成测试 (Live Integration)', () => {
     if (!isCentrifugoOnline) return;
 
     // 1. 通过 RealtimeService 发送广播
-    const envelope = realtimeService.broadcast('public:chat', 'chat:message', {
+    const envelope = await realtimeService.broadcast('public:chat', 'chat:message', {
       content: 'RealtimeService live integration broadcast',
     });
     expect(envelope.event).toBe('chat:message');

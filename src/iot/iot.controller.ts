@@ -1,4 +1,4 @@
-import { Body, Controller, Get, HttpCode, HttpStatus, Param, Post } from '@nestjs/common';
+import { Body, Controller, Get, HttpCode, HttpStatus, Param, Post, Query } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { Throttle } from '@nestjs/throttler';
 
@@ -9,10 +9,13 @@ import { ApiSuccessResponse } from '@/common/decorators/swagger-response.decorat
 
 import {
   CommandResponseEntity,
+  DEFAULT_TENANT_ID,
   type DeviceCriticalEventDto,
   DeviceCriticalEventSchema,
   DeviceIdSchema,
   DeviceShadowEntity,
+  DeviceShadowQuerySchema,
+  type DeviceShadowQueryDto,
   type DeviceTokenRequestDto,
   DeviceTokenRequestSchema,
   DeviceTokenResponseDto,
@@ -39,17 +42,22 @@ export class IotController {
   ) {}
 
   @Get()
-  @ApiOperation({ summary: '获取全部设备影子列表' })
+  @Roles(Role.OPERATOR, Role.ADMIN, Role.SUPER_ADMIN)
+  @ApiOperation({ summary: '获取设备影子列表' })
   @ApiSuccessResponse(DeviceShadowEntity, { isArray: true, description: '设备影子列表' })
-  listDevices(): DeviceShadowEntity[] {
-    return this.telemetryService.listDeviceShadows();
+  listDevices(@Query({ schema: DeviceShadowQuerySchema }) query: DeviceShadowQueryDto): DeviceShadowEntity[] {
+    return this.telemetryService.listDeviceShadows(query.tenantId);
   }
 
   @Get(':deviceId/shadow')
+  @Roles(Role.OPERATOR, Role.ADMIN, Role.SUPER_ADMIN)
   @ApiOperation({ summary: '查询设备实时状态影子' })
   @ApiSuccessResponse(DeviceShadowEntity, { description: '设备影子状态' })
-  getShadow(@Param('deviceId', { schema: DeviceIdSchema }) deviceId: string): DeviceShadowEntity {
-    return this.telemetryService.getDeviceShadowOrFail(deviceId);
+  getShadow(
+    @Param('deviceId', { schema: DeviceIdSchema }) deviceId: string,
+    @Query({ schema: DeviceShadowQuerySchema }) query: DeviceShadowQueryDto,
+  ): DeviceShadowEntity {
+    return this.telemetryService.getDeviceShadowOrFail(query.tenantId ?? DEFAULT_TENANT_ID, deviceId);
   }
 
   @Post(':deviceId/command')

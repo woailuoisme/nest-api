@@ -1,8 +1,10 @@
+import type { ConfigService } from '@nestjs/config';
 import type { FastifyRequest } from 'fastify';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { Role } from '@/common/constants/roles';
 import type { CurrentUserPayload } from '@/common/decorators/current-user.decorator';
+import type { EnvConfig } from '@/config/env.validation';
 import type { RealtimeChannelsService } from '@/realtime/channels/realtime-channels.service';
 import type { RealtimeEventsService } from '@/realtime/realtime-events.service';
 import { RealtimeController } from '@/realtime/realtime.controller';
@@ -17,6 +19,8 @@ describe('RealtimeController', () => {
   let mockChannelsService: {
     listRegisteredChannels: ReturnType<typeof vi.fn>;
   };
+  /** proxy 共享密钥：默认未配置（仅本地开发放行），用例可覆盖 */
+  let proxySecret: string | undefined;
 
   const mockUser: CurrentUserPayload = {
     id: 'user_123',
@@ -42,9 +46,15 @@ describe('RealtimeController', () => {
         .mockReturnValue([{ pattern: 'private:notifications.{userId}', description: '用户通知', isPrivate: true }]),
     };
 
+    proxySecret = undefined;
+    const mockConfig = {
+      get: vi.fn(() => proxySecret),
+    } as unknown as ConfigService<EnvConfig, true>;
+
     controller = new RealtimeController(
       mockEventsService as unknown as RealtimeEventsService,
       mockChannelsService as unknown as RealtimeChannelsService,
+      mockConfig,
     );
   });
 
@@ -92,16 +102,34 @@ describe('RealtimeController', () => {
   });
 
   describe('proxySubscribe', () => {
-    it('应透传 Centrifugo Proxy Webhook 鉴权请求并返回结果', async () => {
-      const dto = {
-        channel: 'private:notifications.user_123',
-        user: 'user_123',
-        client: 'client_xyz',
-      };
+    const dto = {
+      channel: 'private:notifications.user_123',
+      user: 'user_123',
+      client: 'client_xyz',
+    };
 
+    it('未配置共享密钥时（本地开发），应透传鉴权请求并返回结果', async () => {
       const result = await controller.proxySubscribe(dto);
+
       expect(mockEventsService.handleProxySubscribe).toHaveBeenCalledWith(dto);
       expect(result).toEqual({ result: {} });
+    });
+
+    it('已配置共享密钥时，携带正确密钥才放行', async () => {
+      proxySecret = 'proxy-secret-min-16-chars';
+
+      const result = await controller.proxySubscribe(dto, proxySecret);
+
+      expect(mockEventsService.handleProxySubscribe).toHaveBeenCalledWith(dto);
+      expect(result).toEqual({ result: {} });
+    });
+
+    it('已配置共享密钥时，缺失或错误密钥必须拒绝且不得进入鉴权逻辑', async () => {
+      proxySecret = 'proxy-secret-min-16-chars';
+
+      await expect(controller.proxySubscribe(dto)).rejects.toThrow('Invalid Centrifugo proxy secret');
+      await expect(controller.proxySubscribe(dto, 'wrong-secret')).rejects.toThrow('Invalid Centrifugo proxy secret');
+      expect(mockEventsService.handleProxySubscribe).not.toHaveBeenCalled();
     });
   });
 

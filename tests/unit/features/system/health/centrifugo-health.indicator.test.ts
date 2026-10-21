@@ -8,6 +8,7 @@ describe('CentrifugoHealthIndicator 软依赖健康检查', () => {
   let indicator: CentrifugoHealthIndicator;
   let mockRealtimeService: {
     checkHealth: ReturnType<typeof vi.fn>;
+    getDriver: ReturnType<typeof vi.fn>;
   };
   let mockHealthIndicatorService: {
     check: ReturnType<typeof vi.fn>;
@@ -29,6 +30,7 @@ describe('CentrifugoHealthIndicator 软依赖健康检查', () => {
 
     mockRealtimeService = {
       checkHealth: vi.fn(),
+      getDriver: vi.fn().mockReturnValue('centrifugo'),
     };
 
     indicator = new CentrifugoHealthIndicator(
@@ -87,6 +89,26 @@ describe('CentrifugoHealthIndicator 软依赖健康检查', () => {
       state: 'degraded',
       driver: 'centrifugo',
       message: 'DNS resolution timeout',
+    });
+    expect(result.centrifugo.state).toBe('degraded');
+  });
+
+  it('未配置 REALTIME_URL 时应报告 driver=none，不与「已配置但不可达」混淆', async () => {
+    mockRealtimeService.getDriver.mockReturnValue('none');
+    mockRealtimeService.checkHealth.mockResolvedValue({
+      status: 'down',
+      nodesCount: 0,
+      totalClients: 0,
+      totalChannels: 0,
+      error: 'Centrifugo transport is not available',
+    });
+
+    const result = await indicator.isHealthy('centrifugo');
+
+    expect(mockIndicatorBuilder.up).toHaveBeenCalledWith({
+      state: 'degraded',
+      driver: 'none',
+      message: '未配置 REALTIME_URL：实时广播为空操作',
     });
     expect(result.centrifugo.state).toBe('degraded');
   });

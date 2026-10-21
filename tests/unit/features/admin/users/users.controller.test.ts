@@ -107,9 +107,10 @@ describe('AdminUsersController', () => {
   describe('PATCH /admin/users/:id/role — 变更用户角色', () => {
     it('应调用 UsersService.changeRole 变更角色', async () => {
       const dto: ChangeRoleRequest = { role: Role.ADMIN };
-      const result = await controller.changeRole('user-uuid-1', dto);
+      const actor = { id: 'admin-uuid-1', email: 'admin@example.com', role: Role.SUPER_ADMIN };
+      const result = await controller.changeRole(actor, 'user-uuid-1', dto);
 
-      expect(usersService.changeRole).toHaveBeenCalledWith('user-uuid-1', Role.ADMIN);
+      expect(usersService.changeRole).toHaveBeenCalledWith(actor, 'user-uuid-1', Role.ADMIN);
       expect(result.role).toBe(Role.ADMIN);
     });
   });

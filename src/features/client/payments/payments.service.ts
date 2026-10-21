@@ -74,8 +74,16 @@ export class PaymentsService {
       return;
     }
 
+    // 支付回调处理可能包含下游写库与外部调用，耗时可能超过默认锁 TTL
+    const stopHeartbeat = this.idempotency.startLockHeartbeat({
+      lockKey: acquired.lockKey,
+      lockToken: acquired.lockToken,
+    });
+
     try {
-      this.dispatch(payload);
+      // 必须逐一下发等待：`emit` 会在监听器 settle 前返回且不上抛其异常，
+      // 一旦监听器失败就会「已受理但未生效」—— 微信收到 204 不再重投，支付成功永久丢失。
+      await this.dispatch(payload);
       await this.idempotency.complete({
         cacheKey: acquired.cacheKey,
         lockKey: acquired.lockKey,
@@ -89,12 +97,14 @@ export class PaymentsService {
     } catch (error) {
       await this.idempotency.fail({ lockKey: acquired.lockKey, lockToken: acquired.lockToken });
       throw error;
+    } finally {
+      stopHeartbeat();
     }
   }
 
   /** 按事件类型分派领域事件；未识别的回调仅发收妥事件，不做业务处理 */
-  private dispatch(payload: WepayNotifyPayload): void {
-    this.eventEmitter.emit(PAYMENT_EVENTS.NOTIFY_RECEIVED, {
+  private async dispatch(payload: WepayNotifyPayload): Promise<void> {
+    await this.eventEmitter.emitAsync(PAYMENT_EVENTS.NOTIFY_RECEIVED, {
       notifyId: payload.id,
       eventType: payload.eventType,
       resourceType: payload.resourceType,
@@ -104,18 +114,18 @@ export class PaymentsService {
     });
 
     if (this.isTransactionSucceeded(payload)) {
-      this.eventEmitter.emit(PAYMENT_EVENTS.SUCCEEDED, this.buildSucceededEvent(payload));
+      await this.eventEmitter.emitAsync(PAYMENT_EVENTS.SUCCEEDED, this.buildSucceededEvent(payload));
       return;
     }
 
     if (this.isRefundSucceeded(payload)) {
-      this.eventEmitter.emit(PAYMENT_EVENTS.REFUNDED, this.buildRefundedEvent(payload));
+      await this.eventEmitter.emitAsync(PAYMENT_EVENTS.REFUNDED, this.buildRefundedEvent(payload));
       return;
     }
 
     // 退款异常/关闭不会再有后续回调，必须显式暴露给业务侧做人工介入或重新发起
     if (this.isRefundFailed(payload)) {
-      this.eventEmitter.emit(PAYMENT_EVENTS.REFUND_FAILED, this.buildRefundFailedEvent(payload));
+      await this.eventEmitter.emitAsync(PAYMENT_EVENTS.REFUND_FAILED, this.buildRefundFailedEvent(payload));
       return;
     }
 

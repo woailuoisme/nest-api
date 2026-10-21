@@ -71,7 +71,7 @@ describe('URL Configurations (REDIS_URL / MAIL_URL / STORAGE_S3_URL)', () => {
 describe('MAIL_FROM_ADDRESS', () => {
   it('未配置时回退默认地址', () => {
     const config = envOf({});
-    expect(config.MAIL_FROM_ADDRESS).toBe('no-reply@nestforge.dev');
+    expect(config.MAIL_FROM_ADDRESS).toBe('no-reply@example.com');
   });
 
   it('显式空串启动即失败（拒绝运行时 from: ""）', () => {
@@ -80,24 +80,34 @@ describe('MAIL_FROM_ADDRESS', () => {
 });
 
 describe('Smart Defaults & Derivations', () => {
-  it('STORAGE_DRIVER: 未配置且无 S3 URL 时推导为 local', () => {
+  it('FILESYSTEM_DISK: 未配置且无 S3 URL 时推导为 local', () => {
     const config = envOf({});
-    expect(config.STORAGE_DRIVER).toBe('local');
+    expect(config.FILESYSTEM_DISK).toBe('local');
   });
 
-  it('STORAGE_DRIVER: 未配置但有 S3 URL 时自动推导为 s3', () => {
+  it('FILESYSTEM_DISK: 未配置但有 S3 URL 时自动推导为 s3', () => {
     const config = envOf({
       STORAGE_S3_URL: 's3://key:sec@garage:3900/bucket?region=garage',
     });
-    expect(config.STORAGE_DRIVER).toBe('s3');
+    expect(config.FILESYSTEM_DISK).toBe('s3');
   });
 
-  it('STORAGE_DRIVER: 显式指定时尊重显式配置', () => {
+  it('FILESYSTEM_DISK: 显式指定时尊重显式配置', () => {
     const config = envOf({
-      STORAGE_DRIVER: 'local',
+      FILESYSTEM_DISK: 'local',
       STORAGE_S3_URL: 's3://key:sec@garage:3900/bucket?region=garage',
     });
-    expect(config.STORAGE_DRIVER).toBe('local');
+    expect(config.FILESYSTEM_DISK).toBe('local');
+  });
+
+  it('SCOUT_DRIVER: 未配置且无 SEARCH_URL 时推导为 noop', () => {
+    const config = envOf({});
+    expect(config.SCOUT_DRIVER).toBe('noop');
+  });
+
+  it('SCOUT_DRIVER: 未配置但有 SEARCH_URL 时推导为 meilisearch', () => {
+    const config = envOf({ SEARCH_URL: 'meilisearch://masterKey@localhost:7700' });
+    expect(config.SCOUT_DRIVER).toBe('meilisearch');
   });
 
   it('BETTER_AUTH_URL: 未配置时自动级联 APP_URL', () => {
@@ -113,30 +123,205 @@ describe('Smart Defaults & Derivations', () => {
     expect(config.BETTER_AUTH_URL).toBe('http://auth.my-domain.dev');
   });
 
-  it('BROADCAST_DRIVER: 默认使用 centrifugo 驱动', () => {
-    const config = envOf({});
-    expect(config.BROADCAST_DRIVER).toBe('centrifugo');
-  });
-
-  it('BROADCAST_DRIVER: 显式指定 local 时尊重显式配置', () => {
-    const config = envOf({ BROADCAST_DRIVER: 'local' });
-    expect(config.BROADCAST_DRIVER).toBe('local');
-  });
-
-  it('极简配置: 仅提供 DB_URL 时自动产出完整的工业级默认配置', () => {
-    const config = envSchema.parse({
-      DB_URL: 'postgresql://postgres:pass@localhost:5432/db',
-    });
+  it('极简配置: 不提供任何变量时也可启动（全部走默认值）', () => {
+    const config = envSchema.parse({});
     expect(config.APP_ENV).toBe('local');
     expect(config.APP_DEBUG).toBe(false);
     expect(config.PORT).toBe(4300);
     expect(config.APP_URL).toBe('http://localhost:4300');
-    expect(config.STORAGE_DRIVER).toBe('local');
+    expect(config.DB_URL).toBe('postgresql://postgres:postgres@localhost:5432/nest-api');
+    expect(config.FILESYSTEM_DISK).toBe('local');
+    expect(config.SCOUT_DRIVER).toBe('noop');
     expect(config.BETTER_AUTH_URL).toBe('http://localhost:4300');
-    expect(config.BROADCAST_DRIVER).toBe('centrifugo');
     expect(config.HTTP_TIMEOUT_MS).toBe(15_000);
     expect(config.WORKER_EMBEDDED).toBe(false);
     expect(config.MEDIA_QUEUE_ENABLED).toBe(true);
     expect(config.SWAGGER_ENABLED).toBe(true);
+  });
+});
+
+describe('生产环境强制显式配置（禁止默认值兜底）', () => {
+  const PROD_DB_URL = 'postgresql://app:secret@db:5432/nest_api';
+  const PROD_AUTH_SECRET = 'a-strong-production-secret-at-least-32-chars';
+  /** 生产环境基准字段：支付必须为 real 驱动，否则启动期拒绝（见下方专项用例） */
+  const PROD_PAYMENT = {
+    WEPAY_APPID: 'wx-prod-appid',
+    WEPAY_MCHID: '1900000001',
+    WEPAY_SERIAL_NO: 'SERIAL-NO',
+    WEPAY_APIV3_KEY: 'a'.repeat(32),
+    WEPAY_PRIVATE_KEY: '-----BEGIN PRIVATE KEY-----\nMIIB\n-----END PRIVATE KEY-----',
+  };
+  const PROD_BASE = {
+    APP_ENV: 'production',
+    DB_URL: PROD_DB_URL,
+    BETTER_AUTH_SECRET: PROD_AUTH_SECRET,
+    ...PROD_PAYMENT,
+  };
+
+  it('缺少 DB_URL 时拒绝启动（不静默回退到 localhost）', () => {
+    expect(() =>
+      envSchema.parse({ APP_ENV: 'production', BETTER_AUTH_SECRET: PROD_AUTH_SECRET, ...PROD_PAYMENT }),
+    ).toThrow(/DB_URL/);
+  });
+
+  it('缺少 BETTER_AUTH_SECRET 时拒绝启动（不使用公开默认密钥）', () => {
+    expect(() => envSchema.parse({ APP_ENV: 'production', DB_URL: PROD_DB_URL, ...PROD_PAYMENT })).toThrow(
+      /BETTER_AUTH_SECRET/,
+    );
+  });
+
+  it('生产环境显式指定 mock 支付驱动时拒绝启动', () => {
+    expect(() =>
+      envSchema.parse({
+        APP_ENV: 'production',
+        DB_URL: PROD_DB_URL,
+        BETTER_AUTH_SECRET: PROD_AUTH_SECRET,
+        WEPAY_DRIVER: 'mock',
+      }),
+    ).toThrow(/mock/);
+  });
+
+  it('生产环境缺凭证隐式降级 mock 时拒绝启动（防漏配静默上线）', () => {
+    expect(() =>
+      envSchema.parse({ APP_ENV: 'production', DB_URL: PROD_DB_URL, BETTER_AUTH_SECRET: PROD_AUTH_SECRET }),
+    ).toThrow(/WEPAY_ALLOW_MOCK/);
+  });
+
+  it('显式退让后允许 mock 启动（未接入支付的部署不被阻断）', () => {
+    const config = envSchema.parse({
+      APP_ENV: 'production',
+      DB_URL: PROD_DB_URL,
+      BETTER_AUTH_SECRET: PROD_AUTH_SECRET,
+      WEPAY_ALLOW_MOCK: 'true',
+    });
+    expect(config.WEPAY_DRIVER).toBe('mock');
+  });
+
+  it('WEPAY_DRIVER=real 但凭证不完整时拒绝启动（否则运行期才报 401/解密失败）', () => {
+    expect(() =>
+      envSchema.parse({
+        APP_ENV: 'production',
+        DB_URL: PROD_DB_URL,
+        BETTER_AUTH_SECRET: PROD_AUTH_SECRET,
+        WEPAY_DRIVER: 'real',
+        // 只有私钥，缺 APIV3_KEY / APPID / MCHID / SERIAL_NO
+        WEPAY_PRIVATE_KEY: '-----BEGIN PRIVATE KEY-----\nMIIB\n-----END PRIVATE KEY-----',
+      }),
+    ).toThrow(/WEPAY_DRIVER=real/);
+  });
+
+  it('生产环境启用 IoT 且使用公开默认胡椒值时拒绝启动', () => {
+    expect(() =>
+      envSchema.parse({
+        ...PROD_BASE,
+        IOT_DEVICE_CREDENTIALS: 'device-01:secret-123456',
+        IOT_DEVICE_PEPPER: 'nestforge-iot-device-pepper-v1',
+      }),
+    ).toThrow(/IOT_DEVICE_PEPPER/);
+  });
+
+  it('两项齐备（并含支付凭证）时正常通过', () => {
+    const config = envSchema.parse(PROD_BASE);
+    expect(config.DB_URL).toBe(PROD_DB_URL);
+    expect(config.BETTER_AUTH_SECRET).toBe(PROD_AUTH_SECRET);
+    expect(config.WEPAY_DRIVER).toBe('real');
+  });
+
+  it('非生产环境两项均可省略（回退本地默认值）', () => {
+    const config = envSchema.parse({});
+    expect(config.DB_URL).toContain('localhost:5432/nest-api');
+    expect(config.BETTER_AUTH_SECRET).toBeUndefined();
+  });
+
+  it('显式配置为公开默认密钥时也拒绝启动（「已填」不等于「安全」）', () => {
+    expect(() =>
+      envSchema.parse({
+        ...PROD_BASE,
+        BETTER_AUTH_SECRET: 'nestforge-better-auth-secret-key-32-chars!',
+      }),
+    ).toThrow(/公开默认密钥/);
+  });
+});
+
+describe('旧 env 键拦截（更名迁移保护）', () => {
+  it('残留 STORAGE_DRIVER 时拒绝启动，并提示改用 FILESYSTEM_DISK', () => {
+    // 哨兵字段使拦截可经入参验证，无需篡改 process.env
+    expect(() => envSchema.parse({ STORAGE_DRIVER: 'local' })).toThrow(/FILESYSTEM_DISK/);
+  });
+
+  it('残留 SEARCH_DRIVER 时拒绝启动，并提示改用 SCOUT_DRIVER', () => {
+    expect(() => envSchema.parse({ SEARCH_DRIVER: 'noop' })).toThrow(/SCOUT_DRIVER/);
+  });
+
+  it('残留 BROADCAST_DRIVER 时拒绝启动（该键已删除）', () => {
+    expect(() => envSchema.parse({ BROADCAST_DRIVER: 'centrifugo' })).toThrow(/REALTIME_URL/);
+  });
+
+  it('无旧键时不受影响', () => {
+    expect(envSchema.parse({}).FILESYSTEM_DISK).toBe('local');
+  });
+});
+
+describe('APP_NAME（品牌唯一来源）', () => {
+  it('未配置时回退默认应用名，并作为 MAIL_FROM_NAME 的默认值', () => {
+    const config = envOf({});
+    expect(config.APP_NAME).toBe('nest-api');
+    expect(config.MAIL_FROM_NAME).toBe('nest-api');
+  });
+
+  it('显式配置时尊重显式值（MAIL_FROM_NAME 显式覆盖仍优先）', () => {
+    const config = envOf({ APP_NAME: 'acme-core', MAIL_FROM_NAME: 'Acme Notify' });
+    expect(config.APP_NAME).toBe('acme-core');
+    expect(config.MAIL_FROM_NAME).toBe('Acme Notify');
+  });
+
+  it('仅覆盖 APP_NAME 时，MAIL_FROM_NAME 同步跟随而不固化旧值', () => {
+    const config = envOf({ APP_NAME: 'acme-core' });
+    expect(config.APP_NAME).toBe('acme-core');
+    expect(config.MAIL_FROM_NAME).toBe('acme-core');
+  });
+
+  it('空串视同未配置，回退默认应用名（与 appName() 语义一致）', () => {
+    expect(envOf({ APP_NAME: '' }).APP_NAME).toBe('nest-api');
+  });
+});
+
+describe('短信通道凭证一致性 (SMS_PROVIDER)', () => {
+  it('默认 smsbao 且完全未配置时允许启动（短信登录未启用）', () => {
+    const config = envOf({});
+    expect(config.SMS_PROVIDER).toBe('smsbao');
+  });
+
+  it('smsbao 只配置一半时应拒绝启动，避免首次发码才 500', () => {
+    expect(() => envOf({ SMSBAO_USER: 'demo-user' })).toThrow(/SMSBAO_PASSWORD/);
+    expect(() => envOf({ SMSBAO_PASSWORD: 'secret' })).toThrow(/SMSBAO_USER/);
+  });
+
+  it('smsbao 凭证齐全时通过', () => {
+    const config = envOf({ SMSBAO_USER: 'demo-user', SMSBAO_PASSWORD: 'secret' });
+    expect(config.SMSBAO_USER).toBe('demo-user');
+  });
+
+  it('显式选择 aliyun 但缺少凭证时应拒绝启动', () => {
+    expect(() => envOf({ SMS_PROVIDER: 'aliyun' })).toThrow(/ALIYUN_SMS_ACCESS_KEY_ID/);
+    expect(() =>
+      envOf({
+        SMS_PROVIDER: 'aliyun',
+        ALIYUN_SMS_ACCESS_KEY_ID: 'ak',
+        ALIYUN_SMS_ACCESS_KEY_SECRET: 'secret',
+        ALIYUN_SMS_SIGN_NAME: 'nest-api',
+      }),
+    ).toThrow(/ALIYUN_SMS_TEMPLATE_CODE/);
+  });
+
+  it('aliyun 四项凭证齐全时通过', () => {
+    const config = envOf({
+      SMS_PROVIDER: 'aliyun',
+      ALIYUN_SMS_ACCESS_KEY_ID: 'ak',
+      ALIYUN_SMS_ACCESS_KEY_SECRET: 'secret',
+      ALIYUN_SMS_SIGN_NAME: 'nest-api',
+      ALIYUN_SMS_TEMPLATE_CODE: 'SMS_000001',
+    });
+    expect(config.SMS_PROVIDER).toBe('aliyun');
   });
 });

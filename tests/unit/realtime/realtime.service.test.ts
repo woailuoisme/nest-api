@@ -19,6 +19,7 @@ describe('RealtimeService (Centrifugo Facade)', () => {
     sendToUser: ReturnType<typeof vi.fn>;
     broadcast: ReturnType<typeof vi.fn>;
     batchPublish: ReturnType<typeof vi.fn>;
+    isConfigured: ReturnType<typeof vi.fn>;
     checkHealth: ReturnType<typeof vi.fn>;
     generateConnectionToken: ReturnType<typeof vi.fn>;
     generateSubscriptionToken: ReturnType<typeof vi.fn>;
@@ -49,6 +50,7 @@ describe('RealtimeService (Centrifugo Facade)', () => {
       }),
       getWsUrl: vi.fn().mockReturnValue('ws://127.0.0.1:8000/connection/websocket'),
       getSseUrl: vi.fn().mockReturnValue('http://127.0.0.1:8000/connection/sse'),
+      isConfigured: vi.fn().mockReturnValue(true),
     };
 
     service = new RealtimeService(
@@ -59,8 +61,13 @@ describe('RealtimeService (Centrifugo Facade)', () => {
   });
 
   describe('基础属性与驱动', () => {
-    it('getDriver 应固定返回 centrifugo', () => {
+    it('getDriver 应在传输层已配置时返回 centrifugo', () => {
       expect(service.getDriver()).toBe('centrifugo');
+    });
+
+    it('getDriver 应在未配置 REALTIME_URL 时返回 none（不谎报可用）', () => {
+      centrifugoTransport.isConfigured.mockReturnValue(false);
+      expect(service.getDriver()).toBe('none');
     });
 
     it('getCentrifugoTransport 应返回注入的 Centrifugo 实例', () => {
@@ -106,10 +113,10 @@ describe('RealtimeService (Centrifugo Facade)', () => {
   });
 
   describe('事件派发', () => {
-    it('sendToUser 应委托给 primaryTransport', () => {
+    it('sendToUser 应委托给 primaryTransport', async () => {
       const payload = { orderId: 'ORD-999', status: 'shipped' };
 
-      const result = service.sendToUser('01931234-0000-7000-8000-000000000042', 'order:updated', payload);
+      const result = await service.sendToUser('01931234-0000-7000-8000-000000000042', 'order:updated', payload);
 
       expect(primaryTransport.sendToUser).toHaveBeenCalledWith(
         expect.objectContaining({
@@ -121,10 +128,10 @@ describe('RealtimeService (Centrifugo Facade)', () => {
       expect(result.event).toBe('order:updated');
     });
 
-    it('broadcast 应委托给 primaryTransport', () => {
+    it('broadcast 应委托给 primaryTransport', async () => {
       const metric = { cpu: 80 };
 
-      const result = service.broadcast('system', 'metrics:updated', metric);
+      const result = await service.broadcast('system', 'metrics:updated', metric);
 
       expect(primaryTransport.broadcast).toHaveBeenCalledWith(
         expect.objectContaining({

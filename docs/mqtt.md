@@ -1,12 +1,12 @@
 # 工业级物联网 MQTT 5.0 架构与产品接入指南
 
-> 本文档面向工业物联网（IIoT）系统架构师、边缘网关与嵌入式固件开发团队、全端大屏开发团队以及平台运维团队，作为工业产品接入 NestForge 工业底座的**标准协议契约、工业物模型规范、主题拓扑体系、双向 RPC 通信范式以及安全加固工程标准**。
+> 本文档面向工业物联网（IIoT）系统架构师、边缘网关与嵌入式固件开发团队、全端大屏开发团队以及平台运维团队，作为工业产品接入 工业底座的**标准协议契约、工业物模型规范、主题拓扑体系、双向 RPC 通信范式以及安全加固工程标准**。
 
 ---
 
 ## 1. 工业物联网顶层架构与 ISA-95 映射 (IIoT Architecture)
 
-在工业 4.0 与智能制造体系中，NestForge 作为云端制造运营核心（MOM/MES/SCADA 赋能平台），遵循 **ISA-95 / Purdue 工业自动化五层模型**，构建了以 **MQTT 5.0** 为中枢神经的高并发、低延迟工业连接架构：
+在工业 4.0 与智能制造体系中，作为云端制造运营核心（MOM/MES/SCADA 赋能平台），遵循 **ISA-95 / Purdue 工业自动化五层模型**，构建了以 **MQTT 5.0** 为中枢神经的高并发、低延迟工业连接架构：
 
 ```mermaid
 flowchart TD
@@ -29,9 +29,9 @@ flowchart TD
         RuleEngine["数据分流与持久化桥接"]
     end
 
-    subgraph L4_Cloud["Level 3~4: NestForge 核心工业服务底座 (NestJS Core)"]
+    subgraph L4_Cloud["Level 3~4: 核心工业服务底座 (NestJS Core)"]
         direction TB
-        MqttClientModule["MqttModule (NestForge MQTT 5.0 Engine)"]
+        MqttClientModule["MqttModule (MQTT 5.0 Engine)"]
         SharedSubs["$share 共享订阅集群负载均衡"]
         RpcEngine["MQTT 5.0 RPC 协调器 (responseTopic/correlationData)"]
         DeviceShadow["数字影子 (Device Shadow Memory/Timescale)"]
@@ -60,25 +60,25 @@ flowchart TD
 
 1. **协议层与传输层彻底解耦**：现场总线繁多（Modbus RTU/TCP、OPC UA、Profinet、EtherCAT），通过边缘网关就地将数据清洗、对齐并转换为标准的 **MQTT 5.0 JSON / Protobuf** 结构，阻断现场总线抖动对云端业务的冲击。
 2. **端云双向无锁响应 (Zero-Polling RPC)**：全面摈弃传统基于 HTTP 轮询或 Redis 中转的设备下发状态同步机制，利用 MQTT 5.0 原生的 `responseTopic` 与 `correlationData`，实现云端对现场设备的**微秒级同步控制与确定性闭环**。
-3. **高可用弹性吞吐 ($share)**：针对百万级工业测点每秒十万频次的遥测流量，通过 MQTT 5.0 共享订阅机制，由 Broker 自动在 NestForge 的多个 Pod 间均匀轮询分发，支持水平弹性扩容且无需复杂的消费组重平衡。
+3. **高可用弹性吞吐 ($share)**：针对百万级工业测点每秒十万频次的遥测流量，通过 MQTT 5.0 共享订阅机制，由 Broker 自动在多个 Pod 间均匀轮询分发，支持水平弹性扩容且无需复杂的消费组重平衡。
 4. **单向事件驱动解耦 (Event-Driven)**：MQTT 消息进入业务层后立即沉淀为标准领域事件（`iot.telemetry.received`、`iot.alarm.triggered`），与上层展示协议（WebSocket/SSE）和时序数据库解耦，杜绝协议穿透。
 
 ---
 
 ## 2. 工业标准主题拓扑体系 (Topic Hierarchy)
 
-主题命名体系遵循 **ISA-95 企业设备层级标准** 与 **RESTful 语义范式**。在 NestForge 中，系统原生支持命名参数提取（如 `:tenantId`、`:deviceId`）与 MQTT 5.0 共享订阅。
+主题命名体系遵循 **ISA-95 企业设备层级标准** 与 **RESTful 语义范式**。系统原生支持命名参数提取（如 `:tenantId`、`:deviceId`）与 MQTT 5.0 共享订阅。
 
 ### 2.1 主题拓扑全景图
 
-| 业务方向 | 逻辑主题模式 | QoS | Retain | 说明与使用场景 |
-| :--- | :--- | :---: | :---: | :--- |
-| **设备遥测上报** | `devices/:tenantId/:deviceId/telemetry` | **1** | false | 周期性指标上报（温度、振动、转速、能耗等），云端采用 `$share` 消费 |
-| **设备生命周期** | `devices/:tenantId/:deviceId/status` | **1** | **true** | 设备在线/离线状态。**离线状态必须由 Broker 遗嘱消息 (LWT) 强制触发** |
-| **异常告警事件** | `devices/:tenantId/:deviceId/events` | **1** | false | 突发工业告警（如电机超温、急停触发、断刀报警、压力骤降） |
-| **数字影子更新** | `devices/:tenantId/:deviceId/shadow/update` | **1** | false | 设备上报实际状态或主动更新影子属性 |
-| **控制指令下发** | `devices/:deviceId/command` | **1** | false | 平台向设备下发动作指令（如调速、启停、配方下发、复位） |
-| **RPC 同步回复** | `app/rpc/:podId/reply` | **1** | false | 设备执行指令后的回执管道，带 `correlationData` 路由至发起请求的单 Pod |
+| 业务方向         | 逻辑主题模式                                |  QoS  |  Retain  | 说明与使用场景                                                        |
+| :--------------- | :------------------------------------------ | :---: | :------: | :-------------------------------------------------------------------- |
+| **设备遥测上报** | `devices/:tenantId/:deviceId/telemetry`     | **1** |  false   | 周期性指标上报（温度、振动、转速、能耗等），云端采用 `$share` 消费    |
+| **设备生命周期** | `devices/:tenantId/:deviceId/status`        | **1** | **true** | 设备在线/离线状态。**离线状态必须由 Broker 遗嘱消息 (LWT) 强制触发**  |
+| **异常告警事件** | `devices/:tenantId/:deviceId/events`        | **1** |  false   | 突发工业告警（如电机超温、急停触发、断刀报警、压力骤降）              |
+| **数字影子更新** | `devices/:tenantId/:deviceId/shadow/update` | **1** |  false   | 设备上报实际状态或主动更新影子属性                                    |
+| **控制指令下发** | `devices/:tenantId/:deviceId/command`       | **1** |  false   | 平台向设备下发动作指令（如调速、启停、配方下发、复位）                |
+| **RPC 同步回复** | `app/rpc/:podId/reply`                      | **1** |  false   | 设备执行指令后的回执管道，带 `correlationData` 路由至发起请求的单 Pod |
 
 ---
 
@@ -88,9 +88,9 @@ flowchart TD
 
 ### 3.1 设备遥测上报 (Telemetry Payload)
 
-* **主题**：`devices/{tenantId}/{deviceId}/telemetry`
-* **QoS 策略**：工业遥测数据推荐采用 **QoS 1**（配合边缘网关消息缓存与去重，防止弱网丢包；超高频振动采样可降为 QoS 0）。
-* **JSON Schema 范式**：
+- **主题**：`devices/{tenantId}/{deviceId}/telemetry`
+- **QoS 策略**：工业遥测数据推荐采用 **QoS 1**（配合边缘网关消息缓存与去重，防止弱网丢包；超高频振动采样可降为 QoS 0）。
+- **JSON Schema 范式**：
 
 ```json
 {
@@ -112,9 +112,9 @@ flowchart TD
 
 > **字段说明**：
 >
-> * `timestamp`: 毫秒级 Unix 时间戳（边缘设备采集时刻，非云端接收时刻，保证时序准确性）。
-> * `status`: 设备运行状态：`idle` (待机)、`operating` (加工中)、`fault` (故障停机)、`maintenance` (维保检修)。
-> * `quality`: 工业 OPC 质量戳（`192 (0xC0)` 代表 Good 正常；`0 (0x00)` 代表 Bad 传感器断线/故障；`64 (0x40)` 代表 Uncertain 校验不确定）。
+> - `timestamp`: 毫秒级 Unix 时间戳（边缘设备采集时刻，非云端接收时刻，保证时序准确性）。
+> - `status`: 设备运行状态：`idle` (待机)、`operating` (加工中)、`fault` (故障停机)、`maintenance` (维保检修)。
+> - `quality`: 工业 OPC 质量戳（`192 (0xC0)` 代表 Good 正常；`0 (0x00)` 代表 Bad 传感器断线/故障；`64 (0x40)` 代表 Uncertain 校验不确定）。
 
 ---
 
@@ -122,14 +122,14 @@ flowchart TD
 
 工业物联网必须准确感知设备非正常离线（如车间动力电跳闸、网线断开、工控机死机）。
 
-* **主题**：`devices/{tenantId}/{deviceId}/status`
-* **QoS 策略**：**QoS 1**，且必须设置 **`retain: true`**（让新上线的监控端立即读到最新状态）。
-* **MQTT 客户端连接配置**：设备在建立 MQTT 连接时，向 Broker 注册如下**遗嘱消息 (Last Will and Testament, LWT)**：
-  * **遗嘱主题**：`devices/{tenantId}/{deviceId}/status`
-  * **遗嘱 Payload**：`{"status":"offline","reason":"network_disruption","timestamp":1726053600000}`
-  * **遗嘱 QoS**：`1`
-  * **遗嘱 Retain**：`true`
-* **设备正常上线 Payload**：
+- **主题**：`devices/{tenantId}/{deviceId}/status`
+- **QoS 策略**：**QoS 1**，且必须设置 **`retain: true`**（让新上线的监控端立即读到最新状态）。
+- **MQTT 客户端连接配置**：设备在建立 MQTT 连接时，向 Broker 注册如下**遗嘱消息 (Last Will and Testament, LWT)**：
+  - **遗嘱主题**：`devices/{tenantId}/{deviceId}/status`
+  - **遗嘱 Payload**：`{"status":"offline","reason":"network_disruption","timestamp":1726053600000}`
+  - **遗嘱 QoS**：`1`
+  - **遗嘱 Retain**：`true`
+- **设备正常上线 Payload**：
 
   ```json
   {
@@ -140,7 +140,7 @@ flowchart TD
   }
   ```
 
-* **设备正常下线 Payload**（设备断电前优雅退出）：
+- **设备正常下线 Payload**（设备断电前优雅退出）：
 
   ```json
   {
@@ -154,17 +154,17 @@ flowchart TD
 
 ### 3.3 工业级同步 RPC 指令下发 (Command & Response)
 
-NestForge 利用 MQTT 5.0 的 `responseTopic` 与 `correlationData`，实现了生产级微秒同步控制下发。
+利用 MQTT 5.0 的 `responseTopic` 与 `correlationData`，实现了生产级微秒同步控制下发。
 
 #### 1. 平台下发指令数据包 (Request)
 
-* **发布主题**：`devices/{deviceId}/command`
-* **MQTT 5.0 Header Properties**：
-  * `responseTopic`: `app/rpc/{podId}/reply`（指向当前发起请求的 NestForge Pod 私有通道）
-  * `correlationData`: `b3f1c9d2-4e8a-4b91-9c8e-2f7a6b5c4d3e`（全局唯一关联 ID）
-  * `userProperties`: `{"tenantId":"acme-factory","operator":"admin","dispatchAt":"1726053600000"}`
-  * `messageExpiryInterval`: `10`（10 秒内设备未接收则 Broker 自动抛弃，防止堆积下发）
-* **指令 Payload**：
+- **发布主题**：`devices/{tenantId}/{deviceId}/command`（租户取自 `IOT_DEVICE_TENANTS` 注册表，未登记则为 `default`）
+- **MQTT 5.0 Header Properties**：
+  - `responseTopic`: `app/rpc/{podId}/reply`（指向当前发起请求的 Pod 私有通道）
+  - `correlationData`: `b3f1c9d2-4e8a-4b91-9c8e-2f7a6b5c4d3e`（全局唯一关联 ID）
+  - `userProperties`: `{"tenantId":"acme-factory","operator":"admin","dispatchAt":"1726053600000"}`
+  - `messageExpiryInterval`: `10`（10 秒内设备未接收则 Broker 自动抛弃，防止堆积下发）
+- **指令 Payload**：
 
   ```json
   {
@@ -182,10 +182,10 @@ NestForge 利用 MQTT 5.0 的 `responseTopic` 与 `correlationData`，实现了�
 
 现场网关接收到指令并由 PLC 执行完毕后，必须原样提取 MQTT 5.0 属性中的 `responseTopic` 与 `correlationData` 发送应答：
 
-* **发布目标**：`responseTopic`（即 `app/rpc/{podId}/reply`）
-* **MQTT 5.0 Header Properties**：
-  * `correlationData`: 原样带回请求包中的二进制/字符串 ID
-* **响应 Payload**：
+- **发布目标**：`responseTopic`（即 `app/rpc/{podId}/reply`）
+- **MQTT 5.0 Header Properties**：
+  - `correlationData`: 原样带回请求包中的二进制/字符串 ID
+- **响应 Payload**：
 
   ```json
   {
@@ -203,9 +203,9 @@ NestForge 利用 MQTT 5.0 的 `responseTopic` 与 `correlationData`，实现了�
 
 ---
 
-## 4. NestForge 服务端实现规范 (Server Implementation)
+## 4. 服务端实现规范 (Server Implementation)
 
-NestForge 在统一顶级模块 `src/iot/` 中提供了现代化的声明式注解、传输适配器与工业物联网服务。
+平台在统一顶级模块 `src/iot/` 中提供了现代化的声明式注解、传输适配器与工业物联网服务。
 
 ### 4.1 核心依赖与连接配置
 
@@ -223,8 +223,9 @@ MQTT_URL="mqtts://iot_server_user:secret_token@broker.factory.internal:8883?clie
 ```typescript
 import { Injectable, Logger } from '@nestjs/common';
 import { EventEmitter2 } from '@nestjs/event-emitter';
-import { MqttSubscribe, MqttPayload, MqttParams, MqttCtx, type MqttMessageContext } from '@/iot';
+
 import { IOT_EVENTS } from '@/common/events';
+import { MqttSubscribe, MqttPayload, MqttParams, MqttCtx, type MqttMessageContext } from '@/iot';
 
 @Injectable()
 export class IotTelemetryService {
@@ -297,16 +298,18 @@ export class IotTelemetryService {
 
 ```typescript
 import { Injectable } from '@nestjs/common';
+
 import { MqttService } from '@/iot';
 
 @Injectable()
 export class IotCommandService {
   constructor(private readonly mqttService: MqttService) {}
 
-  async adjustMotorSpeed(deviceId: string, targetRpm: number) {
+  async adjustMotorSpeed(tenantId: string, deviceId: string, targetRpm: number) {
     // 同步阻塞等待设备响应，默认 5000ms 超时，底层自动生成 correlationData 并匹配 responseTopic
     const result = await this.mqttService.request(
-      `devices/${deviceId}/command`,
+      // 租户层级必须与服务端注册表（IOT_DEVICE_TENANTS）一致；直接调用底层 request 时由调用方保证
+      `devices/${tenantId}/${deviceId}/command`,
       {
         command: 'SET_MOTOR_SPEED',
         params: { targetRpm },
@@ -315,7 +318,7 @@ export class IotCommandService {
       {
         timeoutMs: 3000,
         qos: 1,
-        userProperties: { dispatchedBy: 'NestForge-WebController' },
+        userProperties: { dispatchedBy: 'nest-api-WebController' },
       },
     );
 
@@ -336,7 +339,7 @@ export class IotCommandService {
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-NestForge 工业边缘网关生产级参考实现 (Python 3.10+ / paho-mqtt v2.0+)
+工业边缘网关生产级参考实现 (Python 3.10+ / paho-mqtt v2.0+)
 特性：TLS 安全加密、MQTT 5.0 请求响应 RPC、遗嘱离线通知 (LWT)、指数退避自动重连
 """
 
@@ -496,7 +499,7 @@ if __name__ == "__main__":
 
 void publish_telemetry(MQTTClient client, float temp, float vibration) {
     char payload[128];
-    snprintf(payload, sizeof(payload), 
+    snprintf(payload, sizeof(payload),
              "{\"timestamp\":%ld,\"temperature\":%.2f,\"vibration\":%.2f,\"status\":\"operating\"}",
              time(NULL) * 1000, temp, vibration);
 
@@ -520,8 +523,8 @@ void publish_telemetry(MQTTClient client, float temp, float vibration) {
 
 ### 6.1 传输安全与双向认证 (mTLS / X.509)
 
-* **严禁明文暴露**：生产环境严禁开启未加密的 `1883` 端口，强制使用 TLS 1.3 (`8883` 端口) 或 WSS (`9002` 端口)。
-* **双向身份验签 (Mutual TLS)**：工业设备内部集成安全单元（TPM 2.0 芯片或 ATECC608 加密元件），在设备出厂时烧录唯一设备证书（X.509）。Broker 强制校验证书链（CA 根证书），杜绝恶意伪造设备。
+- **严禁明文暴露**：生产环境严禁开启未加密的 `1883` 端口，强制使用 TLS 1.3 (`8883` 端口) 或 WSS (`9002` 端口)。
+- **双向身份验签 (Mutual TLS)**：工业设备内部集成安全单元（TPM 2.0 芯片或 ATECC608 加密元件），在设备出厂时烧录唯一设备证书（X.509）。Broker 强制校验证书链（CA 根证书），杜绝恶意伪造设备。
 
 ### 6.2 Broker 鉴权与主题级访问控制 (Auth & Strict ACL)
 
@@ -555,16 +558,15 @@ ACL 编写要点（Mosquitto `acl_file` 语义，详见 `config/acl.example`）�
 
 1. **启用 `acl_file` 即白名单模式**：未出现的主题一律不可访问；`password_file` 的账号名才是 `user`/`%u` 的匹配对象，**不是 clientId**；
 2. **`deny` 优先级高于同主题的授权**，因此不要用 `deny app/rpc/#` 去"封场"再对设备单独授权——会被 deny 直接否决；正确做法是只写最小授权（设备侧仅 `pattern write app/rpc/+/reply` 允许回执）；
-3. **设备侧默认形态**：
-
-   ```text
-   pattern readwrite devices/+/%u/#    # 仅自身 deviceId 子树（遥测/状态/告警）
-   pattern read devices/%u/command     # 接收平台下发的控制指令
-   pattern write app/rpc/+/reply       # 仅能写定向 RPC 回执，无法订阅该通道
-   ```
-
-   该写法覆盖"同名 deviceId 跨租户"的残留越权面；如需绝对租户隔离，改为按设备逐条 `user` 规则（大规模建议由设备台账脚本生成）；
+3. **设备侧默认形态**：仅自身 `deviceId` 子树可读写（含接收自身指令）、只能写定向 RPC 回执 —— 该写法覆盖"同名 deviceId 跨租户"的残留越权面；如需绝对租户隔离，改为按设备逐条 `user` 规则（大规模建议由设备台账脚本生成）；
 4. `pattern` 缺少 `%u`/`%c` 时 Mosquitto 会打印 `Warning: ACL pattern ... does not contain '%c' or '%u'`，属预期提示（如 `app/rpc/+/reply` 本身就是与设备身份无关的规则）。
+
+设备侧两条 `pattern` 规则的实际形态（匹配 `devices/{tenantId}/{deviceId}/...`，指令主题同样落在该子树内）：
+
+```text
+pattern readwrite devices/+/%u/#    # 仅自身 deviceId 子树（遥测/状态/告警/指令）
+pattern write app/rpc/+/reply       # 仅能写定向 RPC 回执，无法订阅该通道
+```
 
 **已实测验证**（`eclipse-mosquitto:2.1-alpine`，本仓库配置）：匿名连接与错误密码均被拒绝（`not authorised`）、设备可发布自身主题且平台可收到、设备伪造他厂设备遥测的消息**未被投递**、设备订阅他厂设备子树**收不到任何数据**。
 
@@ -580,32 +582,37 @@ ACL 编写要点（Mosquitto `acl_file` 语义，详见 `config/acl.example`）�
 ```bash
 curl -X POST http://localhost:4300/v1/iot/devices/token \
   -H "Content-Type: application/json" \
-  -d '{"deviceId": "cnc-001", "deviceSecret": "s3cr3t-def456", "tenantId": "factory-alpha"}'
+  -d '{"deviceId": "cnc-001", "deviceSecret": "s3cr3t-def456"}'
 ```
+
+请求体**不接受 `tenantId`**：租户归属是服务端事实，取自 `IOT_DEVICE_TENANTS` 注册表（未登记则归入 `default`），否则任一设备都可凭自己的合法密钥向其他租户的命名空间发布数据。
 
 > **当前语义与演进路线（务必对齐）**
 > Broker 侧鉴权采用 **原生 `password_file` + `acl_file`（零插件，见 §6.2）**，设备接入 Broker 使用**一机一密账号**：`username=<deviceId>`、`password=<deviceSecret>`（同一密钥需由运维写入 `password.txt`）。
 > 因此本端点当前承担的是**准入校验 + 凭据签发审计**职责，其签发的 JWT **尚未被 Broker 消费**（无插件即无 JWT 验签器）。要闭合该环，需二选一：
 >
-> * **方案 A 后续**：把端点语义改为"发放/轮换 Broker 凭据"（如接入 Mosquitto Dynamic Security 或受控调用 `mosquitto_passwd`），无需引入插件；
-> * **方案 B/C**：让 Broker 原生支持 JWT（`mosquitto-go-auth` 已于 2025-06 归档且 Alpine 镜像不可用；或迁移 EMQX/HiveMQ 等具备 JWKS 的 Broker）。
+> - **方案 A 后续**：把端点语义改为"发放/轮换 Broker 凭据"（如接入 Mosquitto Dynamic Security 或受控调用 `mosquitto_passwd`），无需引入插件；
+> - **方案 B/C**：让 Broker 原生支持 JWT（`mosquitto-go-auth` 已于 2025-06 归档且 Alpine 镜像不可用；或迁移 EMQX/HiveMQ 等具备 JWKS 的 Broker）。
+>
 > 未完成上述演进前，请勿在安全评审中把设备 JWT 视为 Broker 准入控制手段。
 
 相关环境变量：
 
-| 变量 | 说明 |
-| --- | --- |
-| `IOT_DEVICE_CREDENTIALS` | 设备凭证表 `deviceId:secret,deviceId:secret`；**留空表示禁止换票**（一律 401） |
-| `IOT_JWT_SECRET` | 设备接入 JWT 独立签名密钥（≥32 字符），**必须与 `BETTER_AUTH_SECRET` 域分离**；未配置时返回 503 |
-| `IOT_DEVICE_PEPPER` | 凭证摘要的 HMAC 加固盐值（≥16 字符），生产环境务必显式配置 |
-| `IOT_TOKEN_TTL_SECONDS` | 凭据有效期（秒），默认 30 天；缩短有效期需设备侧配合静默续签 |
+| 变量                     | 说明                                                                                                                                |
+| ------------------------ | ----------------------------------------------------------------------------------------------------------------------------------- |
+| `IOT_DEVICE_CREDENTIALS` | 设备凭证表 `deviceId:secret,deviceId:secret`；**留空表示禁止换票**（一律 401）                                                      |
+| `IOT_DEVICE_TENANTS`     | 设备租户归属表 `deviceId:tenantId,deviceId:tenantId`；决定设备 JWT 的 `tenantId` 声明与指令主题的租户层级。未登记设备归入 `default` |
+| `IOT_JWT_SECRET`         | 设备接入 JWT 独立签名密钥（≥32 字符），**必须与 `BETTER_AUTH_SECRET` 域分离**；未配置时返回 503                                     |
+| `IOT_DEVICE_PEPPER`      | 凭证摘要的 HMAC 加固盐值（≥16 字符）；启用 IoT 时生产环境禁止使用公开默认值                                                         |
+| `IOT_TOKEN_TTL_SECONDS`  | 凭据有效期（秒），默认 30 天；缩短有效期需设备侧配合静默续签                                                                        |
 
 安全语义：
 
 1. **恒定时间比较**：密钥错误与设备未注册返回同一条 `401 设备凭证无效`，且两条路径均执行完整的 HMAC 比较，杜绝通过响应耗时探测设备是否已注册；
 2. **绝不回退硬编码密钥**：`IOT_JWT_SECRET` 缺失时 fail fast（503），避免弱默认密钥被用于伪造设备身份；
 3. **限流**：该端点位于 `@Public()` 白名单（设备无法持有用户会话），已叠加 `@Throttle` 每分钟 5 次，防止凭证爆破；
-4. **吊销与轮换**：JWT 携带 `jti` 以支持黑名单即时吊销；轮换设备密钥需**双处同步**——平台侧 `IOT_DEVICE_CREDENTIALS`（滚动重启 API）与 Broker 侧 `password.txt`（`docker kill -s HUP mosquitto` 热重载），否则会出现"能换票但连不上 Broker"或反之的割裂状态。
+4. **租户隔离**：设备 token 的 `tenantId` 只来自服务端注册表（`IOT_DEVICE_TENANTS`），不采信请求体；设备上报告警的租户/设备标识也只取自 MQTT 主题，不采信载荷自报值；
+5. **吊销与轮换**：JWT 携带 `jti` 以支持黑名单即时吊销；轮换设备密钥需**双处同步**——平台侧 `IOT_DEVICE_CREDENTIALS`（滚动重启 API）与 Broker 侧 `password.txt`（`docker kill -s HUP mosquitto` 热重载），否则会出现“能换票但连不上 Broker”或反之的割裂状态。
 
 ---
 
@@ -620,9 +627,9 @@ curl -X POST http://localhost:4300/v1/iot/devices/token \
 ```bash
 # 1. 模拟设备监听指令并自动回复 (MQTT 5.0)
 mosquitto_sub -h localhost -p 1883 -u cnc-01 -P '<设备密钥>' \
-  -t "devices/cnc-01/command" -F "%p (Props: %P)" -V 5
+  -t "devices/tenant-demo/cnc-01/command" -F "%p (Props: %P)" -V 5
 
-# 2. 模拟边缘网关向 NestForge 上报遥测
+# 2. 模拟边缘网关向平台上报遥测
 mosquitto_pub -h localhost -p 1883 -u cnc-01 -P '<设备密钥>' \
   -t "devices/tenant-demo/cnc-01/telemetry" \
   -m '{"temperature": 88.5, "status": "operating", "timestamp": 1726053600000}' \
@@ -631,9 +638,9 @@ mosquitto_pub -h localhost -p 1883 -u cnc-01 -P '<设备密钥>' \
 
 #### 2. GUI 调试工具推荐
 
-* **MQTTX**（EMQX 出品，跨平台开源 GUI，完整支持 MQTT 5.0 用户属性注入与包属性查看）。
+- **MQTTX**（EMQX 出品，跨平台开源 GUI，完整支持 MQTT 5.0 用户属性注入与包属性查看）。
 
-### 7.2 NestForge 内置仿真端点
+### 7.2 内置仿真端点
 
 系统提供了内置的模拟设备仿真接口（[IotController](file:///Users/seaside/Projects/nestjs/nest-drizzle-better-auth/src/iot/iot.controller.ts)），前端或联调人员可零硬件依赖闭环测试：
 
@@ -665,10 +672,10 @@ curl -X POST http://localhost:4300/v1/iot/devices/plc-press-01/command \
 
 ## 8. 常见故障诊断与排查清单 (Troubleshooting)
 
-| 症状 / 异常 | 根本原因 | 生产排查与解决办法 |
-| :--- | :--- | :--- |
-| **设备突然离线，影子无预警停摆** | 现场动力断电或链路闪断触发 Broker LWT | 检查 Broker 是否收到遗嘱消息；排查现场交换机供电或边缘网关心跳配置 |
-| **控制指令下发报 408 RequestTimeout** | 设备已掉线或现场 PLC 处理超时 | 检查设备当前在线状态；增大 `timeoutMs` 参数；确认网关是否正常回填 `correlationData` |
-| **云端多个 Pod 重复消费同一条遥测** | 未配置 MQTT 5.0 共享订阅 | 检查 `@MqttSubscribe` 是否配置了 `sharedGroup: 'xxx'`，Broker 是否正确支持 `$share` |
-| **设备重连后出现大量历史重放消息** | 误配置了 `cleanSession: false` 且 QoS 较高 | 工业状态监控通常只需要最新值，遥测上报建议设置短期 `messageExpiryInterval` |
-| **Broker 报 Client Identifier Invalid** | 多个设备或网关使用了相同的 `clientId` | 工业设备 `clientId` 必须由 MAC 地址、芯片序列号或企业设备唯一编码生成，禁止硬编码 |
+| 症状 / 异常                             | 根本原因                                   | 生产排查与解决办法                                                                  |
+| :-------------------------------------- | :----------------------------------------- | :---------------------------------------------------------------------------------- |
+| **设备突然离线，影子无预警停摆**        | 现场动力断电或链路闪断触发 Broker LWT      | 检查 Broker 是否收到遗嘱消息；排查现场交换机供电或边缘网关心跳配置                  |
+| **控制指令下发报 408 RequestTimeout**   | 设备已掉线或现场 PLC 处理超时              | 检查设备当前在线状态；增大 `timeoutMs` 参数；确认网关是否正常回填 `correlationData` |
+| **云端多个 Pod 重复消费同一条遥测**     | 未配置 MQTT 5.0 共享订阅                   | 检查 `@MqttSubscribe` 是否配置了 `sharedGroup: 'xxx'`，Broker 是否正确支持 `$share` |
+| **设备重连后出现大量历史重放消息**      | 误配置了 `cleanSession: false` 且 QoS 较高 | 工业状态监控通常只需要最新值，遥测上报建议设置短期 `messageExpiryInterval`          |
+| **Broker 报 Client Identifier Invalid** | 多个设备或网关使用了相同的 `clientId`      | 工业设备 `clientId` 必须由 MAC 地址、芯片序列号或企业设备唯一编码生成，禁止硬编码   |

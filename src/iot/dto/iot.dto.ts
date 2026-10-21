@@ -50,12 +50,31 @@ export const MockTelemetrySchema = z.object({
 
 export type MockTelemetryDto = z.infer<typeof MockTelemetrySchema>;
 
+// ─── 设备影子查询 Schema ────────────────────────────────────────────────
+
+/**
+ * 设备影子查询参数。
+ *
+ * `tenantId` 仅是**查询选择器**（决定读取哪个租户的分区），不是访问控制边界——
+ * 当前系统尚无「用户 ↔ 租户」归属模型，准入仅由路由角色限定（OPERATOR 以上）。
+ * 后续接入租户建模后，必须改为服务端推导租户，禁止由调用方指定。
+ */
+export const DeviceShadowQuerySchema = z.object({
+  tenantId: z.string().min(1).max(64).optional().describe('租户 ID（查询选择器，非权限边界）'),
+});
+
+export type DeviceShadowQueryDto = z.infer<typeof DeviceShadowQuerySchema>;
+
+/** 未指定租户时的默认归属 */
+export const DEFAULT_TENANT_ID = 'default';
+
 // ─── 设备安全凭证签发 Schema & DTO ──────────────────────────────────────────
 
 export const DeviceTokenRequestSchema = z.object({
   deviceId: DeviceIdSchema,
   deviceSecret: z.string().min(6).describe('设备预置通信密钥 (Pre-Shared Secret)'),
-  tenantId: z.string().default('default').optional().describe('所属租户 ID'),
+  // 租户不在此声明：它由服务端注册表 (IOT_DEVICE_TENANTS) 决定。
+  // 旧客户端仍可传 tenantId，Zod 会静默丢弃，不影响换票。
 });
 
 export type DeviceTokenRequestDto = z.infer<typeof DeviceTokenRequestSchema>;

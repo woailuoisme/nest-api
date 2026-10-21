@@ -1,4 +1,4 @@
-import { BadRequestException, ForbiddenException, Inject, Injectable } from '@nestjs/common';
+import { BadRequestException, ForbiddenException, Inject, Injectable, Logger } from '@nestjs/common';
 
 import type { CurrentUserPayload } from '@/common/decorators/current-user.decorator';
 
@@ -23,6 +23,8 @@ import { REALTIME_PRIMARY_TRANSPORT, type RealtimeTransport } from './transports
  */
 @Injectable()
 export class RealtimeService {
+  private readonly logger = new Logger(RealtimeService.name);
+
   constructor(
     @Inject(REALTIME_PRIMARY_TRANSPORT) private readonly primaryTransport: RealtimeTransport,
     private readonly channelManager: ChannelManager,
@@ -30,10 +32,13 @@ export class RealtimeService {
   ) {}
 
   /**
-   * 获取当前生效的广播驱动
+   * 获取当前生效的广播驱动。
+   *
+   * `none` 表示未配置 `REALTIME_URL`（传输层已实例化但未接线）：诊断与健康检查必须
+   * 能区分「未配置」与「已配置但故障」，否则运维会对着一个永不投递的驱动排查网络。
    */
-  getDriver(): 'centrifugo' {
-    return 'centrifugo';
+  getDriver(): 'centrifugo' | 'none' {
+    return this.centrifugoTransport.isConfigured() ? 'centrifugo' : 'none';
   }
 
   /**
@@ -105,8 +110,11 @@ export class RealtimeService {
    * @param userId 目标用户 ID
    * @param event 事件名
    * @param data 业务载荷
+   *
+   * 返回 Promise 意味着调用方 `await` 时真能覆盖到网络往返；失败仅告警不上抛，
+   * 避免推送故障反向击穿业务主流程，但绝不会像旧实现那样静默吞掉（`catch(() => {})`）。
    */
-  sendToUser<T = unknown>(userId: string, event: string, data: T): RealtimeEnvelope<T> {
+  async sendToUser<T = unknown>(userId: string, event: string, data: T): Promise<RealtimeEnvelope<T>> {
     const envelope: RealtimeEnvelope<T> = {
       event,
       targetUserId: userId,
@@ -114,9 +122,7 @@ export class RealtimeService {
       timestamp: Date.now(),
     };
 
-    // 异步安全派发至 Centrifugo 外部网关
-    Promise.resolve(this.primaryTransport.sendToUser(envelope)).catch(() => {});
-
+    await this.deliver(() => this.primaryTransport.sendToUser(envelope), `user:${userId}`, event);
     return envelope;
   }
 
@@ -126,7 +132,7 @@ export class RealtimeService {
    * @param event 事件名
    * @param data 业务载荷
    */
-  broadcast<T = unknown>(channel: string, event: string, data: T): RealtimeEnvelope<T> {
+  async broadcast<T = unknown>(channel: string, event: string, data: T): Promise<RealtimeEnvelope<T>> {
     const envelope: RealtimeEnvelope<T> = {
       event,
       channel,
@@ -134,10 +140,20 @@ export class RealtimeService {
       timestamp: Date.now(),
     };
 
-    // 异步安全派发至 Centrifugo 外部网关
-    Promise.resolve(this.primaryTransport.broadcast(envelope)).catch(() => {});
-
+    await this.deliver(() => this.primaryTransport.broadcast(envelope), `channel:${channel}`, event);
     return envelope;
+  }
+
+  /**
+   * 统一投递与失败上报：实时推送属于弱依赖，失败降级为 warn（含频道/事件便于告警聚合），
+   * 但绝不允许静默丢弃 —— 旧实现的 `catch(() => {})` 让 Centrifugo 故障完全不可观测。
+   */
+  private async deliver(send: () => void | Promise<void>, target: string, event: string): Promise<void> {
+    try {
+      await send();
+    } catch (error) {
+      this.logger.warn(`[Realtime] 事件投递失败: target=[${target}], event=[${event}], error=${String(error)}`);
+    }
   }
 
   /**

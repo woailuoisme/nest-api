@@ -10,26 +10,35 @@ import { v7 as uuidv7 } from 'uuid';
 import { isProductionEnv } from '@/common/constants/app.constants';
 
 /** 敏感 Token 查询参数脱敏正则（预编译复用） */
-export const AUTH_QUERY_REGEX = /([?&](?:token|access_token|refresh_token)=)[^&\s]*/g;
+export const AUTH_QUERY_REGEX = /([?&](?:token|access_token|refresh_token|api_key|apikey)=)[^&\s]*/g;
+
+/** 允许透传的请求 ID 字符集与长度（仅保留可见安全字符） */
+export const REQUEST_ID_PATTERN = /^[A-Za-z0-9._-]{1,64}$/;
 
 /** 全局敏感字段脱敏路径 */
 export const REDACT_PATHS = [
   'req.headers.authorization',
   'req.headers.cookie',
+  'req.headers["x-api-key"]',
   'password',
   'passwordHash',
   'token',
   'refreshToken',
+  'deviceSecret',
+  // 设备凭证表是「一串 deviceId:secret」，单行配置日志就会泄漏全部设备密钥
+  'IOT_DEVICE_CREDENTIALS',
   '*.password',
   '*.passwordHash',
   '*.token',
   '*.refreshToken',
+  '*.deviceSecret',
   'req.headers["set-cookie"]',
   'res.headers["set-cookie"]',
   'req.body.password',
   'req.body.password_confirmation',
   'req.body.token',
   'req.body.secret',
+  'req.body.deviceSecret',
 ];
 
 /** HTTP 请求日志关键结构接口 */
@@ -56,11 +65,17 @@ export type RequestIdSource = {
 
 /**
  * 请求 ID 生成策略：优先透传客户端 `x-request-id`，其次复用已存在的 `req.id`，最后生成标准单调递增 `UUIDv7`。
+ *
+ * 透传值必须收敛：客户端可携带任意长度/字符的值，直接写入每条日志会污染结构化输出
+ * （超长行、换行注入、与其他租户的关联 ID 碰撞）。非注入字符集一律丢弃并回落到 UUIDv7。
  */
 export function createRequestId(req: RequestIdSource): string {
   const incoming = req.headers?.['x-request-id'];
-  if (typeof incoming === 'string' && incoming.trim()) {
-    return incoming.trim();
+  if (typeof incoming === 'string') {
+    const trimmed = incoming.trim();
+    if (trimmed && REQUEST_ID_PATTERN.test(trimmed)) {
+      return trimmed;
+    }
   }
   return typeof req.id === 'string' && req.id ? req.id : uuidv7();
 }
@@ -92,6 +107,21 @@ const traceMixin: pino.LoggerOptions['mixin'] = () => {
   return { trace_id: traceId, span_id: spanId, trace_flags: traceFlags };
 };
 
+/** 允许的日志级别（与 env.validation 的 LOG_LEVEL 枚举保持一致） */
+const LOG_LEVELS = new Set(['trace', 'debug', 'info', 'warn', 'error', 'fatal', 'silent']);
+
+/**
+ * 日志级别：由 `LOG_LEVEL` 决定；未配置时生产 info、其余环境 debug。
+ *
+ * 直接读 process.env：logger 在 ConfigModule 之前即可实例化（CLI/Worker 引导期同样生效）。
+ * 非生产环境默认 debug 是既有行为，必须保留：否则开发/预发会在升级后静默丢掉全部 debug 日志。
+ */
+function resolveLogLevel(): pino.LevelWithSilent {
+  const raw = process.env.LOG_LEVEL?.trim().toLowerCase();
+  if (raw && LOG_LEVELS.has(raw)) return raw as pino.LevelWithSilent;
+  return isProductionEnv() ? 'info' : 'debug';
+}
+
 /**
  * 创建进程内 Pino 实例（单通道 stdout）：
  * - 生产：pino 默认即为「单行 JSON 写 stdout」，零包装、零额外开销，便于容器日志驱动 / Loki 采集；
@@ -104,7 +134,7 @@ export async function createPinoLogger(customDestination?: Writable): Promise<pi
   if (customDestination) {
     return pino(
       {
-        level: 'debug',
+        level: resolveLogLevel(),
         redact: { paths: REDACT_PATHS, censor: '[redacted]' },
         mixin: traceMixin,
       },
@@ -114,7 +144,7 @@ export async function createPinoLogger(customDestination?: Writable): Promise<pi
 
   const isProduction = isProductionEnv();
   const options: pino.LoggerOptions = {
-    level: isProduction ? 'info' : 'debug',
+    level: resolveLogLevel(),
     redact: { paths: REDACT_PATHS, censor: '[redacted]' },
     mixin: traceMixin,
     // 开发/测试走 pretty，无需 JSON 基字段（pretty 本就忽略 pid/hostname），故只喂给生产通道

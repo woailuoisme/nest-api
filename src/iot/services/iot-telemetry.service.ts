@@ -1,4 +1,4 @@
-import { createHmac, randomUUID } from 'node:crypto';
+import { randomUUID } from 'node:crypto';
 
 import { Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { EventEmitter2 } from '@nestjs/event-emitter';
@@ -9,6 +9,7 @@ import {
   type IotDeviceStatusChangedEvent,
   type IotTelemetryReceivedEvent,
 } from '@/common/events';
+import { signHs256Jwt } from '@/common/utils/jwt.util';
 
 import { MqttCtx, MqttParams, MqttPayload, MqttSubscribe } from '../decorators';
 import type {
@@ -23,22 +24,12 @@ import type { MqttMessageContext } from '../transports/interfaces/mqtt.interface
 import { MqttService } from '../transports/mqtt.service';
 import { IotDeviceCredentialService } from './iot-device-credential.service';
 
-function toBase64Url(input: string | Buffer): string {
-  const buf = typeof input === 'string' ? Buffer.from(input, 'utf8') : input;
-  return buf.toString('base64url');
-}
+/** 设备影子内存缓存上限：超出后按插入顺序淘汰最早条目，防止无界增长 */
+const MAX_DEVICE_SHADOWS = 10_000;
 
-function signHs256Jwt(payload: Record<string, unknown>, secret: string): string {
-  const header = { alg: 'HS256', typ: 'JWT' };
-  const headerB64 = toBase64Url(JSON.stringify(header));
-  const payloadB64 = toBase64Url(JSON.stringify(payload));
-  const signatureInput = `${headerB64}.${payloadB64}`;
-
-  const hmac = createHmac('sha256', secret);
-  hmac.update(signatureInput);
-  const signatureB64 = toBase64Url(hmac.digest());
-
-  return `${signatureInput}.${signatureB64}`;
+/** 影子缓存键：必须包含租户，避免同名设备跨租户互相覆盖 */
+function shadowKey(tenantId: string, deviceId: string): string {
+  return `${tenantId}:${deviceId}`;
 }
 
 /**
@@ -54,7 +45,11 @@ function signHs256Jwt(payload: Record<string, unknown>, secret: string): string 
 export class IotTelemetryService {
   private readonly logger = new Logger(IotTelemetryService.name);
 
-  /** 设备影子状态内存缓存 (热态最新在线状态与快照) */
+  /**
+   * 设备影子状态内存缓存 (热态最新在线状态与快照)
+   *
+   * 键必须包含租户：仅用 deviceId 会让不同租户的同名设备互相覆盖（租户 A 的状态出现在租户 B 的看板）。
+   */
   private readonly deviceShadows = new Map<string, DeviceShadowEntity>();
 
   constructor(
@@ -79,7 +74,8 @@ export class IotTelemetryService {
     const token = signHs256Jwt(
       {
         sub: dto.deviceId,
-        tenantId: dto.tenantId || 'default',
+        // 租户取自服务端注册表：请求体可被伪造，同设备否则可向任意租户命名空间发布数据
+        tenantId: this.deviceCredentials.resolveTenant(dto.deviceId),
         role: 'device',
         // jti 用于支持凭据吊销（黑名单 / 轮换后即时失效）
         jti: randomUUID(),
@@ -174,11 +170,11 @@ export class IotTelemetryService {
     };
     this.eventEmitter.emit(IOT_EVENTS.STATUS_CHANGED, statusEvent);
 
-    const existing = this.deviceShadows.get(deviceId);
-    this.deviceShadows.set(deviceId, {
+    const key = shadowKey(tenantId, deviceId);
+    const existing = this.deviceShadows.get(key);
+    this.setShadow(key, {
       deviceId,
-      // 保留既有租户绑定与遥测快照，仅在首次建档时采用主题中的租户
-      tenantId: existing?.tenantId ?? tenantId,
+      tenantId,
       online: isOnline,
       lastSeenAt: new Date().toISOString(),
       telemetry: existing?.telemetry ?? null,
@@ -199,8 +195,10 @@ export class IotTelemetryService {
     );
 
     const alarmEvent: IotAlarmTriggeredEvent = {
-      tenantId: payload.tenantId || tenantId,
-      deviceId: payload.deviceId || deviceId,
+      // 租户与设备一律取自 topic（已由 broker ACL 限定的发布路径），
+      // 不采信载荷自报值：设备可伪造成其他租户/其他设备告警
+      tenantId,
+      deviceId,
       level: payload.level || 'warning',
       metric: payload.metric,
       value: payload.value,
@@ -233,7 +231,7 @@ export class IotTelemetryService {
       lastSeenAt: new Date().toISOString(),
       telemetry,
     };
-    this.deviceShadows.set(deviceId, shadow);
+    this.setShadow(shadowKey(tenantId, deviceId), shadow);
     return shadow;
   }
 
@@ -262,25 +260,45 @@ export class IotTelemetryService {
   /**
    * 查询指定设备影子
    */
-  getDeviceShadow(deviceId: string): DeviceShadowEntity | null {
-    return this.deviceShadows.get(deviceId) ?? null;
+  getDeviceShadow(tenantId: string, deviceId: string): DeviceShadowEntity | null {
+    return this.deviceShadows.get(shadowKey(tenantId, deviceId)) ?? null;
   }
 
   /**
    * 查询指定设备影子，若不存在则抛出 NotFoundException
    */
-  getDeviceShadowOrFail(deviceId: string): DeviceShadowEntity {
-    const shadow = this.getDeviceShadow(deviceId);
+  getDeviceShadowOrFail(tenantId: string, deviceId: string): DeviceShadowEntity {
+    const shadow = this.getDeviceShadow(tenantId, deviceId);
     if (!shadow) {
-      throw new NotFoundException(`设备 [${deviceId}] 影子不存在或尚未上报遥测`);
+      throw new NotFoundException(`设备 [${tenantId}/${deviceId}] 影子不存在或尚未上报遥测`);
     }
     return shadow;
   }
 
   /**
-   * 获取所有设备影子列表
+   * 获取设备影子列表（可按租户过滤）
    */
-  listDeviceShadows(): DeviceShadowEntity[] {
-    return Array.from(this.deviceShadows.values());
+  listDeviceShadows(tenantId?: string): DeviceShadowEntity[] {
+    const all = Array.from(this.deviceShadows.values());
+    return tenantId ? all.filter((shadow) => shadow.tenantId === tenantId) : all;
+  }
+
+  /**
+   * 写入影子并限制内存占用：设备规模超预期时按插入顺序淘汰最早条目，
+   * 避免长期运行后 Map 无限增长成为堆泄漏源。
+   */
+  private setShadow(key: string, shadow: DeviceShadowEntity): void {
+    this.deviceShadows.delete(key);
+    this.deviceShadows.set(key, shadow);
+
+    if (this.deviceShadows.size <= MAX_DEVICE_SHADOWS) return;
+
+    const overflow = this.deviceShadows.size - MAX_DEVICE_SHADOWS;
+    let removed = 0;
+    for (const oldestKey of this.deviceShadows.keys()) {
+      this.deviceShadows.delete(oldestKey);
+      removed += 1;
+      if (removed >= overflow) break;
+    }
   }
 }

@@ -44,37 +44,40 @@ flowchart TD
 
 ### 2.1 驱动推导
 
-`WEPAY_DRIVER` 留空时按凭证齐全度自动推导（对齐 `SEARCH_DRIVER` 的推导范式）：
+`WEPAY_DRIVER` 留空时按凭证齐全度自动推导（对齐 `SCOUT_DRIVER` 的推导范式）：
 
-| 条件 | 推导结果 |
-| :--- | :--- |
-| `WEPAY_APPID` + `WEPAY_MCHID` + `WEPAY_SERIAL_NO` + `WEPAY_APIV3_KEY` + （`WEPAY_PRIVATE_KEY` 或 `WEPAY_PRIVATE_KEY_PATH`）齐备 | `real` |
-| 其余情况 | `mock` |
+| 条件                                                                                                                            | 推导结果 |
+| :------------------------------------------------------------------------------------------------------------------------------ | :------- |
+| `WEPAY_APPID` + `WEPAY_MCHID` + `WEPAY_SERIAL_NO` + `WEPAY_APIV3_KEY` + （`WEPAY_PRIVATE_KEY` 或 `WEPAY_PRIVATE_KEY_PATH`）齐备 | `real`   |
+| 其余情况                                                                                                                        | `mock`   |
 
-> **注意**：`APP_ENV=production` 且推导结果为 `mock` 时应用可正常启动，但支付接口不会产生真实交易（运行时仅输出 warn 日志）。生产部署前务必配齐 `WEPAY_*` 凭证或显式 `WEPAY_DRIVER=real`。
+> **注意**：`APP_ENV=production` 且推导结果为 `mock` 时，应用**拒绝启动**（防止漏配一个 env 就静默上线）。
+> 未接入真实支付的部署可设置 `WEPAY_ALLOW_MOCK=true` 显式退让：启动照常，但真实回调会全部验签失败、下单只产生假数据，
+> 健康探针会把 `wepay` 标为 `degraded`。接入真实支付后应删除该开关。
 
 ### 2.2 变量清单
 
-| 变量 | 说明 |
-| :--- | :--- |
-| `WEPAY_DRIVER` | `real` 或 `mock`，留空自动推导 |
-| `WEPAY_APPID` | 直连商户申请的公众号或移动应用 appid |
-| `WEPAY_MCHID` | 直连商户号 |
-| `WEPAY_SERIAL_NO` | 商户 API 证书序列号 |
-| `WEPAY_PRIVATE_KEY` | 商户 API 私钥（内联 PEM，支持 `\n` 转义），优先级高于路径 |
-| `WEPAY_PRIVATE_KEY_PATH` | 商户 API 私钥文件路径（相对项目根目录），须加入 `.gitignore` |
-| `WEPAY_APIV3_KEY` | 32 字节 APIv3 密钥，用于回调解密与平台证书解密 |
-| `WEPAY_PUBLIC_KEY` / `WEPAY_PUBLIC_KEY_ID` | 微信支付公钥与公钥 ID，**成对配置即走公钥模式** |
-| `WEPAY_NOTIFY_URL` | 默认回调地址，单次下单可通过 `notifyUrl` 覆盖 |
-| `WEPAY_API_BASE` | API 基址，默认 `https://api.mch.weixin.qq.com` |
-| `WEPAY_TIMEOUT_MS` | 请求超时，默认 `15000` |
+| 变量                                       | 说明                                                               |
+| :----------------------------------------- | :----------------------------------------------------------------- |
+| `WEPAY_DRIVER`                             | `real` 或 `mock`，留空自动推导                                     |
+| `WEPAY_ALLOW_MOCK`                         | 生产环境允许 mock 驱动的显式退让开关（默认 `false`，否则启动失败） |
+| `WEPAY_APPID`                              | 直连商户申请的公众号或移动应用 appid                               |
+| `WEPAY_MCHID`                              | 直连商户号                                                         |
+| `WEPAY_SERIAL_NO`                          | 商户 API 证书序列号                                                |
+| `WEPAY_PRIVATE_KEY`                        | 商户 API 私钥（内联 PEM，支持 `\n` 转义），优先级高于路径          |
+| `WEPAY_PRIVATE_KEY_PATH`                   | 商户 API 私钥文件路径（相对项目根目录），须加入 `.gitignore`       |
+| `WEPAY_APIV3_KEY`                          | 32 字节 APIv3 密钥，用于回调解密与平台证书解密                     |
+| `WEPAY_PUBLIC_KEY` / `WEPAY_PUBLIC_KEY_ID` | 微信支付公钥与公钥 ID，**成对配置即走公钥模式**                    |
+| `WEPAY_NOTIFY_URL`                         | 默认回调地址，单次下单可通过 `notifyUrl` 覆盖                      |
+| `WEPAY_API_BASE`                           | API 基址，默认 `https://api.mch.weixin.qq.com`                     |
+| `WEPAY_TIMEOUT_MS`                         | 请求超时，默认 `15000`                                             |
 
 ### 2.3 验签凭据双模式
 
-| 模式 | 触发条件 | 行为 |
-| :--- | :--- | :--- |
-| **微信支付公钥** | 同时配置 `WEPAY_PUBLIC_KEY` 与 `WEPAY_PUBLIC_KEY_ID` | 零下载、零轮转，按应答头 `Wechatpay-Serial` 精确匹配公钥 ID；2024 年后新商户推荐 |
-| **平台证书** | 未配置公钥 | 首次调用或回调时按需拉取 `/v3/certificates`，解密后按 `serial_no` 建索引缓存，12 小时 TTL **惰性刷新**（并发共享同一刷新 Promise 防击穿） |
+| 模式             | 触发条件                                             | 行为                                                                                                                                      |
+| :--------------- | :--------------------------------------------------- | :---------------------------------------------------------------------------------------------------------------------------------------- |
+| **微信支付公钥** | 同时配置 `WEPAY_PUBLIC_KEY` 与 `WEPAY_PUBLIC_KEY_ID` | 零下载、零轮转，按应答头 `Wechatpay-Serial` 精确匹配公钥 ID；2024 年后新商户推荐                                                          |
+| **平台证书**     | 未配置公钥                                           | 首次调用或回调时按需拉取 `/v3/certificates`，解密后按 `serial_no` 建索引缓存，12 小时 TTL **惰性刷新**（并发共享同一刷新 Promise 防击穿） |
 
 > 平台证书模式下拉取失败时，若已有可用缓存则记录 `warn` 继续运行；首次拉取失败则上抛，避免「静默不可验签」。
 
@@ -133,12 +136,12 @@ const fundFlow = await wepay.downloadFundFlowBill({ billDate: '2026-01-01', acco
 
 退款是异步过程：**申请成功 ≠ 到账成功**。申请接口返回的 `status` 与回调送达的状态都取自下表：
 
-| 状态 | 含义 | 业务动作 |
-| :--- | :--- | :--- |
-| `PROCESSING` | 退款处理中 | 等待回调，或轮询 `queryRefund()` |
-| `SUCCESS` | 退款成功 | 释放业务侧冻结/记账 |
-| `ABNORMAL` | 退款异常（如收款银行卡已注销） | **人工介入**，或更换退款方式后重新发起 |
-| `CLOSED` | 退款关闭（资金已退回商户） | **重新发起**退款 |
+| 状态         | 含义                           | 业务动作                               |
+| :----------- | :----------------------------- | :------------------------------------- |
+| `PROCESSING` | 退款处理中                     | 等待回调，或轮询 `queryRefund()`       |
+| `SUCCESS`    | 退款成功                       | 释放业务侧冻结/记账                    |
+| `ABNORMAL`   | 退款异常（如收款银行卡已注销） | **人工介入**，或更换退款方式后重新发起 |
+| `CLOSED`     | 退款关闭（资金已退回商户）     | **重新发起**退款                       |
 
 `ABNORMAL` 与 `CLOSED` 均不会再有后续回调，必须显式处理，因此分别映射为 `payment.refund_failed` 事件的 `status`。
 
@@ -150,12 +153,12 @@ const fundFlow = await wepay.downloadFundFlowBill({ billDate: '2026-01-01', acco
 
 以下情况会在**发起网络请求前**被本地拦截（状态码与微信 `PARAM_ERROR` 对齐，同归 400），避免无效往返：
 
-| 校验 | 错误码 |
-| :--- | :--- |
-| `outRefundNo` 缺失 | `WEPAY_REFUND_NO_MISSING` |
-| `transactionId` 与 `outTradeNo` 同时缺失 | `WEPAY_REFUND_TARGET_MISSING` |
-| `amount.total` / `amount.refund` 非正整数（分） | `WEPAY_REFUND_AMOUNT_INVALID` |
-| `amount.refund > amount.total` | `WEPAY_REFUND_AMOUNT_EXCEEDED` |
+| 校验                                            | 错误码                         |
+| :---------------------------------------------- | :----------------------------- |
+| `outRefundNo` 缺失                              | `WEPAY_REFUND_NO_MISSING`      |
+| `transactionId` 与 `outTradeNo` 同时缺失        | `WEPAY_REFUND_TARGET_MISSING`  |
+| `amount.total` / `amount.refund` 非正整数（分） | `WEPAY_REFUND_AMOUNT_INVALID`  |
+| `amount.refund > amount.total`                  | `WEPAY_REFUND_AMOUNT_EXCEEDED` |
 
 > 全额退款（`refund >= total`）才会把交易状态置为 `REFUND`，部分退款保持原状 —— mock 驱动与微信语义保持一致。
 
@@ -163,13 +166,13 @@ const fundFlow = await wepay.downloadFundFlowBill({ billDate: '2026-01-01', acco
 
 账单是**异步生成**的：微信在账单日**次日北京时间 10:00** 起生成，且仅支持下载近三个月内的账单。
 
-| 规则 | 处理方式 |
-| :--- | :--- |
-| 日期格式非 `yyyy-MM-DD` 或日期不存在（如 2 月 30 日） | 本地拦截 → `WEPAY_BILL_DATE_INVALID`(400)，不发起请求 |
-| 账单日尚未到次日 10:00（北京时间） | 本地拦截 → `WEPAY_BILL_NOT_READY`(400)，不发起请求 |
-| 账单日超出近三个月回溯范围 | 本地拦截 → `WEPAY_BILL_DATE_OUT_OF_RANGE`(400)，不发起请求 |
+| 规则                                                       | 处理方式                                                              |
+| :--------------------------------------------------------- | :-------------------------------------------------------------------- |
+| 日期格式非 `yyyy-MM-DD` 或日期不存在（如 2 月 30 日）      | 本地拦截 → `WEPAY_BILL_DATE_INVALID`(400)，不发起请求                 |
+| 账单日尚未到次日 10:00（北京时间）                         | 本地拦截 → `WEPAY_BILL_NOT_READY`(400)，不发起请求                    |
+| 账单日超出近三个月回溯范围                                 | 本地拦截 → `WEPAY_BILL_DATE_OUT_OF_RANGE`(400)，不发起请求            |
 | 已到生成时刻但微信返回 `STATEMENT_CREATING` / 下载地址缺失 | **长间隔退避重试 3 次 × 10 秒**（覆盖「刚过生成时刻尚未落盘」的窗口） |
-| 微信返回 `NO_STATEMENT_EXIST` | 确定性结果（当日无资金变动），**不重试**，直接上报 400 |
+| 微信返回 `NO_STATEMENT_EXIST`                              | 确定性结果（当日无资金变动），**不重试**，直接上报 400                |
 
 > 跨天等待（例如「每天定时拉取昨日账单」）**不在请求链路中阻塞**，应由业务侧定时任务在 T+1 10:00 之后触发。本地日期门禁已消除绝大多数注定失败的调用。
 
@@ -177,23 +180,23 @@ const fundFlow = await wepay.downloadFundFlowBill({ billDate: '2026-01-01', acco
 
 申请账单应答固定返回 `hash_type`（官方固定 `SHA1`）、`hash_value` 与 `download_url`（**5 分钟内有效**）。下载链路严格按官方要求实现：
 
-| 步骤 | 实现 |
-| :--- | :--- |
-| 签名 | 对 `download_url` 的 **path + query** 按 APIv3 标准签名并携带 `Authorization` 请求（并非「URL 自带 token 即可免签名」） |
-| 解压 | `tar_type=GZIP` 时以 gzip 解压；失败上报 `WEPAY_BILL_DECOMPRESS_FAILED`(502) |
+| 步骤 | 实现                                                                                                                                                                        |
+| :--- | :-------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 签名 | 对 `download_url` 的 **path + query** 按 APIv3 标准签名并携带 `Authorization` 请求（并非「URL 自带 token 即可免签名」）                                                     |
+| 解压 | `tar_type=GZIP` 时以 gzip 解压；失败上报 `WEPAY_BILL_DECOMPRESS_FAILED`(502)                                                                                                |
 | 校验 | 以 `hash_value` 校验**解压后**原始账单的 SHA1（官方口径：「原始账单(gzip需要解压缩)的摘要值」）；不一致上报 `WEPAY_BILL_HASH_MISMATCH`(502)，绝不把来路不明的内容交给业务侧 |
-| 错误 | 下载地址过期或请求方与申请方不一致时，透传微信的 `400 INVALID_REQUEST` / `403 NO_AUTH` |
-| 重试 | 整个下载步骤纳入读操作重试（瞬态故障可重试） |
+| 错误 | 下载地址过期或请求方与申请方不一致时，透传微信的 `400 INVALID_REQUEST` / `403 NO_AUTH`                                                                                      |
+| 重试 | 整个下载步骤纳入读操作重试（瞬态故障可重试）                                                                                                                                |
 
 > 直连商户账单**未加密**（`encrypt_key` / `nonce` 仅出现在二级商户资金账单场景），因此无需额外解密；`tar_type` 不传时以数据流形式返回，原样透传。
 
 ### 3.3 容错策略
 
-| 操作类型 | 重试 | 说明 |
-| :--- | :--- | :--- |
-| 查询 / 退款查询 / 账单下载 | ✅ 最多 2 次，仅 5xx、429 与网络异常 | 幂等安全 |
-| 下单 / 关单 / 退款 | ❌ 不重试 | 避免放大不确定性 |
-| 熔断 | ❌ 不接入 | 支付场景熔断后业务完全无法下单/查单，可能比原故障更糟；仅保留超时保护 |
+| 操作类型                   | 重试                                 | 说明                                                                  |
+| :------------------------- | :----------------------------------- | :-------------------------------------------------------------------- |
+| 查询 / 退款查询 / 账单下载 | ✅ 最多 2 次，仅 5xx、429 与网络异常 | 幂等安全                                                              |
+| 下单 / 关单 / 退款         | ❌ 不重试                            | 避免放大不确定性                                                      |
+| 熔断                       | ❌ 不接入                            | 支付场景熔断后业务完全无法下单/查单，可能比原故障更糟；仅保留超时保护 |
 
 ---
 
@@ -245,15 +248,15 @@ async onPaymentSucceeded(event: PaymentSucceededEvent): Promise<void> {
 
 ### 5.1 错误分类与可重试性
 
-| 分类 | 含义 | 可重试 | 业务处置 |
-| :--- | :--- | :---: | :--- |
-| `invalid-request` | 参数或配置不符 | ❌ | 修参数/配置，重试无意义 |
-| `auth` | 签名、证书或商户权限问题 | ❌ | 修配置或申请权限 |
-| `business-state` | 订单/账单状态冲突 | ❌ | 业务分支处理 |
-| `account` | 商户或用户账户侧问题 | ❌ | 人工介入 |
-| `not-found` | 目标资源不存在 | ❌ | 核对单号 |
-| `rate-limited` | 频率限制 | ✅ | 退避后重试 |
-| `upstream` | 微信侧系统异常 | ✅ | 原样重试 |
+| 分类              | 含义                     | 可重试 | 业务处置                |
+| :---------------- | :----------------------- | :----: | :---------------------- |
+| `invalid-request` | 参数或配置不符           |   ❌   | 修参数/配置，重试无意义 |
+| `auth`            | 签名、证书或商户权限问题 |   ❌   | 修配置或申请权限        |
+| `business-state`  | 订单/账单状态冲突        |   ❌   | 业务分支处理            |
+| `account`         | 商户或用户账户侧问题     |   ❌   | 人工介入                |
+| `not-found`       | 目标资源不存在           |   ❌   | 核对单号                |
+| `rate-limited`    | 频率限制                 |   ✅   | 退避后重试              |
+| `upstream`        | 微信侧系统异常           |   ✅   | 原样重试                |
 
 调用方无需硬编码错误码字符串：
 
@@ -274,21 +277,21 @@ try {
 
 ### 5.2 错误码映射
 
-| 归属 | 微信 code | HTTP |
-| :--- | :--- | :--- |
-| 公共 | `PARAM_ERROR` `INVALID_REQUEST` | 400 |
-| 公共 | `SIGN_ERROR` | 401 |
-| 公共 | `SYSTEM_ERROR` | 500 |
-| 商户 | `APPID_MCHID_NOT_MATCH` | 400 |
-| 商户 | `MCH_NOT_EXISTS` `APPID_NOT_EXIST` | 404 |
-| 商户 | `NO_AUTH` / `NOAUTH` | 403 |
-| 交易 | `ORDER_CLOSED` `ORDER_PAID` | 400 |
-| 交易 | `OUT_TRADE_NO_USED` `RULE_LIMIT` `TRADE_ERROR` | 403 |
-| 账户 | `ACCOUNT_ERROR` `NOT_ENOUGH` `USER_ACCOUNT_ABNORMAL` | 403 |
-| 资源 | `RESOURCE_NOT_EXISTS` `ORDER_NOT_EXIST` `USER_NOT_EXISTS` | 404 |
-| 账单 | `NO_STATEMENT_EXIST` `STATEMENT_CREATING` | 400 |
-| 频率 | `FREQUENCY_LIMITED` | 429 |
-| 未收录 | — | 透传微信自身 4xx；5xx 与缺失兜底 502 |
+| 归属   | 微信 code                                                 | HTTP                                 |
+| :----- | :-------------------------------------------------------- | :----------------------------------- |
+| 公共   | `PARAM_ERROR` `INVALID_REQUEST`                           | 400                                  |
+| 公共   | `SIGN_ERROR`                                              | 401                                  |
+| 公共   | `SYSTEM_ERROR`                                            | 500                                  |
+| 商户   | `APPID_MCHID_NOT_MATCH`                                   | 400                                  |
+| 商户   | `MCH_NOT_EXISTS` `APPID_NOT_EXIST`                        | 404                                  |
+| 商户   | `NO_AUTH` / `NOAUTH`                                      | 403                                  |
+| 交易   | `ORDER_CLOSED` `ORDER_PAID`                               | 400                                  |
+| 交易   | `OUT_TRADE_NO_USED` `RULE_LIMIT` `TRADE_ERROR`            | 403                                  |
+| 账户   | `ACCOUNT_ERROR` `NOT_ENOUGH` `USER_ACCOUNT_ABNORMAL`      | 403                                  |
+| 资源   | `RESOURCE_NOT_EXISTS` `ORDER_NOT_EXIST` `USER_NOT_EXISTS` | 404                                  |
+| 账单   | `NO_STATEMENT_EXIST` `STATEMENT_CREATING`                 | 400                                  |
+| 频率   | `FREQUENCY_LIMITED`                                       | 429                                  |
+| 未收录 | —                                                         | 透传微信自身 4xx；5xx 与缺失兜底 502 |
 
 > **100% 按官方映射**：凡携带微信应答的错误一律采用**应答中的原始状态码**。官方对同一错误码在不同接口标注不同状态（`MCH_NOT_EXISTS` 在下单为 400、在退款为 404），透传应答状态才能与官方完全一致，未收录的错误码同样逐字透传。
 >
@@ -296,19 +299,19 @@ try {
 
 ### 5.3 模块自定义错误码
 
-| code | HTTP | 分类 |
-| :--- | :--- | :--- |
-| `WEPAY_TIMEOUT` | 504 | upstream |
-| `WEPAY_NETWORK_ERROR` `WEPAY_HTTP_ERROR` `WEPAY_INVALID_RESPONSE` `WEPAY_BILL_HASH_MISMATCH` `WEPAY_BILL_DECOMPRESS_FAILED` | 502 | upstream |
-| `WEPAY_BILL_HASH_TYPE_UNSUPPORTED` | 500 | invalid-request |
-| `WEPAY_RESPONSE_SIGNATURE_INVALID` | 502 | auth |
-| `WEPAY_CERTIFICATE_UNRESOLVED` `WEPAY_NOTIFY_DECRYPT_FAILED` | 500 | auth |
-| `WEPAY_NOTIFY_SIGNATURE_INVALID` | 401 | auth |
-| `WEPAY_NOTIFY_HEADERS_MISSING` `WEPAY_NOTIFY_TIMESTAMP_INVALID` `WEPAY_NOTIFY_MALFORMED` | 400 | invalid-request |
-| `WEPAY_NOTIFY_URL_MISSING` `WEPAY_PRIVATE_KEY_MISSING` `WEPAY_PRIVATE_KEY_UNREADABLE` | 500 | invalid-request |
-| `WEPAY_BILL_NOT_READY` | 400 | business-state |
-| `WEPAY_BILL_DATE_INVALID` `WEPAY_BILL_DATE_OUT_OF_RANGE` | 400 | invalid-request |
-| `WEPAY_MOCK_ONLY` `WEPAY_REFUND_NO_MISSING` `WEPAY_REFUND_TARGET_MISSING` `WEPAY_REFUND_AMOUNT_INVALID` `WEPAY_REFUND_AMOUNT_EXCEEDED` | 400 | invalid-request |
+| code                                                                                                                                   | HTTP | 分类            |
+| :------------------------------------------------------------------------------------------------------------------------------------- | :--- | :-------------- |
+| `WEPAY_TIMEOUT`                                                                                                                        | 504  | upstream        |
+| `WEPAY_NETWORK_ERROR` `WEPAY_HTTP_ERROR` `WEPAY_INVALID_RESPONSE` `WEPAY_BILL_HASH_MISMATCH` `WEPAY_BILL_DECOMPRESS_FAILED`            | 502  | upstream        |
+| `WEPAY_BILL_HASH_TYPE_UNSUPPORTED`                                                                                                     | 500  | invalid-request |
+| `WEPAY_RESPONSE_SIGNATURE_INVALID`                                                                                                     | 502  | auth            |
+| `WEPAY_CERTIFICATE_UNRESOLVED` `WEPAY_NOTIFY_DECRYPT_FAILED`                                                                           | 500  | auth            |
+| `WEPAY_NOTIFY_SIGNATURE_INVALID`                                                                                                       | 401  | auth            |
+| `WEPAY_NOTIFY_HEADERS_MISSING` `WEPAY_NOTIFY_TIMESTAMP_INVALID` `WEPAY_NOTIFY_MALFORMED`                                               | 400  | invalid-request |
+| `WEPAY_NOTIFY_URL_MISSING` `WEPAY_PRIVATE_KEY_MISSING` `WEPAY_PRIVATE_KEY_UNREADABLE`                                                  | 500  | invalid-request |
+| `WEPAY_BILL_NOT_READY`                                                                                                                 | 400  | business-state  |
+| `WEPAY_BILL_DATE_INVALID` `WEPAY_BILL_DATE_OUT_OF_RANGE`                                                                               | 400  | invalid-request |
+| `WEPAY_MOCK_ONLY` `WEPAY_REFUND_NO_MISSING` `WEPAY_REFUND_TARGET_MISSING` `WEPAY_REFUND_AMOUNT_INVALID` `WEPAY_REFUND_AMOUNT_EXCEEDED` | 400  | invalid-request |
 
 ### 5.4 应答完整性与重试边界
 
@@ -350,20 +353,20 @@ mock 驱动特性：`prepay_id` 由订单号确定性派生（可复现）；`co
 
 ## 7. 排障速查
 
-| 现象 | 排查方向 |
-| :--- | :--- |
-| 回调持续 401 | `Wechatpay-Serial` 与当前凭据不匹配：检查公钥 ID 是否为 `PUB_KEY_ID_xxx`，或平台证书是否拉取成功 |
-| 回调持续 500 且日志为解密失败 | 签名已通过说明报文确实来自微信，多半是 `WEPAY_APIV3_KEY` 配错或换行符丢失 |
-| 回调 400 且提示「疑似重放」 | 服务器时钟偏移超过 5 分钟，校准 NTP |
-| 验签失败但报文看似正常 | `rawBody` 被中间件改写：确认未引入会重新序列化 body 的插件 |
-| 返回 401 `SIGN_ERROR` | 商户私钥与 `WEPAY_SERIAL_NO` 不匹配，或私钥换行符丢失；检查 p12 解出的 key 与证书序列号是否成对 |
-| 返回 403 `NOT_ENOUGH` | 商户账户余额不足，退款前需先充值；下单时该码表示**用户**支付账户余额不足 |
-| 返回 403 `OUT_TRADE_NO_USED` | 商户订单号重复：确认 `out_trade_no` 生成策略是否唯一 |
-| 返回 404 `MCH_NOT_EXISTS` | 商户号错误或 `WEPAY_MCHID` 与 appid 不属同一主体（对照 `APPID_MCHID_NOT_MATCH`） |
-| 返回 502 `WEPAY_INVALID_RESPONSE` | 微信应答缺少关键字段（多半是被网关/代理改写），检查出口网络与 `WEPAY_API_BASE` |
-| 平台证书已轮转但验签仍失败 | 强刷受 60 秒最小间隔约束，间隔后重试；或直接切换到微信支付公钥模式（零轮转） |
-| 收不到退款结果通知 | 未配置 `WEPAY_NOTIFY_URL` 且调用时未传 `notifyUrl`；改用 `queryRefund()` 轮询 |
-| 退款长期停留 PROCESSING | 主动调用 `queryRefund()` 查证；退款到账依赖银行侧，微信侧无法加速 |
-| 退款回调为 `REFUND.ABNORMAL` | 收款方账户异常（如银行卡注销），需人工介入或更换退款方式 |
-| 退款回调为 `REFUND.CLOSED` | 资金已退回商户，需重新发起退款 |
-| 生产启动被阻断 | 凭证缺失，按错误提示补齐 `WEPAY_*` 变量 |
+| 现象                              | 排查方向                                                                                         |
+| :-------------------------------- | :----------------------------------------------------------------------------------------------- |
+| 回调持续 401                      | `Wechatpay-Serial` 与当前凭据不匹配：检查公钥 ID 是否为 `PUB_KEY_ID_xxx`，或平台证书是否拉取成功 |
+| 回调持续 500 且日志为解密失败     | 签名已通过说明报文确实来自微信，多半是 `WEPAY_APIV3_KEY` 配错或换行符丢失                        |
+| 回调 400 且提示「疑似重放」       | 服务器时钟偏移超过 5 分钟，校准 NTP                                                              |
+| 验签失败但报文看似正常            | `rawBody` 被中间件改写：确认未引入会重新序列化 body 的插件                                       |
+| 返回 401 `SIGN_ERROR`             | 商户私钥与 `WEPAY_SERIAL_NO` 不匹配，或私钥换行符丢失；检查 p12 解出的 key 与证书序列号是否成对  |
+| 返回 403 `NOT_ENOUGH`             | 商户账户余额不足，退款前需先充值；下单时该码表示**用户**支付账户余额不足                         |
+| 返回 403 `OUT_TRADE_NO_USED`      | 商户订单号重复：确认 `out_trade_no` 生成策略是否唯一                                             |
+| 返回 404 `MCH_NOT_EXISTS`         | 商户号错误或 `WEPAY_MCHID` 与 appid 不属同一主体（对照 `APPID_MCHID_NOT_MATCH`）                 |
+| 返回 502 `WEPAY_INVALID_RESPONSE` | 微信应答缺少关键字段（多半是被网关/代理改写），检查出口网络与 `WEPAY_API_BASE`                   |
+| 平台证书已轮转但验签仍失败        | 强刷受 60 秒最小间隔约束，间隔后重试；或直接切换到微信支付公钥模式（零轮转）                     |
+| 收不到退款结果通知                | 未配置 `WEPAY_NOTIFY_URL` 且调用时未传 `notifyUrl`；改用 `queryRefund()` 轮询                    |
+| 退款长期停留 PROCESSING           | 主动调用 `queryRefund()` 查证；退款到账依赖银行侧，微信侧无法加速                                |
+| 退款回调为 `REFUND.ABNORMAL`      | 收款方账户异常（如银行卡注销），需人工介入或更换退款方式                                         |
+| 退款回调为 `REFUND.CLOSED`        | 资金已退回商户，需重新发起退款                                                                   |
+| 生产启动被阻断                    | 凭证缺失，按错误提示补齐 `WEPAY_*` 变量                                                          |

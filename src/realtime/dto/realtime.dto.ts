@@ -93,6 +93,10 @@ export class RealtimeChannelInfoDto {
 
 /**
  * Centrifugo Proxy Webhook 频道订阅鉴权请求 DTO Schema
+ *
+ * 安全约定：`user` 由 Centrifugo 依据连接 Token 的 subject 注入（可信），
+ * 其余字段仅为协议元数据；**严禁**在此声明客户端可控的身份/角色字段
+ * （客户端 `subscribe.data` 会原样透传到 webhook，任何来自 data 的角色声明都是伪造入口）。
  */
 export const CentrifugoProxySubscribeSchema = z.object({
   client: z.string().optional(),
@@ -101,7 +105,6 @@ export const CentrifugoProxySubscribeSchema = z.object({
   encoding: z.string().optional(),
   user: z.string().default(''),
   channel: z.string().min(1, 'channel 不能为空'),
-  data: z.unknown().optional(),
   bidi: z.boolean().optional(),
 });
 

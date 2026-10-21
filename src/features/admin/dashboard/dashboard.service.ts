@@ -38,18 +38,16 @@ export class DashboardService {
    * 向实时总线广播系统指标快照
    */
   broadcastSystemMetrics(): SystemMetricPayload {
-    const metrics = this.getSystemMetrics();
-    this.realtimeService.broadcast('dashboard:system', 'metrics:system', metrics);
-    return metrics;
+    return this.broadcast('dashboard:system', 'metrics:system', () => this.getSystemMetrics());
   }
 
   /**
    * 构造并广播标准化业务指标
    */
   broadcastBusinessMetric(metric: string, value: number, tags?: Record<string, string>): BusinessMetricPayload {
-    const payload = this.createBusinessMetric(metric, value, tags);
-    this.realtimeService.broadcast('dashboard:business', 'metrics:business', payload);
-    return payload;
+    return this.broadcast('dashboard:business', 'metrics:business', () =>
+      this.createBusinessMetric(metric, value, tags),
+    );
   }
 
   /**
@@ -69,9 +67,7 @@ export class DashboardService {
    * 构造并广播标准化系统告警
    */
   broadcastAlert(level: 'info' | 'warn' | 'critical', title: string, message: string): AlertMetricPayload {
-    const payload = this.createAlert(level, title, message);
-    this.realtimeService.broadcast('dashboard:alerts', 'metrics:alert', payload);
-    return payload;
+    return this.broadcast('dashboard:alerts', 'metrics:alert', () => this.createAlert(level, title, message));
   }
 
   /**
@@ -85,5 +81,16 @@ export class DashboardService {
       title,
       message,
     };
+  }
+
+  /**
+   * 构造并广播：收敛三处「构造 payload → 推送实时总线 → 返回 payload」的重复流程
+   *
+   * 推送为弱依赖：不阻塞调用方同步返回，失败由 RealtimeService 内部 warn 上报。
+   */
+  private broadcast<T>(channel: string, event: string, build: () => T): T {
+    const payload = build();
+    void this.realtimeService.broadcast(channel, event, payload);
+    return payload;
   }
 }

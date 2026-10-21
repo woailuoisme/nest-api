@@ -7,7 +7,8 @@ admin: true
 health: true
 prometheus: true
 
-# 客户端跨域允许列表 (开发调试支持本地各前端端口与通配符)
+# 客户端跨站允许列表（显式枚举；不再使用 "*" —— 该网关同时开放 admin 控制台，
+# 通配来源属于无必要的攻击面；新增前端域名请在此追加）
 allowed_origins:
   - "http://localhost:3000"
   - "http://localhost:5173"
@@ -15,7 +16,6 @@ allowed_origins:
   - "http://127.0.0.1:3000"
   - "http://127.0.0.1:5173"
   - "http://127.0.0.1:4300"
-  - "*"
 
 # 默认全局频道配置：支持用户隔离频道、保留历史 100 条并启用自动恢复
 allow_user_limited_channels: true
@@ -24,7 +24,14 @@ history_ttl: "300s"
 force_recovery: true
 
 # 反向代理授权配置 (Proxy Subscribe Webhook)
-# 客户端订阅受限私有频道时，Centrifugo 反向回调业务后端进行动态准入鉴定
+# 客户端订阅受限私有频道时，Centrifugo 反向回调业务后端进行动态准入鉴定。
+#
+# 【共享密钥】若要启用后端校验（CENTRIFUGO_PROXY_SECRET），必须给回调请求追加静态头：
+#   方式 A（推荐，无需改本文件）：在 deploy/.env 中设置 JSON 字符串环境变量
+#     CENTRIFUGO_PROXY_STATIC_HTTP_HEADERS={"X-Centrifugo-Proxy-Secret":"<与后端一致的密钥>"}
+#   方式 B：在本文件代理配置中手写 static_http_headers（Centrifugo ≥5.0.2），注意
+#     本文件不支持 ${VAR} 插值，写环境变量名只会把字面量发过去。
+# 默认不发送静态头 ↔ 后端默认也不校验（两边同时未配置时行为与历史一致）。
 proxy_subscribe:
   url: "http://app:3000/v1/realtime/proxy/subscribe"
   timeout: "2s"
