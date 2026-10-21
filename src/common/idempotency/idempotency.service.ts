@@ -18,22 +18,6 @@ import { DrizzleIdempotencyStore } from './drizzle-idempotency.store';
 export const MAX_IDEMPOTENCY_KEY_LENGTH = 256;
 export const IDEMPOTENCY_KEY_PATTERN = /^[\x21-\x7E]+$/;
 
-/** 回放时必须剔除的跳步（Hop-by-hop）与敏感状态请求头 */
-export const DISALLOWED_REPLAY_HEADERS = new Set([
-  'connection',
-  'keep-alive',
-  'proxy-authenticate',
-  'proxy-authorization',
-  'te',
-  'trailer',
-  'transfer-encoding',
-  'upgrade',
-  'set-cookie',
-  'cookie',
-  'authorization',
-  'x-idempotency-replayed',
-]);
-
 /** 容灾策略类型 */
 export type FallbackStrategy = 'fail-closed' | 'fail-open';
 
@@ -53,14 +37,6 @@ export interface CachedResponse {
   statusCode: number;
   body: unknown;
   headers?: Record<string, string> | null;
-}
-
-export interface StoredIdempotencyData {
-  requestPath: string;
-  payloadHash: string;
-  statusCode: number;
-  body: unknown;
-  headers?: Record<string, string>;
 }
 
 export type AcquireResult =
@@ -151,46 +127,6 @@ export class IdempotencyService {
         'Idempotency-Key header contains invalid characters. Only printable ASCII characters are allowed.',
       );
     }
-  }
-
-  /**
-   * 判断 HTTP 响应状态码是否属于可持久化到幂等缓存的范围
-   * 规则：
-   * 1. 若显式指定了 customCodes，以 customCodes 白名单为准；
-   * 2. 默认缓存 2xx 成功与确定性 4xx 业务错误（防重复扣款、重复失败提交）；
-   * 3. 严格排除瞬态错误：409 Conflict（并发冲突）、429 Too Many Requests（限流），以及 5xx 服务端故障（允许重试）。
-   */
-  isCacheableStatusCode(statusCode: number, customCodes?: number[]): boolean {
-    if (customCodes && customCodes.length > 0) {
-      return customCodes.includes(statusCode);
-    }
-    // 2xx 成功响应：全量缓存
-    if (statusCode >= 200 && statusCode < 300) {
-      return true;
-    }
-    // 4xx 客户端错误：缓存除 409 与 429 之外的确定性业务错误
-    if (statusCode >= 400 && statusCode < 500) {
-      return statusCode !== 409 && statusCode !== 429;
-    }
-    // 3xx、5xx 服务端内部错误一律不缓存
-    return false;
-  }
-
-  /**
-   * 安全净化回放响应头：剥离 Hop-by-hop 及 Set-Cookie 等敏感/逐跳头
-   */
-  sanitizeHeadersForReplay(headers?: Record<string, string> | null): Record<string, string> {
-    if (!headers) {
-      return {};
-    }
-    const cleanHeaders: Record<string, string> = {};
-    for (const [key, value] of Object.entries(headers)) {
-      const lowerKey = key.toLowerCase().trim();
-      if (!DISALLOWED_REPLAY_HEADERS.has(lowerKey)) {
-        cleanHeaders[key] = value;
-      }
-    }
-    return cleanHeaders;
   }
 
   /** 计算请求体 SHA-256 签名哈希（基于 Canonical JSON 键排序，消除字段乱序歧义） */

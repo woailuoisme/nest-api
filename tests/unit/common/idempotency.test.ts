@@ -14,11 +14,9 @@ import {
   type AcquireResult,
   canonicalize,
   canonicalStringify,
-  DISALLOWED_REPLAY_HEADERS,
   IDEMPOTENCY_KEY_PATTERN,
   IdempotencyService,
   MAX_IDEMPOTENCY_KEY_LENGTH,
-  type StoredIdempotencyData,
 } from '@/common/idempotency/idempotency.service';
 import * as IdempotencyIndex from '@/common/idempotency/index';
 
@@ -34,7 +32,6 @@ describe('Idempotency Module & Exports', () => {
     expect(IdempotencyIndex.canonicalize).toBe(canonicalize);
     expect(IdempotencyIndex.MAX_IDEMPOTENCY_KEY_LENGTH).toBe(MAX_IDEMPOTENCY_KEY_LENGTH);
     expect(IdempotencyIndex.IDEMPOTENCY_KEY_PATTERN).toBe(IDEMPOTENCY_KEY_PATTERN);
-    expect(IdempotencyIndex.DISALLOWED_REPLAY_HEADERS).toBe(DISALLOWED_REPLAY_HEADERS);
   });
 
   it('场景 2: 验证 IdempotencyModule 正确配置 providers 和 exports 数组，确保模块可安全消费', () => {
@@ -232,80 +229,6 @@ describe('IdempotencyService', () => {
       expect(() => service.validateIdempotencyKey('9b1deb4d-3b7d-4bad-9bdd-2b0d7b3dcb6d')).not.toThrow();
       expect(() => service.validateIdempotencyKey('user:1:action:checkout_2026-09-11')).not.toThrow();
       expect(() => service.validateIdempotencyKey('a'.repeat(256))).not.toThrow();
-    });
-  });
-
-  describe('isCacheableStatusCode', () => {
-    it('场景 18: 默认策略对 200, 201, 204 等成功响应判定为可缓存', () => {
-      expect(service.isCacheableStatusCode(200)).toBe(true);
-      expect(service.isCacheableStatusCode(201)).toBe(true);
-      expect(service.isCacheableStatusCode(204)).toBe(true);
-    });
-
-    it('场景 19: 默认策略对 400, 401, 402, 403, 404, 422 等确定性 4xx 客户端错误进行幂等缓存', () => {
-      expect(service.isCacheableStatusCode(400)).toBe(true);
-      expect(service.isCacheableStatusCode(401)).toBe(true);
-      expect(service.isCacheableStatusCode(402)).toBe(true);
-      expect(service.isCacheableStatusCode(403)).toBe(true);
-      expect(service.isCacheableStatusCode(404)).toBe(true);
-      expect(service.isCacheableStatusCode(422)).toBe(true);
-    });
-
-    it('场景 20: 409 Conflict 与 429 Too Many Requests 瞬态并发与限流错误严禁缓存', () => {
-      expect(service.isCacheableStatusCode(409)).toBe(false);
-      expect(service.isCacheableStatusCode(429)).toBe(false);
-    });
-
-    it('场景 21: 500, 502, 503, 504 等 5xx 服务端故障严禁缓存以保障重试', () => {
-      expect(service.isCacheableStatusCode(500)).toBe(false);
-      expect(service.isCacheableStatusCode(502)).toBe(false);
-      expect(service.isCacheableStatusCode(503)).toBe(false);
-      expect(service.isCacheableStatusCode(504)).toBe(false);
-    });
-
-    it('场景 22: 301, 302 等 3xx 重定向响应由客户端链路处理，默认不予幂等缓存', () => {
-      expect(service.isCacheableStatusCode(301)).toBe(false);
-      expect(service.isCacheableStatusCode(302)).toBe(false);
-    });
-
-    it('场景 23: 传入 customCodes 白名单时，严格按照显式声明的白名单执行匹配', () => {
-      const custom = [201, 400];
-      expect(service.isCacheableStatusCode(200, custom)).toBe(false);
-      expect(service.isCacheableStatusCode(201, custom)).toBe(true);
-      expect(service.isCacheableStatusCode(400, custom)).toBe(true);
-      expect(service.isCacheableStatusCode(422, custom)).toBe(false);
-    });
-  });
-
-  describe('sanitizeHeadersForReplay', () => {
-    it('场景 24: 响应头为 null 或 undefined 时，安全返回空对象', () => {
-      expect(service.sanitizeHeadersForReplay(null)).toEqual({});
-      expect(service.sanitizeHeadersForReplay(undefined)).toEqual({});
-    });
-
-    it('场景 25: 大小写无关地剥离 Hop-by-hop 网络逐跳头及 Set-Cookie、Authorization 敏感凭据头', () => {
-      const originalHeaders = {
-        'Content-Type': 'application/json',
-        Connection: 'keep-alive',
-        'Keep-Alive': 'timeout=5',
-        'Transfer-Encoding': 'chunked',
-        'Set-Cookie': 'session=secret; HttpOnly',
-        'set-cookie': 'another=123',
-        Authorization: 'Bearer abc',
-        'X-Idempotency-Replayed': 'false',
-        'X-Custom-Header': 'custom-value',
-      };
-
-      const clean = service.sanitizeHeadersForReplay(originalHeaders);
-
-      expect(clean).toEqual({
-        'Content-Type': 'application/json',
-        'X-Custom-Header': 'custom-value',
-      });
-      expect(clean['Set-Cookie']).toBeUndefined();
-      expect(clean['set-cookie']).toBeUndefined();
-      expect(clean.Connection).toBeUndefined();
-      expect(clean['Transfer-Encoding']).toBeUndefined();
     });
   });
 
