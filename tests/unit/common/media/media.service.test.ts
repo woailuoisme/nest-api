@@ -43,12 +43,12 @@ describe('MediaService', () => {
 
   const storageMock = {
     disk: vi.fn().mockReturnThis(),
-    put: vi.fn().mockResolvedValue('stored-path'),
+    put: vi.fn().mockResolvedValue({ key: 'stored-path', size: 100 }),
+    url: vi.fn((path: string) => `/uploads/${path}`),
     getUrl: vi.fn((path: string) => `/uploads/${path}`),
     urlToPath: vi.fn((url: string) => (url.startsWith('/uploads/') ? url.slice('/uploads/'.length) : null)),
     exists: vi.fn().mockResolvedValue(false),
     delete: vi.fn().mockResolvedValue(undefined),
-    deleteBatch: vi.fn().mockResolvedValue(undefined),
   };
 
   const configServiceMock = {
@@ -180,7 +180,7 @@ describe('MediaService', () => {
         }),
       ).rejects.toThrow('Disk write error');
 
-      expect(storageMock.deleteBatch).toHaveBeenCalledTimes(1);
+      expect(storageMock.delete).toHaveBeenCalledTimes(1);
     });
 
     it('hash 去重模式下若文件已存在，回滚时不删除已有共享文件', async () => {
@@ -194,8 +194,8 @@ describe('MediaService', () => {
         }),
       ).rejects.toThrow('Transaction Abort');
 
-      // 已存在的文件不进入 newlyCreatedPaths，不被 deleteBatch 删除
-      expect(storageMock.deleteBatch).not.toHaveBeenCalled();
+      // 已存在的文件不进入 newlyCreatedPaths，不被 delete 删除
+      expect(storageMock.delete).not.toHaveBeenCalled();
     });
   });
 
@@ -243,7 +243,7 @@ describe('MediaService', () => {
         }),
       ).rejects.toThrow('Batch Error');
 
-      expect(storageMock.deleteBatch).toHaveBeenCalled();
+      expect(storageMock.delete).toHaveBeenCalled();
     });
   });
 
@@ -278,7 +278,7 @@ describe('MediaService', () => {
         ),
       ).rejects.toThrow('Database Update Failed');
 
-      expect(storageMock.deleteBatch).toHaveBeenCalledTimes(1);
+      expect(storageMock.delete).toHaveBeenCalled();
       expect(storageMock.delete).not.toHaveBeenCalledWith('avatars/old.png');
     });
 
@@ -291,7 +291,6 @@ describe('MediaService', () => {
         'Transaction Abort',
       );
 
-      expect(storageMock.deleteBatch).not.toHaveBeenCalled();
       expect(storageMock.delete).not.toHaveBeenCalled();
     });
   });

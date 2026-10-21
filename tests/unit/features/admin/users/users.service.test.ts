@@ -30,7 +30,7 @@ vi.mock('@/database/drizzle/drizzle-pagination', () => ({
 describe('UsersService (Admin)', () => {
   let usersService: UsersService;
   let db: ReturnType<typeof createMockDrizzleDb>;
-  let searchService: { builder: ReturnType<typeof vi.fn> };
+  let searchService: { searchModel: ReturnType<typeof vi.fn> };
   let searchSyncService: {
     sync: ReturnType<typeof vi.fn>;
     syncById: ReturnType<typeof vi.fn>;
@@ -51,7 +51,7 @@ describe('UsersService (Admin)', () => {
   beforeEach(async () => {
     db = createMockDrizzleDb();
     searchService = {
-      builder: vi.fn(),
+      searchModel: vi.fn(),
     };
     searchSyncService = {
       sync: vi.fn().mockResolvedValue(undefined),
@@ -299,28 +299,27 @@ describe('UsersService (Admin)', () => {
   });
 
   describe('search() — 全文搜索用户', () => {
-    it('应通过 ScoutSearchBuilder 执行检索并返回分页资源', async () => {
-      const mockBuilder = {
-        query: vi.fn().mockReturnThis(),
-        where: vi.fn().mockReturnThis(),
-        hydrate: vi.fn().mockReturnThis(),
-        paginate: vi.fn().mockResolvedValue({
-          items: [mockUser],
-          total: 1,
-          page: 1,
-          limit: 20,
-          processingTimeMs: 5,
-        }),
-      };
-      searchService.builder.mockReturnValue(mockBuilder);
+    it('应通过 searchService.searchModel 执行检索并返回分页资源', async () => {
+      searchService.searchModel.mockResolvedValue({
+        items: [mockUser],
+        total: 1,
+        page: 1,
+        limit: 20,
+        processingTimeMs: 5,
+      });
 
       const result = await usersService.search({ q: '张三', role: Role.USER, page: 1, pageSize: 20 });
 
-      expect(searchService.builder).toHaveBeenCalled();
-      expect(mockBuilder.query).toHaveBeenCalledWith('张三');
-      expect(mockBuilder.where).toHaveBeenCalledWith('role', Role.USER);
-      expect(mockBuilder.hydrate).toHaveBeenCalledWith(true);
-      expect(mockBuilder.paginate).toHaveBeenCalledWith({ page: 1, limit: 20 });
+      expect(searchService.searchModel).toHaveBeenCalledWith(
+        expect.anything(),
+        expect.objectContaining({
+          query: '张三',
+          filter: 'role = "USER"',
+          page: 1,
+          limit: 20,
+          hydrate: true,
+        }),
+      );
       expect(result.items).toHaveLength(1);
       expect(result.meta.total).toBe(1);
     });

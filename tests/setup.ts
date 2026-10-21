@@ -9,9 +9,10 @@ import { vi } from 'vitest';
 
 // 强制测试环境标识（补充 vitest config 中的 env 设置）
 process.env.APP_ENV = 'testing';
-// justfile 以 `set dotenv-load` 注入 .env，LOG_LEVEL 会泄漏进测试进程，
-// 使「非生产默认 level=debug」等用例随本机 .env 漂移；此处清空，由用例自行 stub
+// justfile 以 `set dotenv-load` 注入 .env，LOG_LEVEL 和 STORAGE_S3_URL 会泄漏进测试进程，
+// 使「非生产默认 level=debug」和存储测试随本机 .env 漂移；此处清空，由用例自行 stub
 delete process.env.LOG_LEVEL;
+delete process.env.STORAGE_S3_URL;
 
 // 全局 Mock meilisearch 客户端，防止并发单元测试时连接宿主机 7700 端口
 vi.mock('meilisearch', () => {

@@ -167,7 +167,7 @@ export class QrCodeProcessor {
       contentType: MIME_MAP[finalFormat],
     });
 
-    const url = await disk.getUrl(filePath);
+    const url = disk.url(filePath);
     return { path: filePath, url };
   }
 

@@ -1,7 +1,7 @@
+import type { StorageDisk } from '@nestjs/storage';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { MediaCompensationManager } from '@/common/media/managers/compensation.manager';
-import type { StorageDriver } from '@/common/storage/interfaces/storage.interface';
 import type { StorageService } from '@/common/storage/storage.service';
 import type { MediaJobs } from '@/jobs/media/media.jobs';
 
@@ -86,30 +86,31 @@ describe('MediaCompensationManager', () => {
       ).rejects.toThrow('Database error');
 
       expect(mediaJobsMock.removeJob).toHaveBeenCalledWith('job-123');
-      expect(storageMock.deleteBatch).toHaveBeenCalledWith(['avatars/new.png', 'avatars/new-thumb-ready.webp']);
+      expect(storageMock.delete).toHaveBeenCalledWith(['avatars/new.png', 'avatars/new-thumb-ready.webp']);
       expect(storageMock.delete).not.toHaveBeenCalledWith('avatars/old.png');
     });
   });
 
   describe('deletePaths()', () => {
-    it('当支持 deleteBatch 时优先调用批量删除', async () => {
-      const disk = {
-        delete: vi.fn(),
-        deleteBatch: vi.fn().mockResolvedValue(undefined),
-      } as unknown as StorageDriver;
-
-      await manager.deletePaths(disk, ['a.png', 'b.png']);
-      expect(disk.deleteBatch).toHaveBeenCalledWith(['a.png', 'b.png']);
-      expect(disk.delete).not.toHaveBeenCalled();
-    });
-
-    it('当 deleteBatch 失败或不存在时降级逐个删除', async () => {
+    it('优先调用 disk.delete 批量删除', async () => {
       const disk = {
         delete: vi.fn().mockResolvedValue(undefined),
-      } as unknown as StorageDriver;
+      } as unknown as StorageDisk;
 
       await manager.deletePaths(disk, ['a.png', 'b.png']);
-      expect(disk.delete).toHaveBeenCalledTimes(2);
+      expect(disk.delete).toHaveBeenCalledWith(['a.png', 'b.png']);
+    });
+
+    it('当批量 delete 失败时降级逐个删除', async () => {
+      const deleteMock = vi.fn().mockRejectedValueOnce(new Error('Batch delete failed')).mockResolvedValue(undefined);
+      const disk = {
+        delete: deleteMock,
+      } as unknown as StorageDisk;
+
+      await manager.deletePaths(disk, ['a.png', 'b.png']);
+      expect(deleteMock).toHaveBeenCalledWith(['a.png', 'b.png']);
+      expect(deleteMock).toHaveBeenCalledWith('a.png');
+      expect(deleteMock).toHaveBeenCalledWith('b.png');
     });
   });
 

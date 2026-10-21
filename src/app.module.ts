@@ -15,9 +15,11 @@ import { FEATURE_MODULES } from '@/features';
 import { CommandsModule } from './commands/commands.module';
 import { CacheModule } from './common/cache';
 import { ExcelModule } from './common/excel/excel.module';
+import { HttpModule } from './common/http';
 import { IdempotencyModule } from './common/idempotency';
 import { MailModule } from './common/mail';
 import { MediaModule } from './common/media/media.module';
+import { ResilienceModule } from './common/resilience';
 import { SearchModule } from './common/search/search.module';
 import { StorageModule } from './common/storage/storage.module';
 import { THROTTLER_STORAGE, ThrottlerStorageModule } from './common/throttler';
@@ -38,6 +40,7 @@ import { LoggerModule } from './setup/logger/logger.module';
     // 采用 Nest 12 原生 Standard Schema 通道校验环境变量（Zod schema 即契约，校验失败格式与旧 validate 一致）
     ConfigModule.forRoot({ isGlobal: true, validationSchema: envSchema }),
     EventEmitterModule.forRoot({ wildcard: true }),
+    IdempotencyModule,
     I18nModule.forRoot(createI18nModuleConfig()),
     LoggerModule,
     ThrottlerModule.forRootAsync({
@@ -70,7 +73,8 @@ import { LoggerModule } from './setup/logger/logger.module';
     SearchModule,
     ExcelModule,
     IotModule,
-    IdempotencyModule,
+    HttpModule,
+    ResilienceModule,
     ...FEATURE_MODULES,
     RealtimeModule,
     JobsModule,

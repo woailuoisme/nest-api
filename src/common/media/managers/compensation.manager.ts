@@ -1,7 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
+import type { StorageDisk } from '@nestjs/storage';
 import { compact } from 'es-toolkit';
 
-import type { StorageDriver } from '@/common/storage/interfaces/storage.interface';
 import type { StorageService } from '@/common/storage/storage.service';
 import type { MediaJobs } from '@/jobs/media/media.jobs';
 
@@ -58,23 +58,21 @@ export class MediaCompensationManager {
   /**
    * 批量删除已创建的物理文件列表
    */
-  async deletePaths(disk: StorageDriver, paths: string[]): Promise<void> {
+  async deletePaths(disk: StorageDisk, paths: string[]): Promise<void> {
     if (paths.length === 0) return;
-    if (typeof disk.deleteBatch === 'function') {
-      try {
-        await disk.deleteBatch(paths);
-        return;
-      } catch {
-        // 若 deleteBatch 异常则降级为逐个删除
-      }
+    try {
+      await disk.delete(paths);
+      return;
+    } catch {
+      // 若批量删除异常则降级为逐个删除
+      await Promise.all(
+        paths.map((p) =>
+          disk.delete(p).catch((err: unknown) => {
+            this.logger.warn(`回滚删除媒体文件失败: ${String(err)}`);
+          }),
+        ),
+      );
     }
-    await Promise.all(
-      paths.map((p) =>
-        disk.delete(p).catch((err: unknown) => {
-          this.logger.warn(`回滚删除媒体文件失败: ${String(err)}`);
-        }),
-      ),
-    );
   }
 
   /**
@@ -96,7 +94,7 @@ export class MediaCompensationManager {
    */
   async cleanupOldUrls(
     storage: StorageService,
-    disk: StorageDriver,
+    disk: StorageDisk,
     cleanup?: MediaCleanupOptions,
     diskName?: string,
   ): Promise<void> {

@@ -168,6 +168,8 @@ describe('上传链路 (e2e)', () => {
   beforeEach(async () => {
     await fs.rm(uploadRoot, { recursive: true, force: true });
     await fs.rm(join(process.cwd(), PATHS.STORAGE_TMP), { recursive: true, force: true });
+    await fs.mkdir(join(uploadRoot, '.nest-storage', 'tmp'), { recursive: true });
+    await fs.mkdir(join(uploadRoot, '.nest-storage', 'meta'), { recursive: true });
   });
 
   afterAll(async () => {
@@ -224,9 +226,9 @@ describe('上传链路 (e2e)', () => {
 
     expect(response.statusCode).toBe(201);
     const { url } = JSON.parse(response.payload) as { url: string };
-    expect(url).toMatch(/^\/uploads\/e2e\/\d{8}\/[0-9a-f-]{36}\.png$/);
+    expect(url).toMatch(/^(https?:\/\/[^/]+)?\/uploads\/e2e\/\d{8}\/[0-9a-f-]{36}\.png$/);
 
-    const stored = await fs.readFile(join(uploadRoot, url.replace('/uploads/', '')));
+    const stored = await fs.readFile(join(uploadRoot, url.replace(/^.*\/uploads\//, '')));
     expect(stored.equals(content)).toBe(true);
     expect(await listTmpFiles()).toHaveLength(0);
   });

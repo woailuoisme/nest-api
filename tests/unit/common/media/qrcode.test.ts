@@ -22,6 +22,7 @@ describe('QrCodeService', () => {
   const storageMock = {
     disk: vi.fn().mockReturnThis(),
     put: vi.fn().mockResolvedValue('qrcodes/test.png'),
+    url: vi.fn((path: string) => `/uploads/${path}`),
     getUrl: vi.fn((path: string) => `/uploads/${path}`),
     delete: vi.fn(),
   };

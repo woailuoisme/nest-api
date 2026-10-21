@@ -1,18 +1,9 @@
-import type { Readable } from 'node:stream';
+import type { StorageDisk, StoragePutOptions } from '@nestjs/storage';
 
-export type PutOptions = {
-  contentType?: string;
-};
+export type PutOptions = StoragePutOptions;
 
-export type StorageDriver = {
-  put(path: string, contents: Buffer | Readable | string, options?: PutOptions): Promise<string>;
-  get(path: string): Promise<Buffer>;
-  getStream?(path: string): Promise<Readable>;
-  delete(path: string): Promise<void>;
-  deleteBatch?(paths: string[]): Promise<void>;
-  exists(path: string): Promise<boolean>;
-  list?(prefix: string): Promise<string[]>;
-  getUrl(path: string): string;
-  urlToPath?(url: string): string | null;
-  getSignedUrl?(path: string, expiresInSeconds?: number): Promise<string>;
-};
+/**
+ * 存储磁盘契约
+ * 对齐官方 `@nestjs/storage` 原生标准契约。
+ */
+export type StorageDriver = StorageDisk;

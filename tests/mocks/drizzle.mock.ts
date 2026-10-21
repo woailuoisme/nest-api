@@ -7,7 +7,11 @@ import { vi } from 'vitest';
 
 export function createMockDrizzleDb() {
   const insertReturning = vi.fn();
-  const insertValues = vi.fn().mockReturnValue({ returning: insertReturning });
+  const onConflictDoUpdate = vi.fn().mockReturnValue({ returning: insertReturning });
+  const insertValues = vi.fn().mockReturnValue({
+    returning: insertReturning,
+    onConflictDoUpdate,
+  });
   const insert = vi.fn().mockReturnValue({ values: insertValues });
 
   const updateReturning = vi.fn();
@@ -21,6 +25,7 @@ export function createMockDrizzleDb() {
 
   const findFirstUser = vi.fn();
   const findFirstOAuth = vi.fn();
+  const findFirstIdempotencyKey = vi.fn();
   const execute = vi.fn().mockResolvedValue([]);
 
   // `limit()` 结果同时支持 `.offset()` 链式调用、`await` 与 Promise 组合子
@@ -42,6 +47,9 @@ export function createMockDrizzleDb() {
       oauthAccounts: {
         findFirst: findFirstOAuth,
       },
+      idempotencyKeys: {
+        findFirst: findFirstIdempotencyKey,
+      },
     },
     insert,
     update,
@@ -61,8 +69,10 @@ export function createMockDrizzleDb() {
   mockDb._stubs = {
     findFirstUser,
     findFirstOAuth,
+    findFirstIdempotencyKey,
     insert,
     insertValues,
+    onConflictDoUpdate,
     insertReturning,
     update,
     updateSet,

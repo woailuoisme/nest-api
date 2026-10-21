@@ -80,10 +80,13 @@ export class PaymentsService {
       lockToken: acquired.lockToken,
     });
 
+    let dispatched = false;
+
     try {
       // 必须逐一下发等待：`emit` 会在监听器 settle 前返回且不上抛其异常，
       // 一旦监听器失败就会「已受理但未生效」—— 微信收到 204 不再重投，支付成功永久丢失。
       await this.dispatch(payload);
+      dispatched = true;
       await this.idempotency.complete({
         cacheKey: acquired.cacheKey,
         lockKey: acquired.lockKey,
@@ -95,7 +98,12 @@ export class PaymentsService {
       });
       this.logger.log(`微信支付回调处理完成：eventType=${payload.eventType}，notifyId=${payload.id}`);
     } catch (error) {
-      await this.idempotency.fail({ lockKey: acquired.lockKey, lockToken: acquired.lockToken });
+      // 仅在业务未生效时归还租约。`complete` 失败发生在 `dispatch` 已执行之后，此时删除租约
+      // 会让微信重投即刻重新派发（重复发货/重复记账）；保留租约可让并发重投在租约窗口内
+      // 被挡在 in-flight，并把「已生效但未落库」变成可对账的告警。
+      if (!dispatched) {
+        await this.idempotency.fail({ lockKey: acquired.lockKey, lockToken: acquired.lockToken });
+      }
       throw error;
     } finally {
       stopHeartbeat();

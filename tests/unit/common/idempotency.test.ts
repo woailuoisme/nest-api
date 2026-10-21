@@ -1,16 +1,14 @@
 import {
   BadRequestException,
   ConflictException,
-  type ExecutionContext,
   ServiceUnavailableException,
   UnprocessableEntityException,
 } from '@nestjs/common';
-import { Reflector } from '@nestjs/core';
-import { of, throwError } from 'rxjs';
+import { SQL } from 'drizzle-orm';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { IDEMPOTENT_KEY, Idempotent } from '@/common/idempotency/idempotency.decorator';
-import { IdempotencyInterceptor } from '@/common/idempotency/idempotency.interceptor';
+import { DrizzleIdempotencyStore } from '@/common/idempotency/drizzle-idempotency.store';
+import { Idempotent } from '@/common/idempotency/idempotency.decorator';
 import { IdempotencyModule } from '@/common/idempotency/idempotency.module';
 import {
   type AcquireResult,
@@ -23,14 +21,14 @@ import {
   type StoredIdempotencyData,
 } from '@/common/idempotency/idempotency.service';
 import * as IdempotencyIndex from '@/common/idempotency/index';
-import type { RedisService } from '@/database/redis.service';
+
+import { createMockDrizzleDb } from '../../mocks/drizzle.mock';
 
 describe('Idempotency Module & Exports', () => {
-  it('场景 1: 验证 index.ts 是否正确导出幂等基础设施的所有核心常量、装饰器、拦截器和序列化工具', () => {
-    expect(IdempotencyIndex.IDEMPOTENT_KEY).toBe(IDEMPOTENT_KEY);
+  it('场景 1: 验证 index.ts 是否正确导出幂等基础设施的所有核心常量、装饰器和服务', () => {
     expect(IdempotencyIndex.Idempotent).toBe(Idempotent);
-    expect(IdempotencyIndex.IdempotencyInterceptor).toBe(IdempotencyInterceptor);
     expect(IdempotencyIndex.IdempotencyService).toBe(IdempotencyService);
+    expect(IdempotencyIndex.DrizzleIdempotencyStore).toBe(DrizzleIdempotencyStore);
     expect(IdempotencyIndex.IdempotencyModule).toBe(IdempotencyModule);
     expect(IdempotencyIndex.canonicalStringify).toBe(canonicalStringify);
     expect(IdempotencyIndex.canonicalize).toBe(canonicalize);
@@ -43,10 +41,10 @@ describe('Idempotency Module & Exports', () => {
     const moduleMetadata = Reflect.getMetadata('providers', IdempotencyModule);
     const exportsMetadata = Reflect.getMetadata('exports', IdempotencyModule);
 
+    expect(moduleMetadata).toContain(DrizzleIdempotencyStore);
     expect(moduleMetadata).toContain(IdempotencyService);
-    expect(moduleMetadata).toContain(IdempotencyInterceptor);
+    expect(exportsMetadata).toContain(DrizzleIdempotencyStore);
     expect(exportsMetadata).toContain(IdempotencyService);
-    expect(exportsMetadata).toContain(IdempotencyInterceptor);
   });
 });
 
@@ -56,39 +54,35 @@ describe('Idempotent Decorator', () => {
     defaultMethod() {}
 
     @Idempotent({
-      ttlSeconds: 60,
+      ttl: '60s',
       required: true,
-      waitTimeoutMs: 2000,
-      lockTtlMs: 15000,
-      fallback: 'fail-open',
-      cacheStatusCodes: [200, 201],
+      lockTtl: '15s',
+      retryAfter: '2s',
     })
     customMethod() {}
   }
 
-  @Idempotent({ ttlSeconds: 300, fallback: 'fail-closed' })
+  @Idempotent({ ttl: '5m' })
   class TestClassController {}
 
   it('场景 3: 无参调用 @Idempotent() 时，方法元数据上挂载默认空配置对象', () => {
-    const metadata = Reflect.getMetadata(IDEMPOTENT_KEY, TestController.prototype.defaultMethod);
+    const metadata = Reflect.getMetadata('nestjs:idempotent', TestController.prototype.defaultMethod);
     expect(metadata).toEqual({});
   });
 
-  it('场景 4: 全参数定制（TTL、超时阈值、锁租期、容灾降级模式、状态码白名单）正确挂载至方法元数据', () => {
-    const metadata = Reflect.getMetadata(IDEMPOTENT_KEY, TestController.prototype.customMethod);
+  it('场景 4: 全参数定制（TTL、锁租期、重试间隔）正确挂载至方法元数据', () => {
+    const metadata = Reflect.getMetadata('nestjs:idempotent', TestController.prototype.customMethod);
     expect(metadata).toEqual({
-      ttlSeconds: 60,
+      ttl: 60000,
       required: true,
-      waitTimeoutMs: 2000,
-      lockTtlMs: 15000,
-      fallback: 'fail-open',
-      cacheStatusCodes: [200, 201],
+      lockTtl: 15000,
+      retryAfter: 2000,
     });
   });
 
   it('场景 5: 支持在 Controller 类上声明类级别统一幂等策略，供整个控制器内的所有端点继承', () => {
-    const metadata = Reflect.getMetadata(IDEMPOTENT_KEY, TestClassController);
-    expect(metadata).toEqual({ ttlSeconds: 300, fallback: 'fail-closed' });
+    const metadata = Reflect.getMetadata('nestjs:idempotent', TestClassController);
+    expect(metadata).toEqual({ ttl: 300000 });
   });
 });
 
@@ -184,30 +178,32 @@ describe('Canonical JSON & Deterministic Hashing', () => {
 });
 
 /**
- * Redis 依赖桩：IdempotencyService 仅用到 getClient() 暴露的 set/get/eval 与 key() 命名空间拼接，
- * 统一在此构造，避免多个 describe 重复声明同一套 mock 形状与类型转型。
+ * DrizzleIdempotencyStore 依赖桩：模拟底层数据库原子认领、完成与释放契约
  */
-function createMockIdempotencyRedis() {
-  const client = {
-    set: vi.fn(),
-    get: vi.fn(),
-    eval: vi.fn(),
+function createMockIdempotencyStore() {
+  const store = {
+    acquire: vi.fn(),
+    complete: vi.fn(),
+    release: vi.fn(),
+    extend: vi.fn(),
+    hashKey: vi.fn((k: string) => `hash_${k}`),
   };
-  const redis = {
-    getClient: vi.fn(() => client),
-    key: vi.fn((...args: string[]) => args.join(':')),
+  return store as unknown as DrizzleIdempotencyStore & {
+    acquire: ReturnType<typeof vi.fn>;
+    complete: ReturnType<typeof vi.fn>;
+    release: ReturnType<typeof vi.fn>;
+    extend: ReturnType<typeof vi.fn>;
+    hashKey: ReturnType<typeof vi.fn>;
   };
-  return { client, redis: redis as unknown as RedisService };
 }
 
 describe('IdempotencyService', () => {
   let service: IdempotencyService;
-  let mockRedisClient: any;
+  let mockStore: ReturnType<typeof createMockIdempotencyStore>;
 
   beforeEach(() => {
-    const { client, redis } = createMockIdempotencyRedis();
-    mockRedisClient = client;
-    service = new IdempotencyService(redis);
+    mockStore = createMockIdempotencyStore();
+    service = new IdempotencyService(mockStore);
   });
 
   describe('validateIdempotencyKey', () => {
@@ -358,9 +354,8 @@ describe('IdempotencyService', () => {
       retryIntervalMs: 20,
     };
 
-    it('场景 30: 缓存不存在且分布式互斥锁成功获取（SET NX），返回 acquired: true 与 lockToken', async () => {
-      mockRedisClient.get.mockResolvedValueOnce(null);
-      mockRedisClient.set.mockResolvedValueOnce('OK');
+    it('场景 30: 首次请求且底层 Store 抢占租约锁成功（state: acquired），返回 acquired: true 与 lockToken', async () => {
+      mockStore.acquire.mockResolvedValueOnce({ state: 'acquired' });
 
       const result = await service.acquire(acquireParams);
 
@@ -370,18 +365,24 @@ describe('IdempotencyService', () => {
         expect(result.cacheKey).toBe('idempotency:cache:user:1:key-1');
         expect(result.lockKey).toBe('idempotency:lock:user:1:key-1');
       }
+      expect(mockStore.acquire).toHaveBeenCalledWith(
+        'user:1:key-1',
+        expect.any(String),
+        `${acquireParams.requestPath}:${acquireParams.payloadHash}`,
+        acquireParams.lockTtlMs,
+      );
     });
 
-    it('场景 31: 缓存存在且 requestPath 与 payloadHash 均严格匹配，返回回放数据且不竞争锁', async () => {
-      const storedData: StoredIdempotencyData = {
-        requestPath: acquireParams.requestPath,
-        payloadHash: acquireParams.payloadHash,
-        statusCode: 200,
-        headers: { 'content-type': 'application/json' },
-        body: { orderId: 'ord-1' },
-      };
-
-      mockRedisClient.get.mockResolvedValueOnce(JSON.stringify(storedData));
+    it('场景 31: 存在已完成记录（state: completed）且 requestPath 与 payloadHash 均严格匹配，返回回放数据且不竞争锁', async () => {
+      mockStore.acquire.mockResolvedValueOnce({
+        state: 'completed',
+        fingerprint: `${acquireParams.requestPath}:${acquireParams.payloadHash}`,
+        response: {
+          status: 200,
+          headers: { 'content-type': 'application/json' },
+          body: { orderId: 'ord-1' },
+        },
+      });
 
       const result = await service.acquire(acquireParams);
 
@@ -393,18 +394,14 @@ describe('IdempotencyService', () => {
           body: { orderId: 'ord-1' },
         });
       }
-      expect(mockRedisClient.set).not.toHaveBeenCalled();
     });
 
     it('场景 32: 同一幂等键被用于不同请求路径时，检测出语义冲突并直抛 422 UnprocessableEntityException', async () => {
-      const storedData: StoredIdempotencyData = {
-        requestPath: '/v1/different-orders',
-        payloadHash: acquireParams.payloadHash,
-        statusCode: 200,
-        body: {},
-      };
-
-      mockRedisClient.get.mockResolvedValueOnce(JSON.stringify(storedData));
+      mockStore.acquire.mockResolvedValueOnce({
+        state: 'completed',
+        fingerprint: `/v1/different-orders:${acquireParams.payloadHash}`,
+        response: { status: 200, headers: {}, body: {} },
+      });
 
       await expect(service.acquire(acquireParams)).rejects.toThrow(
         new UnprocessableEntityException('Idempotency key path mismatch'),
@@ -412,44 +409,47 @@ describe('IdempotencyService', () => {
     });
 
     it('场景 33: 同一幂等键被用于不同 Payload 时，检测出载荷指纹不符并直抛 422 UnprocessableEntityException', async () => {
-      const storedData: StoredIdempotencyData = {
-        requestPath: acquireParams.requestPath,
-        payloadHash: 'different-payload-hash',
-        statusCode: 200,
-        body: {},
-      };
-
-      mockRedisClient.get.mockResolvedValueOnce(JSON.stringify(storedData));
+      mockStore.acquire.mockResolvedValueOnce({
+        state: 'completed',
+        fingerprint: `${acquireParams.requestPath}:different-payload-hash`,
+        response: { status: 200, headers: {}, body: {} },
+      });
 
       await expect(service.acquire(acquireParams)).rejects.toThrow(
         new UnprocessableEntityException('Idempotency key payload mismatch'),
       );
     });
 
-    it('场景 34: Redis 中缓存数据损坏（非合规 JSON），记录告警并平滑降级重新加锁执行', async () => {
-      mockRedisClient.get.mockResolvedValueOnce('invalid-json{');
-      mockRedisClient.set.mockResolvedValueOnce('OK');
+    it('场景 34: 底层 Store 异常且配置 fallback 为 fail-open 时，安全降级返回 bypass: true 保证业务不中断', async () => {
+      mockStore.acquire.mockRejectedValueOnce(new Error('DB failure'));
 
-      const result = await service.acquire(acquireParams);
+      const result = await service.acquire({
+        ...acquireParams,
+        fallback: 'fail-open',
+      });
 
-      expect(result.acquired).toBe(true);
-      expect(mockRedisClient.set).toHaveBeenCalled();
+      expect(result).toEqual({ acquired: false, bypass: true });
     });
 
     it('场景 35: 并发请求在超时窗口内自旋重试，等到先发请求完成写入后立刻读取并返回回放', async () => {
-      mockRedisClient.get
-        .mockResolvedValueOnce(null)
-        .mockResolvedValueOnce(null)
-        .mockResolvedValueOnce(
-          JSON.stringify({
-            requestPath: acquireParams.requestPath,
-            payloadHash: acquireParams.payloadHash,
-            statusCode: 201,
+      mockStore.acquire
+        .mockResolvedValueOnce({
+          state: 'in-flight',
+          fingerprint: `${acquireParams.requestPath}:${acquireParams.payloadHash}`,
+        })
+        .mockResolvedValueOnce({
+          state: 'in-flight',
+          fingerprint: `${acquireParams.requestPath}:${acquireParams.payloadHash}`,
+        })
+        .mockResolvedValueOnce({
+          state: 'completed',
+          fingerprint: `${acquireParams.requestPath}:${acquireParams.payloadHash}`,
+          response: {
+            status: 201,
+            headers: {},
             body: { created: true },
-          }),
-        );
-
-      mockRedisClient.set.mockResolvedValue(null);
+          },
+        });
 
       const result = await service.acquire({
         ...acquireParams,
@@ -465,8 +465,16 @@ describe('IdempotencyService', () => {
     });
 
     it('场景 36: 先发请求因异常释放锁（未写入缓存），自旋重试的请求成功竞争到锁并接管执行', async () => {
-      mockRedisClient.get.mockResolvedValue(null);
-      mockRedisClient.set.mockResolvedValueOnce(null).mockResolvedValueOnce(null).mockResolvedValueOnce('OK');
+      mockStore.acquire
+        .mockResolvedValueOnce({
+          state: 'in-flight',
+          fingerprint: `${acquireParams.requestPath}:${acquireParams.payloadHash}`,
+        })
+        .mockResolvedValueOnce({
+          state: 'in-flight',
+          fingerprint: `${acquireParams.requestPath}:${acquireParams.payloadHash}`,
+        })
+        .mockResolvedValueOnce({ state: 'acquired' });
 
       const result = await service.acquire({
         ...acquireParams,
@@ -477,9 +485,11 @@ describe('IdempotencyService', () => {
       expect(result.acquired).toBe(true);
     });
 
-    it('场景 37: 在指定的 waitTimeoutMs 窗口内锁一直未释放且无缓存产出，抛出 409 ConflictException', async () => {
-      mockRedisClient.get.mockResolvedValue(null);
-      mockRedisClient.set.mockResolvedValue(null);
+    it('场景 37: 在指定的 waitTimeoutMs 窗口内锁一直处于 in-flight 且无缓存产出，抛出 409 ConflictException', async () => {
+      mockStore.acquire.mockResolvedValue({
+        state: 'in-flight',
+        fingerprint: `${acquireParams.requestPath}:${acquireParams.payloadHash}`,
+      });
 
       await expect(
         service.acquire({
@@ -490,8 +500,8 @@ describe('IdempotencyService', () => {
       ).rejects.toThrow(ConflictException);
     });
 
-    it('场景 38: Redis 连接失败时，默认 fail-closed 模式抛出 503 ServiceUnavailableException', async () => {
-      mockRedisClient.get.mockRejectedValueOnce(new Error('Redis connection refused'));
+    it('场景 38: 底层 Store 连接失败时，默认 fail-closed 模式抛出 503 ServiceUnavailableException', async () => {
+      mockStore.acquire.mockRejectedValueOnce(new Error('PostgreSQL connection refused'));
 
       await expect(
         service.acquire({
@@ -501,26 +511,31 @@ describe('IdempotencyService', () => {
       ).rejects.toThrow(ServiceUnavailableException);
     });
 
-    it('场景 39: 配置 fallback 为 fail-open 时，Redis 异常安全降级返回 bypass: true 保证业务不中断', async () => {
-      mockRedisClient.get.mockRejectedValueOnce(new Error('Redis timeout'));
+    it('场景 39: 校验不同 actor（用户/访客/租户）对同一 key 生成隔离的 scopedKey 传递到底层 store', async () => {
+      mockStore.acquire.mockResolvedValueOnce({ state: 'acquired' });
 
-      const result = await service.acquire({
+      await service.acquire({
         ...acquireParams,
-        fallback: 'fail-open',
+        actor: 'user:456',
+        key: 'order-pay',
       });
 
-      expect(result).toEqual({ acquired: false, bypass: true });
+      expect(mockStore.acquire).toHaveBeenCalledWith(
+        'user:456:order-pay',
+        expect.any(String),
+        expect.any(String),
+        expect.any(Number),
+      );
     });
   });
 
   describe('complete', () => {
-    it('场景 40: 响应状态码、头部和响应体持久化至 Redis，并通过专用 Lua 脚本比对 token 安全解锁', async () => {
-      mockRedisClient.set.mockResolvedValue('OK');
-      mockRedisClient.eval.mockResolvedValue(1);
+    it('场景 40: 响应状态码、头部和响应体持久化至底层 Store，并通过 CAS 校验 Token 安全解绑 Owner', async () => {
+      mockStore.complete.mockResolvedValueOnce(true);
 
       await service.complete({
-        cacheKey: 'cache-key-1',
-        lockKey: 'lock-key-1',
+        cacheKey: 'idempotency:cache:user:1:key-1',
+        lockKey: 'idempotency:lock:user:1:key-1',
         lockToken: 'token-1',
         requestPath: '/v1/items',
         payloadHash: 'hash-1',
@@ -530,607 +545,231 @@ describe('IdempotencyService', () => {
         ttlSeconds: 7200,
       });
 
-      expect(mockRedisClient.set).toHaveBeenCalledWith('cache-key-1', expect.stringContaining('200'), 'EX', 7200);
-      expect(mockRedisClient.eval).toHaveBeenCalledWith(expect.any(String), 1, 'lock-key-1', 'token-1');
+      expect(mockStore.complete).toHaveBeenCalledWith(
+        'user:1:key-1',
+        'token-1',
+        { status: 200, headers: { 'x-res': 'header' }, body: { ok: true } },
+        7200 * 1000,
+      );
     });
 
-    it('场景 41: 写缓存阶段抛出异常时，finally 保障机制依然执行 Lua 脚本释放互斥锁杜绝死锁', async () => {
-      mockRedisClient.set.mockRejectedValueOnce(new Error('Redis out of memory'));
-      mockRedisClient.eval.mockResolvedValue(1);
+    it('场景 41: complete 阶段存储异常时应 fail-closed 上抛 503，禁止上游误判为已落库', async () => {
+      mockStore.complete.mockRejectedValueOnce(new Error('DB disconnect'));
 
-      await service.complete({
-        cacheKey: 'cache-key-1',
-        lockKey: 'lock-key-1',
-        lockToken: 'token-1',
-        requestPath: '/v1/items',
-        payloadHash: 'hash-1',
-        statusCode: 500,
-        responseBody: {},
-      });
+      await expect(
+        service.complete({
+          cacheKey: 'idempotency:cache:user:1:key-1',
+          lockKey: 'idempotency:lock:user:1:key-1',
+          lockToken: 'token-1',
+          requestPath: '/v1/items',
+          payloadHash: 'hash-1',
+          statusCode: 500,
+          responseBody: {},
+        }),
+      ).rejects.toThrow(ServiceUnavailableException);
+    });
 
-      expect(mockRedisClient.eval).toHaveBeenCalledWith(expect.any(String), 1, 'lock-key-1', 'token-1');
+    it('场景 41b: CAS 未命中（租约过期或被其他副本接管）时应上抛 503 而非静默成功', async () => {
+      mockStore.complete.mockResolvedValueOnce(false);
+
+      await expect(
+        service.complete({
+          cacheKey: 'idempotency:cache:user:1:key-1',
+          lockKey: 'idempotency:lock:user:1:key-1',
+          lockToken: 'token-1',
+          requestPath: '/v1/items',
+          payloadHash: 'hash-1',
+          statusCode: 200,
+          responseBody: { ok: true },
+        }),
+      ).rejects.toThrow(ServiceUnavailableException);
     });
   });
 
   describe('fail and releaseLock', () => {
-    it('场景 42: 下游业务执行失败时，执行 Lua 解锁脚本主动让出互斥锁', async () => {
-      mockRedisClient.eval.mockResolvedValueOnce(1);
+    it('场景 42: 下游业务执行失败时，调用 release 主动归还租约互斥锁', async () => {
+      mockStore.release.mockResolvedValueOnce(true);
 
       await service.fail({
-        lockKey: 'lock-key-f',
+        lockKey: 'idempotency:lock:user:1:key-f',
         lockToken: 'token-f',
       });
 
-      expect(mockRedisClient.eval).toHaveBeenCalledWith(expect.any(String), 1, 'lock-key-f', 'token-f');
+      expect(mockStore.release).toHaveBeenCalledWith('user:1:key-f', 'token-f');
     });
 
-    it('场景 43: Redis 异常导致解锁脚本执行失败时，安全捕获并记录 Warn 日志而不阻断主流程', async () => {
-      mockRedisClient.eval.mockRejectedValueOnce(new Error('Redis disconnect'));
+    it('场景 43: release 释放锁执行失败时，安全捕获并记录 Warn 日志而不阻断主流程', async () => {
+      mockStore.release.mockRejectedValueOnce(new Error('DB disconnect'));
 
       await expect(
         service.fail({
-          lockKey: 'lock-key-f',
+          lockKey: 'idempotency:lock:user:1:key-f',
           lockToken: 'token-f',
         }),
       ).resolves.not.toThrow();
     });
+
+    it('场景 43b: 启动锁续租心跳并在定时器触发时调用 store.extend 延展租约', async () => {
+      vi.useFakeTimers();
+      mockStore.extend.mockResolvedValue(true);
+
+      const stop = service.startLockHeartbeat({
+        lockKey: 'idempotency:lock:user:1:key-hb',
+        lockToken: 'token-hb',
+        lockTtlMs: 3000,
+      });
+
+      vi.advanceTimersByTime(1000);
+      expect(mockStore.extend).toHaveBeenCalledWith('user:1:key-hb', 'token-hb', 3000);
+
+      stop();
+      vi.useRealTimers();
+    });
+
+    it('场景 43c: 续租 CAS 未命中（已失锁）时应停止心跳，不再继续空转续租', async () => {
+      vi.useFakeTimers();
+      try {
+        mockStore.extend.mockResolvedValue(false);
+
+        service.startLockHeartbeat({
+          lockKey: 'idempotency:lock:user:1:key-hb2',
+          lockToken: 'token-hb2',
+          lockTtlMs: 3000,
+        });
+
+        await vi.advanceTimersByTimeAsync(1000);
+        expect(mockStore.extend).toHaveBeenCalledTimes(1);
+
+        await vi.advanceTimersByTimeAsync(3000);
+        expect(mockStore.extend).toHaveBeenCalledTimes(1);
+      } finally {
+        vi.useRealTimers();
+      }
+    });
   });
 });
 
-describe('IdempotencyInterceptor', () => {
-  let interceptor: IdempotencyInterceptor;
-  let reflector: Reflector;
-  let realService: IdempotencyService;
-  let mockRedisClient: any;
+describe('Idempotency Storage Registration', () => {
+  it('场景 44: DrizzleIdempotencyStore 正确注册为 IdempotencyStorage 的底层数据源', async () => {
+    const { IdempotencyStorage } = await import('@nestjs/idempotency');
+    const storage = new IdempotencyStorage();
+    const mockDb = createMockDrizzleDb();
+    const store = new DrizzleIdempotencyStore(mockDb, storage);
+    expect(storage.source).toBe(store);
+  });
+});
+
+describe('DrizzleIdempotencyStore', () => {
+  let store: DrizzleIdempotencyStore;
+  let mockDb: any;
 
   beforeEach(() => {
-    const { client, redis } = createMockIdempotencyRedis();
-    reflector = new Reflector();
-    mockRedisClient = client;
-    realService = new IdempotencyService(redis);
-    interceptor = new IdempotencyInterceptor(reflector, realService);
+    mockDb = createMockDrizzleDb();
+    store = new DrizzleIdempotencyStore(mockDb);
   });
 
-  function createMockContext(
-    method = 'POST',
-    headers: Record<string, any> = {},
-    user?: any,
-    ip = '127.0.0.1',
-    url = '/v1/orders?filter=new',
-    body: any = { total: 100 },
-  ) {
-    const req: any = {
-      method,
-      headers,
-      url,
-      ip,
-      body,
-      user,
-    };
-    const resHeaders: Record<string, any> = {};
-    const res: any = {
-      statusCode: 200,
-      header: vi.fn((k: string, v: any) => {
-        resHeaders[k.toLowerCase()] = v;
-      }),
-      status: vi.fn((code: number) => {
-        res.statusCode = code;
-        return res;
-      }),
-      getHeaders: vi.fn(() => resHeaders),
-    };
+  it('场景 66: hashKey 产生确定性的 64 位十六进制 SHA-256 字符串', () => {
+    const hash1 = store.hashKey('test-key');
+    const hash2 = store.hashKey('test-key');
+    expect(hash1).toBe(hash2);
+    expect(hash1).toHaveLength(64);
+  });
 
-    const context: ExecutionContext = {
-      switchToHttp: () => ({
-        getRequest: () => req,
-        getResponse: () => res,
-      }),
-      getHandler: () => () => {},
-      getClass: () => class {},
-    } as unknown as ExecutionContext;
+  it('场景 67: acquire - 成功插入新记录时返回 state = acquired', async () => {
+    mockDb._stubs.insertReturning.mockResolvedValueOnce([{ keyHash: 'dummy' }]);
+    const res = await store.acquire('user:1:key', 'token-1', '/api/test:hash', 30000);
+    expect(res).toEqual({ state: 'acquired' });
+    expect(mockDb.insert).toHaveBeenCalled();
+  });
 
-    return { context, req, res, resHeaders };
-  }
-
-  describe('HTTP Verb Filtering', () => {
-    it('场景 44: GET、HEAD、OPTIONS 等只读安全动词即便携带 Idempotency-Key 也直接旁路放行', async () => {
-      vi.spyOn(reflector, 'getAllAndOverride').mockReturnValue(undefined);
-      const { context } = createMockContext('GET', { 'idempotency-key': 'valid-key-1' });
-      const next = { handle: () => of('bypass-get') };
-
-      const obs = await interceptor.intercept(context, next);
-      let emitted: any;
-      obs.subscribe((val) => {
-        emitted = val;
-      });
-
-      expect(emitted).toBe('bypass-get');
-      expect(mockRedisClient.get).not.toHaveBeenCalled();
+  it('场景 68: acquire - 冲突且现有记录属于进行中时返回 state = in-flight', async () => {
+    mockDb._stubs.insertReturning.mockResolvedValueOnce([]); // 插入冲突
+    mockDb.query.idempotencyKeys.findFirst.mockResolvedValueOnce({
+      keyHash: 'dummy',
+      owner: 'token-other',
+      fingerprint: '/api/test:hash',
+      expiresAt: Date.now() + 10000,
+      response: null,
     });
 
-    it('场景 45: 请求 HTTP Method 为空或未定义时，安全绕过幂等拦截', async () => {
-      vi.spyOn(reflector, 'getAllAndOverride').mockReturnValue(undefined);
-      const { context, req } = createMockContext('POST', { 'idempotency-key': 'valid-key-2' });
-      req.method = undefined;
-      const next = { handle: () => of('bypass-no-method') };
+    const res = await store.acquire('user:1:key', 'token-1', '/api/test:hash', 30000);
+    expect(res).toEqual({ state: 'in-flight', fingerprint: '/api/test:hash' });
+  });
 
-      const obs = await interceptor.intercept(context, next);
-      let emitted: any;
-      obs.subscribe((val) => {
-        emitted = val;
-      });
-
-      expect(emitted).toBe('bypass-no-method');
-      expect(mockRedisClient.get).not.toHaveBeenCalled();
+  it('场景 69: acquire - 冲突且现有记录已完成时返回 state = completed 并携带响应体', async () => {
+    mockDb._stubs.insertReturning.mockResolvedValueOnce([]); // 插入冲突
+    mockDb.query.idempotencyKeys.findFirst.mockResolvedValueOnce({
+      keyHash: 'dummy',
+      owner: null,
+      fingerprint: '/api/test:hash',
+      expiresAt: Date.now() + 86400000,
+      response: { status: 200, body: { success: true } },
     });
 
-    it('场景 46: 支持处理小写 post、put、patch、delete 等变异动词，正常执行互斥锁与缓存写入', async () => {
-      vi.spyOn(reflector, 'getAllAndOverride').mockReturnValue(undefined);
-      const { context } = createMockContext('post', { 'idempotency-key': 'key-post' });
-      const next = { handle: () => of('post-ok') };
-
-      mockRedisClient.get.mockResolvedValueOnce(null);
-      mockRedisClient.set.mockResolvedValue('OK');
-      mockRedisClient.eval.mockResolvedValue(1);
-
-      const obs = await interceptor.intercept(context, next);
-      let emitted: any;
-      await new Promise<void>((resolve) => {
-        obs.subscribe({
-          next: (val) => {
-            emitted = val;
-          },
-          complete: () => resolve(),
-        });
-      });
-
-      expect(emitted).toBe('post-ok');
-      expect(mockRedisClient.set).toHaveBeenCalled();
+    const res = await store.acquire('user:1:key', 'token-1', '/api/test:hash', 30000);
+    expect(res).toEqual({
+      state: 'completed',
+      fingerprint: '/api/test:hash',
+      response: { status: 200, body: { success: true } },
     });
   });
 
-  describe('Header Validation & Security Constraints', () => {
-    it('场景 47: 默认非必填（required: false）时，未携带 Idempotency-Key 头部的请求直接透明通过', async () => {
-      vi.spyOn(reflector, 'getAllAndOverride').mockReturnValue(undefined);
-      const { context } = createMockContext('POST', {});
-      const next = { handle: () => of('pass-no-header') };
+  it('场景 67c: 租约写入与可见性谓词必须使用 DB 时钟表达式（防回退到应用时钟 Date.now）', async () => {
+    mockDb._stubs.insertReturning.mockResolvedValueOnce([{ keyHash: 'dummy' }]);
+    await store.acquire('user:1:key', 'token-1', '/api/test:hash', 30000);
 
-      const obs = await interceptor.intercept(context, next);
-      let emitted: any;
-      obs.subscribe((val) => {
-        emitted = val;
-      });
+    const [values] = mockDb._stubs.insertValues.mock.calls[0] as [Record<string, unknown>];
+    expect(values.expiresAt).toBeInstanceOf(SQL);
 
-      expect(emitted).toBe('pass-no-header');
-      expect(mockRedisClient.get).not.toHaveBeenCalled();
-    });
-
-    it('场景 48: required: true 模式下，未携带 Idempotency-Key 时直接阻断并抛出 400 BadRequestException', async () => {
-      vi.spyOn(reflector, 'getAllAndOverride').mockReturnValue({ required: true });
-      const { context } = createMockContext('POST', {});
-      const next = { handle: () => of('fail') };
-
-      await expect(interceptor.intercept(context, next)).rejects.toThrow(
-        new BadRequestException('Idempotency-Key header is required for this operation'),
-      );
-    });
-
-    it('场景 49: required: true 模式下，传入纯空格幂等键同样被判定为缺失并抛出 400 异常', async () => {
-      vi.spyOn(reflector, 'getAllAndOverride').mockReturnValue({ required: true });
-      const { context } = createMockContext('POST', { 'idempotency-key': '   ' });
-      const next = { handle: () => of('fail') };
-
-      await expect(interceptor.intercept(context, next)).rejects.toThrow(
-        new BadRequestException('Idempotency-Key header is required for this operation'),
-      );
-    });
-
-    it('场景 50: 幂等键包含空格等非法字符，被 service.validateIdempotencyKey 拦截并抛出 400', async () => {
-      vi.spyOn(reflector, 'getAllAndOverride').mockReturnValue(undefined);
-      const { context } = createMockContext('POST', { 'idempotency-key': 'invalid key space' });
-      const next = { handle: () => of('fail') };
-
-      await expect(interceptor.intercept(context, next)).rejects.toThrow(BadRequestException);
-    });
-
-    it('场景 51: 幂等键长度超标超过 256 字符，被直接拦截并抛出 400 异常', async () => {
-      vi.spyOn(reflector, 'getAllAndOverride').mockReturnValue(undefined);
-      const { context } = createMockContext('POST', { 'idempotency-key': 'a'.repeat(257) });
-      const next = { handle: () => of('fail') };
-
-      await expect(interceptor.intercept(context, next)).rejects.toThrow(
-        new BadRequestException('Idempotency-Key header must not exceed 256 characters'),
-      );
-    });
+    const [upsert] = mockDb._stubs.onConflictDoUpdate.mock.calls[0] as [Record<string, unknown>];
+    expect(upsert.setWhere).toBeInstanceOf(SQL);
+    expect((upsert.set as Record<string, unknown>).expiresAt).toBeInstanceOf(SQL);
   });
 
-  describe('Scope Resolution and Fallback Options', () => {
-    it('场景 52: 从 req.user.id 提取 actor 隔离租户，并将装饰器全量参数完整下发给 acquire', async () => {
-      vi.spyOn(reflector, 'getAllAndOverride').mockReturnValue({
-        ttlSeconds: 600,
-        lockTtlMs: 20000,
-        waitTimeoutMs: 3000,
-        fallback: 'fail-open',
-      });
-      const { context } = createMockContext('POST', { 'idempotency-key': 'k-actor' }, { id: 'user-777' });
-      const next = { handle: () => of('user-ok') };
+  it('场景 67b: acquire - 回查发现记录已被并发释放时仅重试一次，预算耗尽即抛错（杜绝无限递归）', async () => {
+    mockDb._stubs.insertReturning.mockResolvedValue([]); // 插入恒冲突
+    mockDb.query.idempotencyKeys.findFirst.mockResolvedValue(null); // 回查恒为空
 
-      mockRedisClient.get.mockResolvedValueOnce(null);
-      mockRedisClient.set.mockResolvedValue('OK');
-      mockRedisClient.eval.mockResolvedValue(1);
-
-      const acquireSpy = vi.spyOn(realService, 'acquire');
-
-      const obs = await interceptor.intercept(context, next);
-      await new Promise<void>((resolve) => obs.subscribe({ complete: () => resolve() }));
-
-      expect(acquireSpy).toHaveBeenCalledWith(
-        expect.objectContaining({
-          actor: 'user:user-777',
-          ttlSeconds: 600,
-          lockTtlMs: 20000,
-          waitTimeoutMs: 3000,
-          fallback: 'fail-open',
-        }),
-      );
-    });
-
-    it('场景 53: 支持从 req.session.user.id 解析用户身份，实现多鉴权形态兼容', async () => {
-      vi.spyOn(reflector, 'getAllAndOverride').mockReturnValue(undefined);
-      const { context, req } = createMockContext('POST', { 'idempotency-key': 'k-session' });
-      req.session = { user: { id: 'session-user-999' } };
-      const next = { handle: () => of('session-ok') };
-
-      mockRedisClient.get.mockResolvedValueOnce(null);
-      mockRedisClient.set.mockResolvedValue('OK');
-      mockRedisClient.eval.mockResolvedValue(1);
-
-      const acquireSpy = vi.spyOn(realService, 'acquire');
-
-      const obs = await interceptor.intercept(context, next);
-      await new Promise<void>((resolve) => obs.subscribe({ complete: () => resolve() }));
-
-      expect(acquireSpy).toHaveBeenCalledWith(expect.objectContaining({ actor: 'user:session-user-999' }));
-    });
-
-    it('场景 54: 当无用户态且 ip/url 缺失时，安全降级为 ip:127.0.0.1 及空路径防止空指针', async () => {
-      vi.spyOn(reflector, 'getAllAndOverride').mockReturnValue(undefined);
-      const { context, req } = createMockContext('POST', { 'idempotency-key': 'k-empty-fallback' });
-      req.ip = undefined;
-      req.url = undefined;
-      const next = { handle: () => of('fallback-ok') };
-
-      mockRedisClient.get.mockResolvedValueOnce(null);
-      mockRedisClient.set.mockResolvedValue('OK');
-      mockRedisClient.eval.mockResolvedValue(1);
-
-      const acquireSpy = vi.spyOn(realService, 'acquire');
-
-      const obs = await interceptor.intercept(context, next);
-      await new Promise<void>((resolve) => obs.subscribe({ complete: () => resolve() }));
-
-      expect(acquireSpy).toHaveBeenCalledWith(
-        expect.objectContaining({
-          actor: 'ip:127.0.0.1',
-          requestPath: '',
-        }),
-      );
-    });
-
-    it('场景 55: fail-open 模式下 acquire 返回 bypass: true 时，拦截器直接调用 next.handle() 透传执行', async () => {
-      vi.spyOn(reflector, 'getAllAndOverride').mockReturnValue({ fallback: 'fail-open' });
-      const { context } = createMockContext('POST', { 'idempotency-key': 'k-bypass-test' });
-      const next = { handle: () => of('bypassed-data') };
-
-      // Simulate Redis down in fail-open mode
-      mockRedisClient.get.mockRejectedValueOnce(new Error('Redis down'));
-
-      const obs = await interceptor.intercept(context, next);
-      let emitted: any;
-      await new Promise<void>((resolve) => {
-        obs.subscribe({
-          next: (val) => {
-            emitted = val;
-          },
-          complete: () => resolve(),
-        });
-      });
-
-      expect(emitted).toBe('bypassed-data');
-    });
-
-    it('场景 56: fail-closed 模式下底层抛出 503 时，拦截器直接冒泡中断请求保障强一致性', async () => {
-      vi.spyOn(reflector, 'getAllAndOverride').mockReturnValue(undefined);
-      const { context } = createMockContext('POST', { 'idempotency-key': 'k-closed-test' });
-      const next = { handle: () => of('data') };
-
-      // Simulate Redis down in default fail-closed mode
-      mockRedisClient.get.mockRejectedValueOnce(new Error('Redis connection refused'));
-
-      await expect(interceptor.intercept(context, next)).rejects.toThrow(ServiceUnavailableException);
-    });
+    await expect(store.acquire('user:1:key', 'token-1', '/api/test:hash', 30000)).rejects.toThrow(/retry exhausted/);
+    expect(mockDb.insert).toHaveBeenCalledTimes(2);
   });
 
-  describe('Replay Execution & Header Sanitization', () => {
-    it('场景 57: 短路回放并命中缓存，回写原始状态码与脱敏后响应头，注入 x-idempotency-replayed 标头', async () => {
-      vi.spyOn(reflector, 'getAllAndOverride').mockReturnValue(undefined);
-      const { context, res } = createMockContext('POST', { 'idempotency-key': 'k-replay' });
-
-      const payloadHash = realService.computePayloadHash({ total: 100 });
-      const storedData: StoredIdempotencyData = {
-        requestPath: '/v1/orders',
-        payloadHash,
-        statusCode: 201,
-        headers: {
-          'Content-Type': 'application/json',
-          'Set-Cookie': 'auth=stolen; Path=/',
-          Connection: 'keep-alive',
-          'X-Server-Id': 'node-1',
-        },
-        body: { orderId: 'ord-replay-123' },
-      };
-
-      mockRedisClient.get.mockResolvedValueOnce(JSON.stringify(storedData));
-
-      const next = { handle: vi.fn() };
-
-      const obs = await interceptor.intercept(context, next);
-      let emitted: any;
-      obs.subscribe((val) => {
-        emitted = val;
-      });
-
-      expect(emitted).toEqual({ orderId: 'ord-replay-123' });
-      expect(res.status).toHaveBeenCalledWith(201);
-      expect(res.header).toHaveBeenCalledWith('x-idempotency-replayed', 'true');
-      expect(res.header).toHaveBeenCalledWith('Content-Type', 'application/json');
-      expect(res.header).toHaveBeenCalledWith('X-Server-Id', 'node-1');
-
-      // Crucial security check: Set-Cookie and Connection must NEVER be replayed!
-      expect(res.header).not.toHaveBeenCalledWith('Set-Cookie', expect.anything());
-      expect(res.header).not.toHaveBeenCalledWith('Connection', expect.anything());
-
-      expect(next.handle).not.toHaveBeenCalled();
+  it('场景 67d: 回查命中「已过期」行时应重试抢占，而非误报 in-flight（避免上层白等 409）', async () => {
+    mockDb._stubs.insertReturning.mockResolvedValueOnce([]); // 首次 UPSERT 未命中
+    mockDb.query.idempotencyKeys.findFirst.mockResolvedValueOnce({
+      keyHash: 'dummy',
+      owner: 'stale-owner',
+      fingerprint: '/api/test:hash',
+      expiresAt: 1,
+      expired: true,
+      response: null,
     });
+    mockDb._stubs.insertReturning.mockResolvedValueOnce([{ keyHash: 'dummy' }]); // 重试后抢占成功
+
+    const res = await store.acquire('user:1:key', 'token-1', '/api/test:hash', 30000);
+
+    expect(res).toEqual({ state: 'acquired' });
+    expect(mockDb.insert).toHaveBeenCalledTimes(2);
   });
 
-  describe('Status Code Caching Policy (2xx & 4xx vs 5xx/409/429)', () => {
-    it('场景 58: 200 与 201 业务成功响应持久化至 Redis 并释放互斥锁', async () => {
-      vi.spyOn(reflector, 'getAllAndOverride').mockReturnValue(undefined);
-      const { context, res } = createMockContext('POST', { 'idempotency-key': 'k-201' });
-      res.statusCode = 201;
-
-      mockRedisClient.get.mockResolvedValueOnce(null);
-      mockRedisClient.set.mockResolvedValue('OK');
-      mockRedisClient.eval.mockResolvedValue(1);
-
-      const completeSpy = vi.spyOn(realService, 'complete');
-      const failSpy = vi.spyOn(realService, 'fail');
-
-      const next = { handle: () => of({ created: true }) };
-
-      const obs = await interceptor.intercept(context, next);
-      await new Promise<void>((resolve) => obs.subscribe({ complete: () => resolve() }));
-
-      expect(completeSpy).toHaveBeenCalledWith(expect.objectContaining({ statusCode: 201 }));
-      expect(failSpy).not.toHaveBeenCalled();
-    });
-
-    it('场景 59: 确定性 422 业务规则校验错误响应被幂等缓存，防止恶意重复提交相同错误表单', async () => {
-      vi.spyOn(reflector, 'getAllAndOverride').mockReturnValue(undefined);
-      const { context, res } = createMockContext('POST', { 'idempotency-key': 'k-422' });
-      res.statusCode = 422;
-
-      mockRedisClient.get.mockResolvedValueOnce(null);
-      mockRedisClient.set.mockResolvedValue('OK');
-      mockRedisClient.eval.mockResolvedValue(1);
-
-      const completeSpy = vi.spyOn(realService, 'complete');
-
-      const next = { handle: () => of({ error: 'Validation failed' }) };
-
-      const obs = await interceptor.intercept(context, next);
-      await new Promise<void>((resolve) => obs.subscribe({ complete: () => resolve() }));
-
-      expect(completeSpy).toHaveBeenCalledWith(expect.objectContaining({ statusCode: 422 }));
-    });
-
-    it('场景 60: 500 服务端故障响应严禁缓存，拦截器捕获后立即调用 fail() 释放互斥锁以便重试', async () => {
-      vi.spyOn(reflector, 'getAllAndOverride').mockReturnValue(undefined);
-      const { context, res } = createMockContext('POST', { 'idempotency-key': 'k-500' });
-      res.statusCode = 500;
-
-      mockRedisClient.get.mockResolvedValueOnce(null);
-      mockRedisClient.set.mockResolvedValue('OK');
-      mockRedisClient.eval.mockResolvedValue(1);
-
-      const completeSpy = vi.spyOn(realService, 'complete');
-      const failSpy = vi.spyOn(realService, 'fail');
-
-      const next = { handle: () => of({ error: 'Internal server error' }) };
-
-      const obs = await interceptor.intercept(context, next);
-      await new Promise<void>((resolve) => obs.subscribe({ complete: () => resolve() }));
-
-      expect(completeSpy).not.toHaveBeenCalled();
-      expect(failSpy).toHaveBeenCalled();
-    });
-
-    it('场景 61: 429 Too Many Requests 限流响应严禁缓存，拦截器立即调用 fail() 释放锁', async () => {
-      vi.spyOn(reflector, 'getAllAndOverride').mockReturnValue(undefined);
-      const { context, res } = createMockContext('POST', { 'idempotency-key': 'k-429' });
-      res.statusCode = 429;
-
-      mockRedisClient.get.mockResolvedValueOnce(null);
-      mockRedisClient.set.mockResolvedValue('OK');
-      mockRedisClient.eval.mockResolvedValue(1);
-
-      const completeSpy = vi.spyOn(realService, 'complete');
-      const failSpy = vi.spyOn(realService, 'fail');
-
-      const next = { handle: () => of({ error: 'Rate limit exceeded' }) };
-
-      const obs = await interceptor.intercept(context, next);
-      await new Promise<void>((resolve) => obs.subscribe({ complete: () => resolve() }));
-
-      expect(completeSpy).not.toHaveBeenCalled();
-      expect(failSpy).toHaveBeenCalled();
-    });
-
-    it('场景 62: 设置 cacheStatusCodes 白名单后，不在名单内的 200 响应不予缓存并主动释放锁', async () => {
-      vi.spyOn(reflector, 'getAllAndOverride').mockReturnValue({ cacheStatusCodes: [201] });
-      const { context, res } = createMockContext('POST', { 'idempotency-key': 'k-custom-status' });
-      res.statusCode = 200; // Not in [201] whitelist!
-
-      mockRedisClient.get.mockResolvedValueOnce(null);
-      mockRedisClient.set.mockResolvedValue('OK');
-      mockRedisClient.eval.mockResolvedValue(1);
-
-      const completeSpy = vi.spyOn(realService, 'complete');
-      const failSpy = vi.spyOn(realService, 'fail');
-
-      const next = { handle: () => of({ ok: true }) };
-
-      const obs = await interceptor.intercept(context, next);
-      await new Promise<void>((resolve) => obs.subscribe({ complete: () => resolve() }));
-
-      expect(completeSpy).not.toHaveBeenCalled();
-      expect(failSpy).toHaveBeenCalled();
-    });
-
-    it('场景 63: 当底层的 res.statusCode 缺失或为假值时，安全保底视为 200 状态码', async () => {
-      vi.spyOn(reflector, 'getAllAndOverride').mockReturnValue(undefined);
-      const { context, res } = createMockContext('POST', { 'idempotency-key': 'k-no-status' });
-      res.statusCode = 0; // falsy status code triggers (res.statusCode || 200)
-
-      mockRedisClient.get.mockResolvedValueOnce(null);
-      mockRedisClient.set.mockResolvedValue('OK');
-      mockRedisClient.eval.mockResolvedValue(1);
-
-      const completeSpy = vi.spyOn(realService, 'complete');
-      const next = { handle: () => of({ ok: true }) };
-
-      const obs = await interceptor.intercept(context, next);
-      await new Promise<void>((resolve) => obs.subscribe({ complete: () => resolve() }));
-
-      expect(completeSpy).toHaveBeenCalledWith(
-        expect.objectContaining({
-          statusCode: 200,
-        }),
-      );
-    });
+  it('场景 70: complete - 执行 CAS 更新并返回更新结果', async () => {
+    mockDb._stubs.updateReturning.mockResolvedValueOnce([{ keyHash: 'dummy' }]);
+    const ok = await store.complete('user:1:key', 'token-1', { status: 200, body: {} } as any, 86400000);
+    expect(ok).toBe(true);
+    expect(mockDb.update).toHaveBeenCalled();
   });
 
-  describe('Exception Propagation and Unlock Handling', () => {
-    it('场景 64: 业务 Observable 管道抛出异常时，拦截器确保调用 fail() 归还锁并冒泡原始异常', async () => {
-      vi.spyOn(reflector, 'getAllAndOverride').mockReturnValue(undefined);
-      const { context } = createMockContext('POST', { 'idempotency-key': 'k-throw' });
-
-      mockRedisClient.get.mockResolvedValueOnce(null);
-      mockRedisClient.set.mockResolvedValue('OK');
-      mockRedisClient.eval.mockResolvedValue(1);
-
-      const failSpy = vi.spyOn(realService, 'fail');
-
-      const businessError = new Error('Payment gateway timeout');
-      const next = { handle: () => throwError(() => businessError) };
-
-      const obs = await interceptor.intercept(context, next);
-
-      await expect(
-        new Promise((_, reject) => {
-          obs.subscribe({ error: reject });
-        }),
-      ).rejects.toThrow('Payment gateway timeout');
-
-      expect(failSpy).toHaveBeenCalled();
-    });
+  it('场景 71: release - 执行 CAS 删除并返回删除结果', async () => {
+    mockDb._stubs.deleteReturning.mockResolvedValueOnce([{ keyHash: 'dummy' }]);
+    const ok = await store.release('user:1:key', 'token-1');
+    expect(ok).toBe(true);
+    expect(mockDb.delete).toHaveBeenCalled();
   });
 
-  describe('High Concurrency & Thundering Herd Simulation', () => {
-    it('场景 65: 高并发同一 Key 击穿（羊群效应）压测 - 5 个并发请求，1 个执行，4 个自旋等待并回放缓存', async () => {
-      vi.spyOn(reflector, 'getAllAndOverride').mockReturnValue({ waitTimeoutMs: 3000 });
-
-      let cacheStore: string | null = null;
-      let lockHolder: string | null = null;
-
-      // Mock Redis state machine simulating atomic Redis cluster
-      mockRedisClient.get.mockImplementation(async (key: string) => {
-        if (key.includes(':cache:')) {
-          return cacheStore;
-        }
-        return null;
-      });
-
-      mockRedisClient.set.mockImplementation(
-        async (key: string, token: string, _px: string, _ttl: number, flag?: string) => {
-          if (key.includes(':cache:')) {
-            cacheStore = token; // serialized JSON
-            return 'OK';
-          }
-          if (flag === 'NX') {
-            if (!lockHolder) {
-              lockHolder = token;
-              return 'OK';
-            }
-            return null; // lock already held
-          }
-          return 'OK';
-        },
-      );
-
-      mockRedisClient.eval.mockImplementation(
-        async (_script: string, _keysCount: number, _key: string, token: string) => {
-          if (lockHolder === token) {
-            lockHolder = null;
-            return 1;
-          }
-          return 0;
-        },
-      );
-
-      let downstreamExecutionCount = 0;
-
-      // Simulate 5 simultaneous requests with the exact same idempotency key and body
-      const promises = Array.from({ length: 5 }).map(async (_, idx) => {
-        const { context, resHeaders } = createMockContext(
-          'POST',
-          { 'idempotency-key': 'concurrent-key-thundering' },
-          { id: 'user-shared' },
-          '10.0.0.1',
-          '/v1/transfers',
-          { amount: 500, to: 'account-b' },
-        );
-
-        const next = {
-          handle: () => {
-            downstreamExecutionCount++;
-            return of({ transferId: 'tx-999', idx });
-          },
-        };
-
-        const obs = await interceptor.intercept(context, next);
-        return new Promise<any>((resolve, reject) => {
-          obs.subscribe({
-            next: (val) => resolve({ val, resHeaders }),
-            error: reject,
-          });
-        });
-      });
-
-      const results = await Promise.all(promises);
-
-      // Downstream handler must have executed EXACTLY ONCE!
-      expect(downstreamExecutionCount).toBe(1);
-
-      // All 5 requests must have received identical business payload
-      for (const res of results) {
-        expect(res.val.transferId).toBe('tx-999');
-      }
-
-      // The 4 spin-waiting requests must have x-idempotency-replayed header
-      const replayedCount = results.filter((r) => r.resHeaders['x-idempotency-replayed'] === 'true').length;
-      expect(replayedCount).toBe(4);
-    });
+  it('场景 72: extend - 执行 CAS 续租并返回结果', async () => {
+    mockDb._stubs.updateReturning.mockResolvedValueOnce([{ keyHash: 'dummy' }]);
+    const ok = await store.extend('user:1:key', 'token-1', 15000);
+    expect(ok).toBe(true);
+    expect(mockDb.update).toHaveBeenCalled();
   });
 });

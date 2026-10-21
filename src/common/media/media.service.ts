@@ -2,9 +2,9 @@ import { extname } from 'node:path';
 
 import { BadRequestException, Injectable, Logger, Optional } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import type { StorageDisk } from '@nestjs/storage';
 import { isEmptyObject } from 'es-toolkit';
 
-import type { StorageDriver } from '@/common/storage/interfaces/storage.interface';
 import {
   getUploadContent,
   isMemoryUpload,
@@ -252,7 +252,7 @@ export class MediaService {
   // ── 内部辅助流程 ─────────────────────────────────────────────────────────
 
   private async persistToDisk(
-    disk: StorageDriver,
+    disk: StorageDisk,
     path: string,
     content: Buffer | import('node:stream').Readable,
     contentType: string,
@@ -261,7 +261,7 @@ export class MediaService {
     const exists = await disk.exists(path).catch(() => false);
     if (!exists) newlyCreatedPaths.push(path);
     await disk.put(path, content, { contentType });
-    return { path, url: disk.getUrl(path), isNew: !exists };
+    return { path, url: disk.url(path), isNew: !exists };
   }
 
   private generateVariants(

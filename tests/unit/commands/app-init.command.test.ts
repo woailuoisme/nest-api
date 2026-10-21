@@ -102,6 +102,42 @@ describe('AppInitCommand', () => {
     expect(summary).toContain('[SKIPPED]');
   });
 
+  /** 已配置 S3 的门面桩：exists 为逐次 HEAD 结果，created 为 PUT 结果 */
+  const s3Storage = (options: { exists: boolean[]; created: boolean }): StorageService =>
+    ({
+      isS3Configured: () => true,
+      getS3Config: () => ({ bucket: 'assets' }),
+      checkS3BucketExists: vi.fn(async () => options.exists.shift() ?? false),
+      ensureS3Bucket: vi.fn(async () => ({ created: options.created })),
+    }) as unknown as StorageService;
+
+  const readSummary = (): string =>
+    vi
+      .mocked(console.log)
+      .mock.calls.map((c) => String(c[0]))
+      .join('\n');
+
+  it('S3 建桶失败且回查仍不存在时应置非零退出码，不得谎报 created', async () => {
+    writeFileSync(envPath, '', 'utf8');
+    const storage = s3Storage({ exists: [false, false], created: false });
+
+    await makeCommand(storage).run([], { env: envPath });
+
+    expect(storage.ensureS3Bucket).toHaveBeenCalledTimes(1);
+    expect(process.exitCode).toBe(1);
+    expect(readSummary()).toContain('[FAILED]');
+  });
+
+  it('桶被并发创建导致 PUT 未新建时应收敛为「已存在」而非失败', async () => {
+    writeFileSync(envPath, '', 'utf8');
+    const storage = s3Storage({ exists: [false, true], created: false });
+
+    await makeCommand(storage).run([], { env: envPath });
+
+    expect(process.exitCode).toBe(0);
+    expect(readSummary()).toContain('already exists');
+  });
+
   it('迁移目录缺失时中止并置非零退出码', async () => {
     // 覆写迁移目录指向不存在的路径（worker 内不可 chdir）
     class MissingMigrationsCommand extends AppInitCommand {

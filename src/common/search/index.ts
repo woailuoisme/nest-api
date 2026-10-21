@@ -1,7 +1,6 @@
 export * from './drivers/meilisearch.driver';
 export * from './drivers/noop.driver';
 export * from './interfaces/search.interface';
-export * from './scout/scout-builder';
 export * from './scout/searchable.interface';
 export * from './search.module';
 export * from './search.service';

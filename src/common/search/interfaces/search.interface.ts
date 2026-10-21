@@ -95,3 +95,36 @@ export interface SearchDriver {
   ): Promise<SearchResult<T>>;
   checkHealth(): Promise<SearchDriverHealth>;
 }
+
+/**
+ * 模型搜索执行选项
+ */
+export interface SearchExecutionOptions {
+  /** 检索词（空字符串代表通配搜索） */
+  query?: string;
+  /** 过滤表达式（支持 Meilisearch 语法如 "role = admin AND banned = false"） */
+  filter?: string | string[] | (string | string[])[];
+  /** 排序规则列表（例如 ['createdAt:desc', 'name:asc']） */
+  sort?: string[];
+  /** 页码（从 1 开始，默认 1） */
+  page?: number;
+  /** 每页数量（默认 20） */
+  limit?: number;
+  /** 显式偏移量（若传入则覆盖 page 计算） */
+  offset?: number;
+  /** 高亮字段列表，默认 ['*'] */
+  highlight?: string[];
+  /** 是否回源数据库水合最新实体（开启后将通过 loadRecords 批量加载并保持检索评分排序） */
+  hydrate?: boolean;
+}
+
+/**
+ * 分页搜索结果信封
+ */
+export interface PaginatedSearchResult<T> {
+  items: T[];
+  total: number;
+  page: number;
+  limit: number;
+  processingTimeMs: number;
+}

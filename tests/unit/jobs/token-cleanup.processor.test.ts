@@ -20,12 +20,14 @@ describe('TokenCleanupProcessor', () => {
   const makeJob = (): Job<TokenCleanupJobData> =>
     ({ name: TokenCleanupJobName.PurgeExpired, data: { batchSize: 1000 } }) as unknown as Job<TokenCleanupJobData>;
 
-  it('should purge expired sessions and verifications in batches on PurgeExpired job', async () => {
-    // 每个表：第一批命中 → 第二批为空（循环结束）
+  it('should purge expired sessions, verifications and idempotency keys in batches on PurgeExpired job', async () => {
+    // 每张表：第一批命中 → 第二批为空（循环结束）
     const selectQueue: { id: string }[][] = [
       [{ id: 'session-1' }, { id: 'session-2' }],
       [],
       [{ id: 'verification-1' }],
+      [],
+      [{ id: 'idempotency-1' }],
       [],
     ];
     mockDb.select.mockImplementation(() => ({
@@ -34,14 +36,16 @@ describe('TokenCleanupProcessor', () => {
 
     mockDb._stubs.deleteReturning
       .mockResolvedValueOnce([{ id: 'session-1' }, { id: 'session-2' }])
-      .mockResolvedValueOnce([{ id: 'verification-1' }]);
+      .mockResolvedValueOnce([{ id: 'verification-1' }])
+      .mockResolvedValueOnce([{ id: 'idempotency-1' }]);
 
     await processor.process(makeJob());
 
-    expect(mockDb.select).toHaveBeenCalledTimes(4);
-    expect(mockDb.delete).toHaveBeenCalledTimes(2);
+    expect(mockDb.select).toHaveBeenCalledTimes(6);
+    expect(mockDb.delete).toHaveBeenCalledTimes(3);
     expect(mockDb.delete).toHaveBeenNthCalledWith(1, schema.session);
     expect(mockDb.delete).toHaveBeenNthCalledWith(2, schema.verification);
+    expect(mockDb.delete).toHaveBeenNthCalledWith(3, schema.idempotencyKeys);
   });
 
   it('should stop scanning when no expired rows remain', async () => {

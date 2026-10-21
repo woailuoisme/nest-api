@@ -1,117 +1,198 @@
 import { Readable } from 'node:stream';
 
-import { Injectable, Logger } from '@nestjs/common';
+import { Inject, Injectable, Logger, Optional } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import {
+  Storage,
+  type StorageBody,
+  type StorageDisk,
+  type StorageDownload,
+  type StorageGetOptions,
+  type StorageListOptions,
+  type StorageListPage,
+  type StoragePutOptions,
+  type StorageSignedUrlRequest,
+  type StorageWriteResult,
+} from '@nestjs/storage';
 
-import { PATHS } from '@/common/constants/app.constants';
-
-import { LocalStorageDriver } from './drivers/local.driver';
-import { S3StorageDriver } from './drivers/s3.driver';
-import type { PutOptions, StorageDriver } from './interfaces/storage.interface';
+import {
+  checkS3BucketExists,
+  createStorageOptions,
+  ensureS3Bucket,
+  parseS3Url,
+  type S3DriverConfig,
+} from './storage.config';
 
 /**
- * 多磁盘存储门面 — 默认透传到配置的 driver，
- * 可选方法在 driver 不支持时提供优雅回退。
+ * 统一存储服务门面 — 继承自 @nestjs/storage 核心能力，
+ * 直接使用原生 StorageDisk，并提供业务所需的 URL 反解与 S3 环境准备辅助。
  */
 @Injectable()
-export class StorageService implements StorageDriver {
+export class StorageService {
   private readonly logger = new Logger(StorageService.name);
-  readonly #drivers = new Map<string, StorageDriver>();
-  readonly #defaultDisk: string;
+  private readonly defaultDisk: string;
+  private readonly storageInstance: Storage;
+  private readonly s3Config: S3DriverConfig | null = null;
 
-  constructor(config: ConfigService) {
-    this.#defaultDisk = config.get<string>('FILESYSTEM_DISK') ?? (config.get('STORAGE_S3_URL') ? 's3' : 'local');
-    this.#bootstrap(config);
-    this.#logInit(config);
+  constructor(
+    private readonly config: ConfigService,
+    @Optional() @Inject(Storage) injectedStorage?: Storage,
+  ) {
+    this.defaultDisk = config.get<string>('FILESYSTEM_DISK') ?? (config.get('STORAGE_S3_URL') ? 's3' : 'local');
+
+    const rawS3Url = config.get<string>('STORAGE_S3_URL');
+    if (rawS3Url) {
+      this.s3Config = parseS3Url(rawS3Url);
+    }
+
+    if (injectedStorage) {
+      this.storageInstance = injectedStorage;
+    } else {
+      const options = createStorageOptions(config);
+      const diskMap = new Map<string, StorageDisk>(Object.entries(options.disks ?? {}));
+      this.storageInstance = new Storage(diskMap, this.defaultDisk);
+    }
+
+    this.logInit();
   }
 
-  disk(name?: string): StorageDriver {
-    const driver = this.#drivers.get(name ?? this.#defaultDisk);
-    if (!driver) throw new Error(`Storage disk "${name ?? this.#defaultDisk}" is not configured.`);
-    return driver;
+  /** 获取原生 @nestjs/storage Storage 实例 */
+  get rawStorage(): Storage {
+    return this.storageInstance;
   }
 
-  // ── 委托方法 ──────────────────────────────────────────
+  /** 获取指定名称或默认磁盘的原生 StorageDisk */
+  disk(name?: string): StorageDisk {
+    const diskName = name ?? this.defaultDisk;
+    try {
+      return this.storageInstance.disk(diskName);
+    } catch {
+      throw new Error(`Storage disk "${diskName}" is not configured.`);
+    }
+  }
 
-  put(path: string, contents: Buffer | Readable | string, options?: PutOptions): Promise<string> {
+  // ── 默认磁盘便捷委托方法 ──────────────────────────────────────
+
+  put(path: string, contents: StorageBody, options?: StoragePutOptions): Promise<StorageWriteResult> {
     return this.disk().put(path, contents, options);
   }
 
-  get(path: string): Promise<Buffer> {
-    return this.disk().get(path);
+  get(path: string, options?: StorageGetOptions): Promise<StorageDownload> {
+    return this.disk().get(path, options);
   }
 
-  delete(path: string): Promise<void> {
-    return this.disk().delete(path);
+  getBuffer(path: string): Promise<Buffer> {
+    return this.disk().getBuffer(path);
+  }
+
+  async getStream(path: string): Promise<Readable> {
+    const download = await this.disk().get(path);
+    return Readable.from(download.body);
+  }
+
+  delete(paths: string | readonly string[]): Promise<void> {
+    return this.disk().delete(paths);
+  }
+
+  deleteBatch(paths: string[]): Promise<void> {
+    return this.disk().delete(paths);
   }
 
   exists(path: string): Promise<boolean> {
     return this.disk().exists(path);
   }
 
+  url(path: string): string {
+    return this.disk().url(path);
+  }
+
   getUrl(path: string): string {
-    return this.disk().getUrl(path);
+    return this.url(path);
   }
 
-  urlToPath(url: string, diskName?: string): string | null {
-    const driver = this.disk(diskName);
-    return driver.urlToPath?.(url) ?? null;
-  }
-
-  // ── 可选方法 + 回退 ───────────────────────────────────
-
-  async getStream(path: string): Promise<Readable> {
-    const driver = this.disk();
-    return driver.getStream?.(path) ?? Readable.from(await driver.get(path));
-  }
-
-  async deleteBatch(paths: string[]): Promise<void> {
-    const driver = this.disk();
-    if (driver.deleteBatch) return driver.deleteBatch(paths);
-    // 无批量删除 → 逐个删除
-    await Promise.all(paths.map((p) => driver.delete(p)));
-  }
-
-  async list(prefix: string): Promise<string[]> {
-    const driver = this.disk();
-    if (driver.list) return driver.list(prefix);
-    throw new Error(`Storage disk "${this.#defaultDisk}" does not support list().`);
+  signedUrl(path: string, options?: StorageSignedUrlRequest): Promise<string> {
+    return this.disk().signedUrl(path, options);
   }
 
   async getSignedUrl(path: string, expiresInSeconds = 3600): Promise<string> {
-    const driver = this.disk();
-    return driver.getSignedUrl?.(path, expiresInSeconds) ?? driver.getUrl(path);
+    try {
+      return await this.disk().signedUrl(path, { expiresIn: `${expiresInSeconds}s` });
+    } catch {
+      return this.url(path);
+    }
   }
 
-  // ── 初始化 ────────────────────────────────────────────
-
-  /**
-   * 初始化存储驱动映射。
-   *
-   * 使用 `new` 直接实例化 LocalStorageDriver 和 S3StorageDriver，
-   * 而非通过 NestJS DI 注入，因为这两个驱动类是无依赖的纯配置驱动类 —
-   * 构造函数仅接收配置字符串/对象，不依赖任何 NestJS provider。
-   * 直接实例化可简化初始化流程，避免不必要的 DI 模板代码。
-   */
-  #bootstrap(config: ConfigService): void {
-    this.#drivers.set(
-      'local',
-      new LocalStorageDriver(config.get<string>('STORAGE_LOCAL_ROOT', `./${PATHS.STORAGE_UPLOADS}`)),
-    );
-    this.#drivers.set('s3', new S3StorageDriver(config.get<string>('STORAGE_S3_URL') || ''));
+  list(prefixOrOptions?: string | StorageListOptions): Promise<StorageListPage> {
+    const options = typeof prefixOrOptions === 'string' ? { prefix: prefixOrOptions } : prefixOrOptions;
+    return this.disk().list(options);
   }
 
-  /**
-   * 启动时打印当前存储配置（driver + 关键参数）。
-   * 注意：这是「已配置」而非「已连接」——storage 无长连接概念，
-   * S3/Garage 走 HTTP 请求-响应，不验证远端可达性。
-   */
-  #logInit(config: ConfigService): void {
-    const s3Driver = this.#drivers.get('s3') as S3StorageDriver | undefined;
+  // ── 业务辅助方法：URL 反解相对路径（供删除旧头像/媒体文件业务使用） ─────────
+
+  urlToPath(url: string, diskName?: string): string | null {
+    if (!url || typeof url !== 'string') return null;
+
+    const targetDisk = diskName ?? this.defaultDisk;
+
+    if (targetDisk === 'local') {
+      if (!url.includes('/uploads/')) return null;
+      const pathPart = url.slice(url.indexOf('/uploads/') + '/uploads/'.length).replace(/^\/+/, '');
+      if (!pathPart || pathPart.startsWith('/') || pathPart.split('/').includes('..')) return null;
+      return pathPart;
+    }
+
+    if (targetDisk === 's3' && this.s3Config) {
+      const { publicUrl, endpoint, bucket } = this.s3Config;
+
+      if (publicUrl && url.startsWith(publicUrl)) {
+        return url.slice(publicUrl.length).replace(/^\/+/, '');
+      }
+
+      if (endpoint && url.startsWith(endpoint)) {
+        const pathPart = url.slice(endpoint.length).replace(/^\/+/, '');
+        if (bucket && pathPart.startsWith(`${bucket}/`)) {
+          return pathPart.slice(`${bucket}/`.length);
+        }
+        return pathPart;
+      }
+
+      if (bucket && url.includes(bucket)) {
+        const escaped = bucket.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        const match = url.match(new RegExp(`${escaped}[^/]*/(.*)$`));
+        if (match?.[1]) return match[1].replace(/^\/+/, '');
+      }
+    }
+
+    return null;
+  }
+
+  // ── S3 专用辅助（用于 app:init 迁移与环境检查）─────────
+
+  isS3Configured(): boolean {
+    return Boolean(this.s3Config?.bucket);
+  }
+
+  getS3Config(): S3DriverConfig | null {
+    return this.s3Config;
+  }
+
+  async checkS3BucketExists(): Promise<boolean> {
+    if (!this.s3Config) return false;
+    return checkS3BucketExists(this.s3Config);
+  }
+
+  async ensureS3Bucket(): Promise<{ created: boolean }> {
+    if (!this.s3Config) return { created: false };
+    return ensureS3Bucket(this.s3Config);
+  }
+
+  // ── 初始化日志 ────────────────────────────────────────
+
+  private logInit(): void {
     const detail =
-      this.#defaultDisk === 's3'
-        ? `endpoint=${s3Driver?.config.endpoint ?? '-'}, bucket=${s3Driver?.config.bucket ?? '-'}`
-        : `root=${config.get<string>('STORAGE_LOCAL_ROOT', `./${PATHS.STORAGE_UPLOADS}`)}`;
-    this.logger.debug(`Storage initialized: ${this.#defaultDisk} driver (${detail})`);
+      this.defaultDisk === 's3'
+        ? `endpoint=${this.s3Config?.endpoint ?? 'aws'}, bucket=${this.s3Config?.bucket ?? '-'}`
+        : `default=${this.defaultDisk}`;
+    this.logger.debug(`Storage initialized: ${this.defaultDisk} driver (${detail})`);
   }
 }

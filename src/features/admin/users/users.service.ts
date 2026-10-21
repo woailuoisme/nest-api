@@ -200,19 +200,18 @@ export class UsersService {
 
   /** 全文搜索用户（支持 Meilisearch 检索与角色过滤，保持相关度排序） */
   async search(query: SearchUsersRequest) {
-    const builder = this.searchService.builder(userSearchable).query(query.q);
-
-    if (query.role) {
-      builder.where('role', query.role);
-    }
-
-    builder.hydrate(true);
-    const result = await builder.paginate({ page: query.page, limit: query.pageSize });
+    const result = await this.searchService.searchModel(userSearchable, {
+      query: query.q,
+      filter: query.role ? `role = "${query.role}"` : undefined,
+      page: query.page,
+      limit: query.pageSize,
+      hydrate: true,
+    });
 
     const pageMeta = new PageMetaResource({ page: result.page, pageSize: result.limit }, result.total);
 
     return new PaginatedResultResource(
-      result.items.map((u) => new UserEntity(u)),
+      result.items.map((u) => new UserEntity(u as typeof user.$inferSelect)),
       pageMeta,
     );
   }

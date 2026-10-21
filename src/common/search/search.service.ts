@@ -1,5 +1,6 @@
 import { Injectable, Logger, Optional } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import { keyBy } from 'es-toolkit';
 
 import type { EnvConfig } from '@/config/env.validation';
 import { type DrizzleDB, InjectDb } from '@/database/drizzle/drizzle.service';
@@ -8,12 +9,13 @@ import { MeiliSearchDriver } from './drivers/meilisearch.driver';
 import { NoopSearchDriver } from './drivers/noop.driver';
 import type {
   IndexSettings,
+  PaginatedSearchResult,
   SearchDriver,
   SearchDriverHealth,
+  SearchExecutionOptions,
   SearchParams,
   SearchResult,
 } from './interfaces/search.interface';
-import { ScoutSearchBuilder } from './scout/scout-builder';
 import type { SearchableDefinition } from './scout/searchable.interface';
 
 /**
@@ -21,7 +23,7 @@ import type { SearchableDefinition } from './scout/searchable.interface';
  *
  * 负责：
  * 1. 自动根据环境变量推导加载 MeiliSearchDriver 或 NoopSearchDriver；
- * 2. 提供类似 Laravel Scout 的 ScoutSearchBuilder 链式构建检索器；
+ * 2. 提供强类型、高内聚的 searchModel 检索与可选 Drizzle 数据水合；
  * 3. 封装直接索引增删改与健康检查接口。
  */
 @Injectable()
@@ -62,19 +64,70 @@ export class SearchService {
   }
 
   /**
-   * 创建 Scout 风格流式搜索构建器
-   *
-   * @example
-   * const results = await searchService.builder(userSearchable)
-   *   .query('alex')
-   *   .where('role', 'admin')
-   *   .orderBy('createdAt', 'desc')
-   *   .paginate({ page: 1, limit: 15 });
+   * 按 Searchable 契约执行强类型模型检索，支持可选的 Drizzle 数据水合
    */
-  builder<TEntity = unknown, TDoc extends Record<string, unknown> = Record<string, unknown>>(
+  async searchModel<TEntity = unknown, TDoc extends Record<string, unknown> = Record<string, unknown>>(
     searchable: SearchableDefinition<TEntity, TDoc>,
-  ): ScoutSearchBuilder<TEntity, TDoc> {
-    return new ScoutSearchBuilder(this.activeDriver, searchable, this.db);
+    options: SearchExecutionOptions = {},
+  ): Promise<PaginatedSearchResult<TEntity | TDoc>> {
+    const limit = Math.max(1, options.limit ?? 20);
+    const page = Math.max(1, options.page ?? 1);
+    const offset = options.offset ?? (page - 1) * limit;
+
+    const rawResult = await this.activeDriver.search<TDoc>(searchable.index, options.query ?? '', {
+      filter: options.filter,
+      sort: options.sort,
+      limit,
+      offset,
+      attributesToHighlight: options.highlight ?? ['*'],
+    });
+
+    const total = rawResult.totalHits ?? rawResult.estimatedTotalHits ?? rawResult.hits.length;
+
+    if (!options.hydrate || !rawResult.hits.length) {
+      return {
+        items: rawResult.hits,
+        total,
+        page,
+        limit,
+        processingTimeMs: rawResult.processingTimeMs,
+      };
+    }
+
+    if (!searchable.loadRecords || !this.db) {
+      throw new Error(
+        `Hydration is enabled for search index "${searchable.index}", but loadRecords or DrizzleDB instance is missing.`,
+      );
+    }
+
+    const primaryKey = searchable.primaryKey ?? ('id' as keyof TEntity & string);
+    const hitIds = rawResult.hits
+      .map((hit) => (hit as Record<string, unknown>)[primaryKey] as string | number)
+      .filter(Boolean);
+
+    if (!hitIds.length) {
+      return {
+        items: [],
+        total,
+        page,
+        limit,
+        processingTimeMs: rawResult.processingTimeMs,
+      };
+    }
+
+    const dbEntities = await searchable.loadRecords(this.db, hitIds);
+    const entityMap = keyBy(dbEntities, (entity) => String((entity as Record<string, unknown>)[primaryKey]));
+
+    // 严谨保持 Meilisearch 相关性评分的先后顺序，过滤掉 DB 中已被物理删除的游离项
+    const hydratedItems = hitIds.map((id) => entityMap[String(id)]).filter((item): item is TEntity => Boolean(item));
+
+    return {
+      items: hydratedItems,
+      total,
+      page,
+      limit,
+      processingTimeMs: rawResult.processingTimeMs,
+    };
   }
 
   // ── 通用代理方法 ──────────────────────────────────────────

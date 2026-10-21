@@ -49,7 +49,7 @@ export interface SearchableDefinition<
 
   /**
    * 批量根据主键 ID 加载数据库实体
-   * 用于异步队列回源同步与 ScoutSearchBuilder.hydrate() 数据水合。
+   * 用于异步队列回源同步与 SearchService.searchModel() 数据水合。
    */
   loadRecords?: (db: DrizzleDB, ids: (string | number)[]) => Promise<TEntity[]>;
 

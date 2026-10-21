@@ -12,7 +12,6 @@ import type { NestFastifyApplication } from '@nestjs/platform-fastify';
 import type { FastifyRequest } from 'fastify';
 
 import { HttpExceptionFilter } from '@/common/filters/http-exception.filter';
-import { IdempotencyInterceptor } from '@/common/idempotency';
 import { TimeoutInterceptor } from '@/common/interceptors/timeout.interceptor';
 import { TransformInterceptor } from '@/common/interceptors/transform.interceptor';
 import type { EnvConfig } from '@/config/env.validation';
@@ -124,11 +123,9 @@ export function setupGlobalMiddleware(app: NestFastifyApplication): void {
   app.useGlobalFilters(new HttpExceptionFilter(config.get('APP_DEBUG')));
 
   const reflector = app.get(Reflector);
-  const idempotencyInterceptor = app.get(IdempotencyInterceptor);
   const httpTimeoutMs = config.get('HTTP_TIMEOUT_MS');
   app.useGlobalInterceptors(
     new TimeoutInterceptor(reflector, httpTimeoutMs),
-    idempotencyInterceptor,
     // 响应序列化：读取 handler/class 上的 @SerializeOptions({ schema }) 做输出白名单裁剪（未声明 schema 的端点零开销透传）。
     // 位置须在 TransformInterceptor 之前：拦截器响应映射按注册顺序反向执行，此处可在信封归一化之后校验最终载荷。
     // 该顺序契约由 tests/unit/setup/response-serializer.test.ts 锁定，调整顺序前请先看那份用例。

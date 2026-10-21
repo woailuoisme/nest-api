@@ -3,7 +3,6 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { MeiliSearchDriver } from '@/common/search/drivers/meilisearch.driver';
 import { NoopSearchDriver } from '@/common/search/drivers/noop.driver';
-import { ScoutSearchBuilder } from '@/common/search/scout/scout-builder';
 import type { SearchableDefinition } from '@/common/search/scout/searchable.interface';
 import { SearchService } from '@/common/search/search.service';
 import type { EnvConfig } from '@/config/env.validation';
@@ -55,7 +54,7 @@ describe('SearchService 核心门面', () => {
     expect(service.driver()).toBeInstanceOf(NoopSearchDriver);
   });
 
-  it('builder() 应返回带有当前驱动和 db 实例的 ScoutSearchBuilder', () => {
+  it('searchModel() 应调用底层驱动完成检索并返回标准化分页信封', async () => {
     mockConfigService.get.mockReturnValue('noop');
     const service = new SearchService(mockConfigService as unknown as ConfigService<EnvConfig, true>, mockDb);
 
@@ -64,7 +63,11 @@ describe('SearchService 核心门面', () => {
       toSearchableArray: (x) => x,
     };
 
-    const builder = service.builder(dummySearchable);
-    expect(builder).toBeInstanceOf(ScoutSearchBuilder);
+    const res = await service.searchModel(dummySearchable, { query: 'hello', page: 1, limit: 10 });
+    expect(res).toBeDefined();
+    expect(res.page).toBe(1);
+    expect(res.limit).toBe(10);
+    expect(res.items).toEqual([]);
+    expect(res.total).toBe(0);
   });
 });

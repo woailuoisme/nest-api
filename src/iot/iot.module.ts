@@ -60,6 +60,3 @@ import { parseMqttDsn, resolveMqttBrokerUrl } from './transports/utils/dsn.parse
   ],
 })
 export class IotModule {}
-
-/** 向后兼容别名 */
-export const MqttModule = IotModule;

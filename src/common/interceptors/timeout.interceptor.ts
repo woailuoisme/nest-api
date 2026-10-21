@@ -1,23 +1,51 @@
-import {
-  type CallHandler,
-  type ExecutionContext,
-  Injectable,
-  type NestInterceptor,
-  Optional,
-  RequestTimeoutException,
-} from '@nestjs/common';
+import { type CallHandler, type ExecutionContext, Injectable, type NestInterceptor, Optional } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { Reflector } from '@nestjs/core';
 import type { FastifyRequest } from 'fastify';
-import { finalize, type Observable, throwError, timeout } from 'rxjs';
+import { finalize, type Observable } from 'rxjs';
 
 import { RequestContext } from '@/common/context';
 import { REQUEST_SIGNAL_SYMBOL } from '@/common/decorators/req-signal.decorator';
-import { BYPASS_TIMEOUT_KEY, TIMEOUT_METADATA_KEY } from '@/common/decorators/timeout.decorator';
+import {
+  BYPASS_TIMEOUT_KEY,
+  LEGACY_TIMEOUT_METADATA_KEY,
+  TIMEOUT_METADATA_KEY,
+} from '@/common/decorators/timeout.decorator';
 import type { EnvConfig } from '@/config/env.validation';
 
 /** 默认全局请求超时时间（毫秒） */
 export const DEFAULT_REQUEST_TIMEOUT_MS = 15_000;
+
+/**
+ * 解析时间跨度为毫秒数：支持纯数字毫秒或时间字符串 (500ms, 5s, 1m)
+ */
+function parseDurationToMs(value: number | string | undefined, defaultMs: number): number {
+  if (typeof value === 'number') {
+    return value;
+  }
+  if (typeof value === 'string') {
+    const match = value.trim().match(/^(\d+)(ms|s|m|h|d|w)?$/);
+    if (match) {
+      const num = Number.parseInt(match[1], 10);
+      const unit = match[2] ?? 'ms';
+      switch (unit) {
+        case 'ms':
+          return num;
+        case 's':
+          return num * 1_000;
+        case 'm':
+          return num * 60_000;
+        case 'h':
+          return num * 3_600_000;
+        case 'd':
+          return num * 86_400_000;
+        case 'w':
+          return num * 604_800_000;
+      }
+    }
+  }
+  return defaultMs;
+}
 
 /**
  * 解析默认超时时间：支持直接传入毫秒数（手工装配/测试覆盖）或注入 ConfigService 读取 HTTP_TIMEOUT_MS
@@ -33,19 +61,18 @@ function resolveDefaultTimeoutMs(source?: number | ConfigService<EnvConfig, true
 }
 
 /**
- * 生产级双轨协作式超时拦截器 (Dual-Track Cooperative TimeoutInterceptor)
+ * 生产级请求生命周期与取消协同拦截器 (RequestLifecycleInterceptor)
  *
- * 核心机制：
- * 1. 响应信封轨：通过 RxJS timeout 操作符拦截，超时时向前端抛出规范的 RequestTimeoutException（408）；
- * 2. 协作取消轨：内部创建并维护 AbortController，不仅通过 REQUEST_SIGNAL_SYMBOL 挂载到请求对象，
- *    更自动同步注入 RequestContext (AsyncLocalStorage)，全链路下游服务无需层层传递参数即可直接获得 signal；
- * 3. 截止时间与超时预算 (Deadline Budget)：将超时截止时刻计算后注入 RequestContext，
- *    供下游微服务调用与 @Resilient() 提前预检并自动缩紧剩余超时预算；
- * 4. 智能长连接豁免：识别 @BypassTimeout()、timeoutMs <= 0 以及 /realtime/stream 广播长连接，
- *    豁免应用层超时强杀，但依然维持底层连接断开时对 AbortSignal 的触发通知。
+ * 核心架构职责：
+ * 1. 彻底淘汰手写 RxJS timeout() 强杀逻辑，方法与路由层超时与熔断 100% 移交 `@nestjs/resilience` 统一容灾中心；
+ * 2. 协作取消中枢：创建并维护请求级 AbortController，挂载到 REQUEST_SIGNAL_SYMBOL 与 RequestContext (AsyncLocalStorage)；
+ * 3. 客户端断连感知：监听 Fastify 底层 rawReq 的 'close' 事件，在浏览器或网关主动断连时联动触发 signal.abort()，
+ *    避免下游数据库查询与微服务调用继续进行无意义的幽灵计算；
+ * 4. 链路死线预算注入：计算当前请求的截止时刻注入 RequestContext，供下游微服务 / DeadlineInterceptor 自动获得全局墙钟死线；
+ * 5. 智能流式长连接识别：识别 @BypassTimeout()、timeoutMs <= 0 以及 /realtime/stream 广播流，标记流式长连接并豁免超时预算。
  */
 @Injectable()
-export class TimeoutInterceptor implements NestInterceptor {
+export class RequestLifecycleInterceptor implements NestInterceptor {
   private readonly defaultTimeoutMs: number;
 
   constructor(
@@ -66,11 +93,16 @@ export class TimeoutInterceptor implements NestInterceptor {
         context.getClass(),
       ]) === true;
 
-    const rawTimeout = this.reflector.getAllAndOverride<number | undefined>(TIMEOUT_METADATA_KEY, [
-      context.getHandler(),
-      context.getClass(),
-    ]);
-    const timeoutMs = typeof rawTimeout === 'number' ? rawTimeout : this.defaultTimeoutMs;
+    const rawTimeout =
+      this.reflector.getAllAndOverride<number | string | undefined>(TIMEOUT_METADATA_KEY, [
+        context.getHandler(),
+        context.getClass(),
+      ]) ??
+      this.reflector.getAllAndOverride<number | string | undefined>(LEGACY_TIMEOUT_METADATA_KEY, [
+        context.getHandler(),
+        context.getClass(),
+      ]);
+    const timeoutMs = parseDurationToMs(rawTimeout, this.defaultTimeoutMs);
 
     const req = context.switchToHttp().getRequest<FastifyRequest & { [REQUEST_SIGNAL_SYMBOL]?: AbortSignal }>();
     const controller = new AbortController();
@@ -96,23 +128,9 @@ export class TimeoutInterceptor implements NestInterceptor {
 
     rawReq?.once('close', onClose);
 
-    // 显式豁免超时或长连接场景：跳过 RxJS timeout 定时强杀，仅保留底层断连监听
-    if (shouldBypassTimeout) {
-      return next.handle().pipe(finalize(() => rawReq?.off?.('close', onClose)));
-    }
-
-    return next.handle().pipe(
-      timeout({
-        each: timeoutMs,
-        with: () =>
-          throwError(() => {
-            if (!controller.signal.aborted) {
-              controller.abort(new Error(`Request timed out after ${timeoutMs}ms`));
-            }
-            return new RequestTimeoutException(`Request timed out after ${timeoutMs}ms`);
-          }),
-      }),
-      finalize(() => rawReq?.off?.('close', onClose)),
-    );
+    return next.handle().pipe(finalize(() => rawReq?.off?.('close', onClose)));
   }
 }
+
+/** 向下兼容别名导出 */
+export { RequestLifecycleInterceptor as TimeoutInterceptor };

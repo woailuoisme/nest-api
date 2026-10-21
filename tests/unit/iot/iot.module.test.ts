@@ -8,16 +8,10 @@ import {
   IotTelemetryService,
   MQTT_CLIENT_TOKEN,
   MQTT_OPTIONS_TOKEN,
-  MqttModule,
   MqttService,
 } from '@/iot';
 
 describe('IotModule (物联网与 MQTT 核心模块)', () => {
-  it('应该正确导出 IotModule 与向后兼容的 MqttModule 别名', () => {
-    expect(IotModule).toBeDefined();
-    expect(MqttModule).toBe(IotModule);
-  });
-
   it('应该声明 IotController 作为唯一的控制器', () => {
     const controllers = Reflect.getMetadata('controllers', IotModule) ?? [];
     expect(controllers).toContain(IotController);

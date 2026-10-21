@@ -71,58 +71,53 @@ describe('TimeoutInterceptor (双轨协作式超时拦截器)', () => {
     expect(signal.aborted).toBe(false);
   });
 
-  it('场景 2: 请求超时，应抛出 RequestTimeoutException 并且 signal 变为 aborted', async () => {
-    const reflector = createMockReflector(50); // 50ms 超时
+  it('场景 2: 消除手写 RxJS timeout 强杀，生命周期拦截器透传流并正确管理协作取消信号', async () => {
+    const reflector = createMockReflector(50);
     const interceptor = new TimeoutInterceptor(reflector, 50);
     const { context, mockRequest } = createMockContext();
 
-    // 模拟一个需要 150ms 的慢流
     const next: CallHandler = {
-      handle: () => timer(150).pipe(map(() => ({ success: true }))),
+      handle: () => of({ success: true }),
     };
 
-    let caughtError: unknown;
-    let abortedAtError = false;
-
-    await new Promise<void>((resolve) => {
+    const result = await new Promise((resolve) => {
       interceptor.intercept(context, next).subscribe({
-        next: () => {},
-        error: (err) => {
-          caughtError = err;
-          const signal = mockRequest[REQUEST_SIGNAL_SYMBOL] as AbortSignal;
-          abortedAtError = signal?.aborted ?? false;
-          resolve();
-        },
+        next: (val) => resolve(val),
       });
     });
 
-    expect(caughtError).toBeInstanceOf(RequestTimeoutException);
-    expect(abortedAtError).toBe(true);
+    expect(result).toEqual({ success: true });
+    const signal = mockRequest[REQUEST_SIGNAL_SYMBOL] as AbortSignal;
+    expect(signal).toBeDefined();
+    expect(signal.aborted).toBe(false);
   });
 
-  it('场景 3: 支持通过 @Timeout() 装饰器局部覆盖默认超时时间', async () => {
-    const reflector = createMockReflector(30); // 覆盖为 30ms
+  it('场景 3: 支持通过 @Timeout() 装饰器局部覆盖默认超时时间并正确注入 RequestContext 死线', async () => {
+    const reflector = createMockReflector(3000);
     const interceptor = new TimeoutInterceptor(reflector, 10_000);
-    const { context, mockRequest } = createMockContext();
+    const { context } = createMockContext();
 
-    const next: CallHandler = {
-      handle: () => timer(100).pipe(map(() => 'done')),
-    };
-
-    let caughtError: unknown;
-    await new Promise<void>((resolve) => {
-      interceptor.intercept(context, next).subscribe({
-        error: (err) => {
-          caughtError = err;
-          resolve();
+    await RequestContext.run({ requestId: 'req-timeout-custom', startTime: Date.now() }, async () => {
+      const next: CallHandler = {
+        handle: () => {
+          const remaining = RequestContext.getRemainingMs();
+          expect(remaining).toBeDefined();
+          expect(remaining!).toBeGreaterThan(2000);
+          expect(remaining!).toBeLessThanOrEqual(3000);
+          return of('done');
         },
+      };
+
+      const result = await new Promise((resolve) => {
+        interceptor.intercept(context, next).subscribe({
+          next: (val) => resolve(val),
+        });
       });
+
+      expect(result).toBe('done');
     });
 
     expect(reflector.getAllAndOverride).toHaveBeenCalledWith(TIMEOUT_METADATA_KEY, expect.any(Array));
-    expect(caughtError).toBeInstanceOf(RequestTimeoutException);
-    const signal = mockRequest[REQUEST_SIGNAL_SYMBOL] as AbortSignal;
-    expect(signal.aborted).toBe(true);
   });
 
   it('场景 4: 当超时时间设置为 <= 0 时，显式禁用超时检测', async () => {
@@ -279,34 +274,30 @@ describe('TimeoutInterceptor (双轨协作式超时拦截器)', () => {
     expect(mockRequestWithoutRaw[REQUEST_SIGNAL_SYMBOL]).toBeDefined();
   });
 
-  it('场景 10: 当客户端断连已先触发 abort 时，紧随其后的超时不会重复调用 abort (竞态覆盖)', async () => {
-    const reflector = createMockReflector(20);
-    const interceptor = new TimeoutInterceptor(reflector, 20);
+  it('场景 10: 客户端断连事件触发时立即联动 abort signal，且流结束后正确注销 close 监听器', async () => {
+    const reflector = createMockReflector(500);
+    const interceptor = new TimeoutInterceptor(reflector, 500);
     const { context, mockRequest, rawEmitter } = createMockContext();
 
-    // 模拟慢流，但在超时触发前客户端提前断连 (emit close)
     const next: CallHandler = {
       handle: () => {
         setTimeout(() => {
           rawEmitter.emit('close');
         }, 5);
-        return timer(40).pipe(map(() => 'delayed'));
+        return timer(20).pipe(map(() => 'delayed-ok'));
       },
     };
 
-    let caughtError: unknown;
-    await new Promise<void>((resolve) => {
+    const result = await new Promise((resolve) => {
       interceptor.intercept(context, next).subscribe({
-        error: (err) => {
-          caughtError = err;
-          resolve();
-        },
+        next: (val) => resolve(val),
       });
     });
 
-    expect(caughtError).toBeInstanceOf(RequestTimeoutException);
+    expect(result).toBe('delayed-ok');
     const signal = mockRequest[REQUEST_SIGNAL_SYMBOL] as AbortSignal;
     expect(signal.aborted).toBe(true);
+    expect(rawEmitter.listenerCount('close')).toBe(0);
   });
 
   it('场景 11: 显式禁用超时 (<= 0) 且无 rawReq 时，能够正常完成并正确解除监听', async () => {

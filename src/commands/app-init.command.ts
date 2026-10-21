@@ -5,7 +5,6 @@ import { resolve } from 'node:path';
 import { Injectable, Logger } from '@nestjs/common';
 import { Command, CommandRunner, Option } from 'nest-commander';
 
-import { S3StorageDriver } from '@/common/storage/drivers/s3.driver';
 import { StorageService } from '@/common/storage/storage.service';
 import { type DrizzleDB, InjectDb } from '@/database/drizzle/drizzle.service';
 
@@ -156,17 +155,29 @@ export class AppInitCommand extends CommandRunner {
 
   /** Ensure the S3 bucket exists; skipped when STORAGE_S3_URL is unset (local driver) */
   private async initStorage(): Promise<StepResult> {
-    const driver = this.storage.disk('s3');
-    if (!(driver instanceof S3StorageDriver) || !driver.config.bucket) {
+    if (!this.storage.isS3Configured?.()) {
       return { step: 'S3 bucket', status: 'skipped', detail: 'STORAGE_S3_URL not configured, using the local driver' };
     }
 
-    const { bucket } = driver.config;
-    if (await driver.bucketExists()) {
+    const s3Config = this.storage.getS3Config?.();
+    const bucket = s3Config?.bucket ?? 'default';
+
+    if (await this.storage.checkS3BucketExists()) {
       return { step: 'S3 bucket', status: 'skipped', detail: `bucket ${bucket} already exists` };
     }
 
-    await driver.ensureBucket();
-    return { step: 'S3 bucket', status: 'done', detail: `bucket ${bucket} created` };
+    const { created } = await this.storage.ensureS3Bucket();
+    if (created) {
+      return { step: 'S3 bucket', status: 'done', detail: `bucket ${bucket} created` };
+    }
+
+    // `created: false` 同时覆盖「PUT 失败」与「桶已被并发创建/HEAD 曾被拒」两种情形，
+    // 故回查一次再判定：仍不存在即真实失败，必须抛错让命令以非零码退出（否则运维会
+    // 看到绿色的 "bucket created"，故障被推迟到首次上传才以 5xx 暴露）。
+    if (await this.storage.checkS3BucketExists()) {
+      return { step: 'S3 bucket', status: 'skipped', detail: `bucket ${bucket} already exists` };
+    }
+
+    throw new Error(`创建 S3 bucket 失败：${bucket}（检查凭证、建桶权限与 endpoint 连通性）`);
   }
 }

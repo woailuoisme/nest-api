@@ -1,5 +1,6 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, Optional } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import { HttpClient, InjectHttpClient } from '@nestjs/http-client';
 
 import type { CurrentUserPayload } from '@/common/decorators/current-user.decorator';
 import { signHs256Jwt } from '@/common/utils/jwt.util';
@@ -89,7 +90,8 @@ export function parseCentrifugoDsn(dsn: string): CentrifugoConfig {
  *
  * 核心特性：
  * 1. 彻底无状态化与防雪崩：客户端使用 HMAC-SHA256 JWT 令牌鉴权，Centrifugo 本地无状态验签，百万长连接零 RPC 回源；
- * 2. 纯原生零外部依赖：纯原生 node:crypto 签名 + 原生 fetch 调度 Centrifugo HTTP API，无臃肿三方 SDK；
+ * 2. 纯原生零 SDK：纯原生 node:crypto 签名 + `@nestjs/http-client` 调度 Centrifugo HTTP API，无第三方 SDK；
+ *    baseUrl / API Key 由 RealtimeModule 在同一处注册，本类只声明「调哪个 method、带什么 body」；
  * 3. 统一 DSN 配置规范：通过单一 centrifugo:// 格式解析 API Key、HMAC Secret 与服务地址；
  * 4. 生产级高可靠性：业务发布重启不影响前端 WebSocket 长连接，跨节点广播高并发毫秒级下发。
  */
@@ -99,7 +101,10 @@ export class CentrifugoTransport implements RealtimeTransport {
   private config: CentrifugoConfig | null = null;
   private readonly logger = new Logger(CentrifugoTransport.name);
 
-  constructor(private readonly configService: ConfigService<EnvConfig, true>) {
+  constructor(
+    private readonly configService: ConfigService<EnvConfig, true>,
+    @Optional() @InjectHttpClient('centrifugo') private readonly http?: HttpClient,
+  ) {
     this.initConfig();
   }
 
@@ -260,7 +265,7 @@ export class CentrifugoTransport implements RealtimeTransport {
     }
 
     const channel = RealtimeChannel.user(envelope.targetUserId);
-    await this.callApi('publish', {
+    await this.publishApi('publish', {
       channel,
       data: envelope,
     });
@@ -275,7 +280,7 @@ export class CentrifugoTransport implements RealtimeTransport {
     }
 
     const channel = envelope.channel ?? RealtimeChannel.public('default');
-    await this.callApi('publish', {
+    await this.publishApi('publish', {
       channel,
       data: envelope,
     });
@@ -297,7 +302,7 @@ export class CentrifugoTransport implements RealtimeTransport {
       },
     }));
 
-    await this.callApi('batch', {
+    await this.publishApi('batch', {
       commands,
       parallel: true,
     });
@@ -312,7 +317,7 @@ export class CentrifugoTransport implements RealtimeTransport {
     }
 
     try {
-      const res = await this.callApi<{ nodes?: CentrifugoNodeInfo[] }>('info', {});
+      const res = await this.postApi<{ nodes?: CentrifugoNodeInfo[] }>('info', {});
 
       if (!res?.nodes || res.nodes.length === 0) {
         return buildUnavailableHealth('degraded', 'Centrifugo returned empty node list');
@@ -342,7 +347,7 @@ export class CentrifugoTransport implements RealtimeTransport {
     }
 
     try {
-      const response = await this.callApi<{
+      const response = await this.postApi<{
         presence?: Record<string, { client: string; user: string; conn_info?: T; chan_info?: T }>;
       }>('presence', { channel });
 
@@ -361,43 +366,43 @@ export class CentrifugoTransport implements RealtimeTransport {
   }
 
   /**
-   * 底层调度 Centrifugo HTTP Server API
+   * 推送类调用（publish / batch）—— 失败只告警，不向上抛。
+   *
+   * 实时广播是尽力送达：一次推送失败不应让已经提交的业务请求变成 5xx。
+   * 漏推的补偿不在传输层，而在领域层（带 eventId 的幂等事件 + 客户端重连后拉取历史）。
    */
-  private async callApi<R = Record<string, unknown>>(
+  private async publishApi(method: string, params: Record<string, unknown>): Promise<void> {
+    try {
+      await this.postApi(method, params);
+    } catch (err) {
+      this.logger.warn(`[CentrifugoTransport] API ${method} failed: ${(err as Error).message}`);
+    }
+  }
+
+  /**
+   * 探测类调用（info / presence）—— 失败原因原样上抛，由调用方决定如何呈现。
+   *
+   * 早前版本在此统一吞掉异常并返回 null，导致网络故障被 `checkHealth()` 误报为
+   * "Centrifugo returned empty node list"，把排查方向引到错误的地方；
+   * 而 `checkHealth()` 自己的 catch 分支因此永远不可达。
+   */
+  private async postApi<R = Record<string, unknown>>(
     method: string,
     params: Record<string, unknown>,
   ): Promise<R | null> {
-    if (!this.config) {
+    if (!this.config || !this.http) {
       return null;
     }
 
-    const endpoint = `${this.config.apiUrl}/${method}`;
-    try {
-      const res = await fetch(endpoint, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `apikey ${this.config.apiKey}`,
-        },
-        body: JSON.stringify(params),
-      });
+    // baseUrl（含 DSN 的 path 前缀）与 apikey 头均由 RealtimeModule 在客户端注册时统一给出
+    const { data } = await this.http.post<{ result?: R; error?: { code: number; message: string } }>(`/${method}`, {
+      json: params,
+    });
 
-      if (!res.ok) {
-        const errorText = await res.text().catch(() => '');
-        this.logger.warn(`[CentrifugoTransport] API ${method} HTTP ${res.status}: ${errorText}`);
-        return null;
-      }
-
-      const body = (await res.json()) as { result?: R; error?: { code: number; message: string } };
-      if (body.error) {
-        this.logger.warn(`[CentrifugoTransport] API ${method} error: [${body.error.code}] ${body.error.message}`);
-        return null;
-      }
-
-      return body.result ?? null;
-    } catch (err) {
-      this.logger.warn(`[CentrifugoTransport] API request to ${method} failed: ${(err as Error).message}`);
-      return null;
+    if (data?.error) {
+      throw new Error(`Centrifugo API ${method} error [${data.error.code}]: ${data.error.message}`);
     }
+
+    return data?.result ?? null;
   }
 }

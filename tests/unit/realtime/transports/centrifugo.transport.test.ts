@@ -1,6 +1,7 @@
 import * as crypto from 'node:crypto';
 
 import type { ConfigService } from '@nestjs/config';
+import type { HttpClient } from '@nestjs/http-client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { Role } from '@/common/constants/roles';
@@ -8,7 +9,22 @@ import type { CurrentUserPayload } from '@/common/decorators/current-user.decora
 import { PresenceService } from '@/realtime/channels/presence.service';
 import { CentrifugoTransport, parseCentrifugoDsn, signHs256Jwt } from '@/realtime/transports/centrifugo.transport';
 
+/**
+ * 假 HttpClient —— unit 层只断言「接缝用法正确」（调哪个 method、传什么 body），
+ * HTTP 协议行为（非 2xx / 超时 / 重试）由库自身与 integration 层保证，不在此重复模拟。
+ */
+function createFakeHttp() {
+  return { post: vi.fn().mockResolvedValue({ data: { result: {} } }) } as unknown as HttpClient & {
+    post: ReturnType<typeof vi.fn>;
+  };
+}
+
 describe('CentrifugoTransport', () => {
+  const http = createFakeHttp();
+
+  beforeEach(() => {
+    http.post.mockReset().mockResolvedValue({ data: { result: {} } });
+  });
   describe('parseCentrifugoDsn()', () => {
     it('应准确解析标准 HTTP DSN 配置', () => {
       const dsn = 'centrifugo://api-key-1:token-secret-2@127.0.0.1:8000/api?tls=false';
@@ -87,7 +103,7 @@ describe('CentrifugoTransport', () => {
         }),
       };
 
-      transport = new CentrifugoTransport(mockConfigService as unknown as ConfigService<any, true>);
+      transport = new CentrifugoTransport(mockConfigService as unknown as ConfigService<any, true>, http);
     });
 
     afterEach(() => {
@@ -98,10 +114,12 @@ describe('CentrifugoTransport', () => {
       const emptyConfigService = {
         get: vi.fn().mockReturnValue(undefined),
       };
-      const unconfiguredTransport = new CentrifugoTransport(emptyConfigService as unknown as ConfigService<any, true>);
+      const unconfiguredTransport = new CentrifugoTransport(
+        emptyConfigService as unknown as ConfigService<any, true>,
+        http,
+      );
       expect(unconfiguredTransport.getConfig()).toBeNull();
 
-      const fetchSpy = vi.spyOn(globalThis, 'fetch');
       await unconfiguredTransport.sendToUser({
         event: 'test',
         targetUserId: 'user-1',
@@ -116,7 +134,7 @@ describe('CentrifugoTransport', () => {
       await unconfiguredTransport.batchPublish([{ channel: 'chan', data: {} }]);
       const presence = await unconfiguredTransport.getPresence('chan');
 
-      expect(fetchSpy).not.toHaveBeenCalled();
+      expect(http.post).not.toHaveBeenCalled();
       expect(presence).toEqual([]);
     });
 
@@ -124,7 +142,7 @@ describe('CentrifugoTransport', () => {
       const invalidConfigService = {
         get: vi.fn().mockReturnValue('invalid-url-format'),
       };
-      const badTransport = new CentrifugoTransport(invalidConfigService as unknown as ConfigService<any, true>);
+      const badTransport = new CentrifugoTransport(invalidConfigService as unknown as ConfigService<any, true>, http);
       expect(badTransport.getConfig()).toBeNull();
     });
 
@@ -132,7 +150,7 @@ describe('CentrifugoTransport', () => {
       const noSecretConfigService = {
         get: vi.fn().mockReturnValue(undefined),
       };
-      const badTransport = new CentrifugoTransport(noSecretConfigService as unknown as ConfigService<any, true>);
+      const badTransport = new CentrifugoTransport(noSecretConfigService as unknown as ConfigService<any, true>, http);
       expect(() => badTransport.generateConnectionToken(mockUser)).toThrowError(
         /Centrifugo tokenSecret is not configured/,
       );
@@ -142,7 +160,7 @@ describe('CentrifugoTransport', () => {
       const noSecretConfigService = {
         get: vi.fn().mockReturnValue(undefined),
       };
-      const badTransport = new CentrifugoTransport(noSecretConfigService as unknown as ConfigService<any, true>);
+      const badTransport = new CentrifugoTransport(noSecretConfigService as unknown as ConfigService<any, true>, http);
       expect(() => badTransport.generateSubscriptionToken(mockUser, 'channel-1')).toThrowError(
         /Centrifugo tokenSecret is not configured/,
       );
@@ -181,22 +199,16 @@ describe('CentrifugoTransport', () => {
       expect(payload.client).toBe('client-xyz-789');
     });
 
-    it('sendToUser 缺少 targetUserId 时应直接跳过不调用 fetch', async () => {
-      const fetchSpy = vi.spyOn(globalThis, 'fetch');
+    it('sendToUser 缺少 targetUserId 时应直接跳过不调用 HttpClient', async () => {
       await transport.sendToUser({
         event: 'order:shipped',
         data: { orderId: '1001' },
         timestamp: 1720000000000,
       });
-      expect(fetchSpy).not.toHaveBeenCalled();
+      expect(http.post).not.toHaveBeenCalled();
     });
 
     it('sendToUser 应向 user#<userId> 频道调用 Centrifugo publish API', async () => {
-      const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValue({
-        ok: true,
-        json: async () => ({ result: {} }),
-      } as Response);
-
       await transport.sendToUser({
         event: 'order:shipped',
         targetUserId: mockUser.id,
@@ -204,61 +216,39 @@ describe('CentrifugoTransport', () => {
         timestamp: 1720000000000,
       });
 
-      expect(fetchSpy).toHaveBeenCalledWith(
-        'http://127.0.0.1:8000/api/publish',
-        expect.objectContaining({
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            Authorization: 'apikey my-api-key',
+      expect(http.post).toHaveBeenCalledWith('/publish', {
+        json: {
+          channel: `user#${mockUser.id}`,
+          data: {
+            event: 'order:shipped',
+            targetUserId: mockUser.id,
+            data: { orderId: '1001' },
+            timestamp: 1720000000000,
           },
-          body: JSON.stringify({
-            channel: `user#${mockUser.id}`,
-            data: {
-              event: 'order:shipped',
-              targetUserId: mockUser.id,
-              data: { orderId: '1001' },
-              timestamp: 1720000000000,
-            },
-          }),
-        }),
-      );
+        },
+      });
     });
 
     it('broadcast 当未指定 channel 时应默认广播到 public:default', async () => {
-      const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValue({
-        ok: true,
-        json: async () => ({ result: {} }),
-      } as Response);
-
       await transport.broadcast({
         event: 'system:ping',
         data: { status: 'alive' },
         timestamp: 1720000000000,
       });
 
-      expect(fetchSpy).toHaveBeenCalledWith(
-        'http://127.0.0.1:8000/api/publish',
-        expect.objectContaining({
-          method: 'POST',
-          body: JSON.stringify({
-            channel: 'public:default',
-            data: {
-              event: 'system:ping',
-              data: { status: 'alive' },
-              timestamp: 1720000000000,
-            },
-          }),
-        }),
-      );
+      expect(http.post).toHaveBeenCalledWith('/publish', {
+        json: {
+          channel: 'public:default',
+          data: {
+            event: 'system:ping',
+            data: { status: 'alive' },
+            timestamp: 1720000000000,
+          },
+        },
+      });
     });
 
     it('broadcast 应向指定频道调用 Centrifugo publish API', async () => {
-      const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValue({
-        ok: true,
-        json: async () => ({ result: {} }),
-      } as Response);
-
       await transport.broadcast({
         event: 'system:alert',
         channel: 'announcements',
@@ -266,31 +256,23 @@ describe('CentrifugoTransport', () => {
         timestamp: 1720000000000,
       });
 
-      expect(fetchSpy).toHaveBeenCalledWith(
-        'http://127.0.0.1:8000/api/publish',
-        expect.objectContaining({
-          method: 'POST',
-          body: JSON.stringify({
+      expect(http.post).toHaveBeenCalledWith('/publish', {
+        json: {
+          channel: 'announcements',
+          data: {
+            event: 'system:alert',
             channel: 'announcements',
-            data: {
-              event: 'system:alert',
-              channel: 'announcements',
-              data: { text: 'Maintenance scheduled' },
-              timestamp: 1720000000000,
-            },
-          }),
-        }),
-      );
+            data: { text: 'Maintenance scheduled' },
+            timestamp: 1720000000000,
+          },
+        },
+      });
     });
 
-    it('callApi 在 HTTP 状态码非 200 时应记录警告并返回 null', async () => {
-      vi.spyOn(globalThis, 'fetch').mockResolvedValue({
-        ok: false,
-        status: 403,
-        text: async () => 'Forbidden permission denied',
-      } as Response);
+    it('publish 在 HTTP 状态码非 2xx 时只告警，不向上抛', async () => {
+      http.post.mockRejectedValue(new Error('403 Forbidden permission denied'));
 
-      // broadcast 内部会调用 callApi
+      // broadcast 内部调用 publishApi，推送失败必须被吞掉——广播不能把已提交的业务请求变成 5xx
       await expect(
         transport.broadcast({
           event: 'test',
@@ -300,16 +282,8 @@ describe('CentrifugoTransport', () => {
       ).resolves.toBeUndefined();
     });
 
-    it('callApi 在 Centrifugo 返回业务错误码时应记录警告并返回 null', async () => {
-      vi.spyOn(globalThis, 'fetch').mockResolvedValue({
-        ok: true,
-        json: async () => ({
-          error: {
-            code: 100,
-            message: 'Namespace not found',
-          },
-        }),
-      } as Response);
+    it('publish 在 Centrifugo 返回业务错误码时只告警，不向上抛', async () => {
+      http.post.mockResolvedValue({ data: { error: { code: 100, message: 'Namespace not found' } } });
 
       await expect(
         transport.broadcast({
@@ -321,9 +295,8 @@ describe('CentrifugoTransport', () => {
     });
 
     it('getPresence 应成功返回在线客户端并兼容 conn_info 与 chan_info', async () => {
-      vi.spyOn(globalThis, 'fetch').mockResolvedValue({
-        ok: true,
-        json: async () => ({
+      http.post.mockResolvedValue({
+        data: {
           result: {
             presence: {
               'client-aaa': {
@@ -338,11 +311,12 @@ describe('CentrifugoTransport', () => {
               },
             },
           },
-        }),
-      } as Response);
+        },
+      });
 
       const members = await transport.getPresence('presence:room-1');
 
+      expect(http.post).toHaveBeenCalledWith('/presence', { json: { channel: 'presence:room-1' } });
       expect(members).toHaveLength(2);
       expect(members[0]).toEqual({
         clientId: 'client-aaa',
@@ -356,54 +330,43 @@ describe('CentrifugoTransport', () => {
       });
     });
 
-    it('getPresence 在网络异常或服务端报错时应安全降级返回空数组', async () => {
-      vi.spyOn(globalThis, 'fetch').mockRejectedValue(new Error('Connection refused'));
+    it('getPresence 在网络异常时应降级返回空数组', async () => {
+      http.post.mockRejectedValue(new Error('Connection refused'));
 
       const members = await transport.getPresence('presence:room-1');
       expect(members).toEqual([]);
     });
 
-    it('batchPublish 应向 /api/batch 批量提交 publish 指令', async () => {
-      const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValue({
-        ok: true,
-        json: async () => ({ result: { replies: [{}, {}] } }),
-      } as Response);
-
+    it('batchPublish 应向 /batch 批量提交 publish 指令', async () => {
       await transport.batchPublish([
         { channel: 'public:announcements', data: { text: 'Hello' } },
         { channel: 'user#user-1', data: { text: 'Hi' } },
       ]);
 
-      expect(fetchSpy).toHaveBeenCalledWith(
-        'http://127.0.0.1:8000/api/batch',
-        expect.objectContaining({
-          method: 'POST',
-          headers: expect.objectContaining({
-            'Content-Type': 'application/json',
-            Authorization: 'apikey my-api-key',
-          }),
-          body: JSON.stringify({
-            commands: [
-              { publish: { channel: 'public:announcements', data: { text: 'Hello' } } },
-              { publish: { channel: 'user#user-1', data: { text: 'Hi' } } },
-            ],
-            parallel: true,
-          }),
-        }),
-      );
+      expect(http.post).toHaveBeenCalledWith('/batch', {
+        json: {
+          commands: [
+            { publish: { channel: 'public:announcements', data: { text: 'Hello' } } },
+            { publish: { channel: 'user#user-1', data: { text: 'Hi' } } },
+          ],
+          parallel: true,
+        },
+      });
     });
 
     it('batchPublish 传入空数组时应直接返回且不触发网络请求', async () => {
-      const fetchSpy = vi.spyOn(globalThis, 'fetch');
       await transport.batchPublish([]);
-      expect(fetchSpy).not.toHaveBeenCalled();
+      expect(http.post).not.toHaveBeenCalled();
     });
 
     it('checkHealth 未配置 config 时应返回 down 状态及错误说明', async () => {
       const emptyConfigService = {
         get: vi.fn().mockReturnValue(undefined),
       };
-      const unconfiguredTransport = new CentrifugoTransport(emptyConfigService as unknown as ConfigService<any, true>);
+      const unconfiguredTransport = new CentrifugoTransport(
+        emptyConfigService as unknown as ConfigService<any, true>,
+        http,
+      );
 
       const health = await unconfiguredTransport.checkHealth();
       expect(health.status).toBe('down');
@@ -411,14 +374,7 @@ describe('CentrifugoTransport', () => {
     });
 
     it('checkHealth 当 Centrifugo 节点列表为空时应返回 degraded 状态', async () => {
-      vi.spyOn(globalThis, 'fetch').mockResolvedValue({
-        ok: true,
-        json: async () => ({
-          result: {
-            nodes: [],
-          },
-        }),
-      } as Response);
+      http.post.mockResolvedValue({ data: { result: { nodes: [] } } });
 
       const health = await transport.checkHealth();
       expect(health.status).toBe('degraded');
@@ -427,9 +383,8 @@ describe('CentrifugoTransport', () => {
     });
 
     it('checkHealth 正常时应返回健康状态及节点、客户端与频道统计指标', async () => {
-      vi.spyOn(globalThis, 'fetch').mockResolvedValue({
-        ok: true,
-        json: async () => ({
+      http.post.mockResolvedValue({
+        data: {
           result: {
             nodes: [
               {
@@ -439,8 +394,8 @@ describe('CentrifugoTransport', () => {
               },
             ],
           },
-        }),
-      } as Response);
+        },
+      });
 
       const health = await transport.checkHealth();
       expect(health).toEqual({
@@ -462,7 +417,7 @@ describe('CentrifugoTransport', () => {
     });
 
     it('checkHealth 当发生未知异常时应捕获并标记 down', async () => {
-      vi.spyOn(transport as any, 'callApi').mockRejectedValue(new Error('Unexpected system error'));
+      vi.spyOn(transport as any, 'postApi').mockRejectedValue(new Error('Unexpected system error'));
 
       const health = await transport.checkHealth();
       expect(health.status).toBe('down');

@@ -174,11 +174,21 @@ describe('支付回调处理服务', () => {
     expect(mismatched.emitter.emitAsync).not.toHaveBeenCalledWith(PAYMENT_EVENTS.SUCCEEDED, expect.anything());
   });
 
-  it('落库完成阶段失败时应释放幂等锁并上抛，令微信重投', async () => {
+  it('业务已生效但落库失败时应保留租约并上抛，避免微信重投后立即重复派发', async () => {
     const failing = buildService({ completeRejects: true });
 
     await expect(failing.service.handleWepayNotify({}, '{}')).rejects.toThrowError('redis unavailable');
+    expect(failing.emitter.emitAsync).toHaveBeenCalledWith(PAYMENT_EVENTS.SUCCEEDED, expect.anything());
+    expect(failing.idempotency.fail).not.toHaveBeenCalled();
+  });
+
+  it('业务未生效（事件下发失败）时应释放幂等锁并上抛，允许微信重投后重新处理', async () => {
+    const failing = buildService({});
+    (failing.emitter.emitAsync as ReturnType<typeof vi.fn>).mockRejectedValueOnce(new Error('listener failed'));
+
+    await expect(failing.service.handleWepayNotify({}, '{}')).rejects.toThrowError('listener failed');
     expect(failing.idempotency.fail).toHaveBeenCalledWith({ lockKey: 'lock-key', lockToken: 'lock-token' });
+    expect(failing.idempotency.complete).not.toHaveBeenCalled();
   });
 
   it('验签失败应在抢占幂等锁之前中断，不产生任何副作用', async () => {

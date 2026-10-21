@@ -1,7 +1,7 @@
 import { Processor, WorkerHost } from '@nestjs/bullmq';
 import { Injectable, Logger } from '@nestjs/common';
 import type { Job } from 'bullmq';
-import { inArray, lt } from 'drizzle-orm';
+import { and, inArray, lt } from 'drizzle-orm';
 
 import { TOKEN_CLEANUP_QUEUE } from '@/common/constants/queues';
 import { type DrizzleDB, InjectDb } from '@/database/drizzle/drizzle.service';
@@ -16,7 +16,15 @@ const DEFAULT_BATCH_SIZE = 1_000;
 const MAX_BATCHES = 1_000;
 
 /**
- * 会话与令牌清理消费者 — 消费定时任务，批量清理过期 Better Auth 会话与验证码记录。
+ * 幂等键保留宽限期（毫秒）
+ *
+ * 过期记录不立即删除，而是多留一天：幂等记录是支付与写接口的对账凭证，
+ * 出问题当天仍能在库里查到原始请求指纹与响应快照。
+ */
+const IDEMPOTENCY_RETENTION_GRACE_MS = 24 * 60 * 60 * 1000;
+
+/**
+ * 过期记录清理消费者 — 消费定时任务，分批清理过期 Better Auth 会话/验证码与幂等键。
  */
 @Injectable()
 @Processor(TOKEN_CLEANUP_QUEUE)
@@ -65,6 +73,34 @@ export class TokenCleanupProcessor extends WorkerHost {
           this.logger.log(
             `Session/token cleanup complete: ${deletedSessions} sessions and ${deletedVerifications} verifications purged (batchSize=${batchSize})`,
           );
+        }
+
+        // 幂等记录同样只增不减：每次 @Idempotent() 写入与微信回调都会留下一行，
+        // 不清理会令 idempotency_keys 与 expires_at 索引无界膨胀。
+        // DELETE 必须复验 cutoff：SELECT 与 DELETE 之间同一 key 可能被 acquire 重新抢占，
+        // 只按主键删除会误删刚生效的新租约（等价于给重复派发开口子）。
+        const idempotencyCutoff = Date.now() - IDEMPOTENCY_RETENTION_GRACE_MS;
+        const deletedIdempotencyKeys = await this.purgeInBatches(
+          (ids) =>
+            this.db
+              .delete(schema.idempotencyKeys)
+              .where(
+                and(
+                  inArray(schema.idempotencyKeys.keyHash, ids),
+                  lt(schema.idempotencyKeys.expiresAt, idempotencyCutoff),
+                ),
+              )
+              .returning({ id: schema.idempotencyKeys.keyHash }),
+          () =>
+            this.db
+              .select({ id: schema.idempotencyKeys.keyHash })
+              .from(schema.idempotencyKeys)
+              .where(lt(schema.idempotencyKeys.expiresAt, idempotencyCutoff))
+              .limit(batchSize),
+        );
+
+        if (deletedIdempotencyKeys > 0) {
+          this.logger.log(`Idempotency cleanup complete: ${deletedIdempotencyKeys} expired keys purged`);
         }
         break;
       }
