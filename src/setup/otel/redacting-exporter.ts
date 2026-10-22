@@ -1,4 +1,4 @@
-import type { ReadableSpan, SpanExporter } from '@opentelemetry/sdk-trace-base';
+import type { ReadableSpan, SpanExporter } from '@opentelemetry/sdk-trace';
 
 /**
  * 凭据以下发形式出现在 query 中的第三方网关主机。

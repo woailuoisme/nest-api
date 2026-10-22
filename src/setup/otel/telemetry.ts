@@ -6,9 +6,17 @@
  * 未配置 `OTEL_EXPORTER_OTLP_ENDPOINT` 时不初始化（动态 import 均不执行）：
  * 本地与测试环境零配置可用、零依赖加载开销。
  *
- * ponytail: 纯 ESM 产物下 require-hook 类探针（ioredis/pg 等）无法 patch，
- * 生效的是 diagnostics-channel 类探针（HTTP server spans 由 @fastify/otel 承担、出站 fetch 由 undici 探针承担）；
- * 如需完整覆盖需引入 --experimental-loader hook（Node 24 有已知挂起 issue，暂不启用）。
+ * 探针按白名单显式装配，不用 `@opentelemetry/auto-instrumentations-node` 全家桶：
+ * 后者会引入 40+ 个与本项目无关的客户端探针（mongo/mysql/oracledb/cassandra/kafka/aws-sdk…），
+ * 其中 pino 探针还会与本项目 logger 的 traceMixin 重复写入 trace_id。
+ *
+ * 不使用 `instrumentation-nestjs-core`：其 supportedVersions 为 `@nestjs/core >=4.0.0 <12`，
+ * 本项目 Nest 12 下 require-instrumentation 会静默跳过，装了也零产出。
+ *
+ * 探针生效方式（Node 24 + ESM 实测，勿凭“纯 ESM 不能 patch”推断）：
+ * - require-hook 类：http / ioredis 的目标包均为 CJS，经 Module._load hook 正常 patch（已验证 __wrapped）；
+ * - diagnostics-channel 类：undici（`undici:request:*`）与 @fastify/otel 直接订阅 channel，与加载方式无关。
+ * 未覆盖：ESM-only 依赖的 require-hook 探针（如 postgres.js），需 loader hook（Node 24 有已知挂起 issue，暂不启用）。
  */
 import { appName } from '@/common/constants/app.constants';
 import { resolveServiceName } from '@/setup/logger/logger.config';
@@ -33,7 +41,10 @@ const endpoint = process.env.OTEL_EXPORTER_OTLP_ENDPOINT;
 if (endpoint) {
   const [
     { NodeSDK },
-    { getNodeAutoInstrumentations },
+    { HttpInstrumentation },
+    { UndiciInstrumentation },
+    { IORedisInstrumentation },
+    { RuntimeNodeInstrumentation },
     { FastifyOtelInstrumentation },
     { OTLPTraceExporter },
     { OTLPMetricExporter },
@@ -41,7 +52,10 @@ if (endpoint) {
     { defaultResource, resourceFromAttributes },
   ] = await Promise.all([
     import('@opentelemetry/sdk-node'),
-    import('@opentelemetry/auto-instrumentations-node'),
+    import('@opentelemetry/instrumentation-http'),
+    import('@opentelemetry/instrumentation-undici'),
+    import('@opentelemetry/instrumentation-ioredis'),
+    import('@opentelemetry/instrumentation-runtime-node'),
     import('@fastify/otel'),
     import('@opentelemetry/exporter-trace-otlp-proto'),
     import('@opentelemetry/exporter-metrics-otlp-proto'),
@@ -63,10 +77,14 @@ if (endpoint) {
     // 复数形态（IMetricReader[]）：单数 metricReader 已在 sdk-node 0.300 移除
     metricReaders: [new PeriodicExportingMetricReader({ exporter: new OTLPMetricExporter() })],
     instrumentations: [
-      getNodeAutoInstrumentations({
-        // fs 探针产生海量无价值 spans，显式关闭
-        '@opentelemetry/instrumentation-fs': { enabled: false },
-      }),
+      // 出站 Node http/https 客户端（阿里云短信 / Meilisearch SDK 等）
+      new HttpInstrumentation(),
+      // 出站 fetch（undici 全局 fetch；redacting-exporter 脱敏的就是它产出的 span）
+      new UndiciInstrumentation(),
+      // Redis 命令（含 BullMQ 连接池）：限流热路径使 span 量随请求数线性增长，需相应下调采样率
+      new IORedisInstrumentation(),
+      // 运行时指标（事件循环 / GC / 堆），metrics 通道的主要来源
+      new RuntimeNodeInstrumentation(),
       // registerOnInitialization 经 diagnostics channel 自动挂接所有 Fastify 实例（含 Bull Board）
       new FastifyOtelInstrumentation({ registerOnInitialization: true }),
     ],
