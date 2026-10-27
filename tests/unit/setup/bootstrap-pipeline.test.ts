@@ -5,7 +5,7 @@ import { isAppShuttingDown, setAppShuttingDown, setupShutdownHooks, setupWorkerS
 import { PinoLoggerService } from '@/setup/logger';
 
 describe('Bootstrap Pipeline & Lifecycle Helpers', () => {
-  it('createFastifyAdapter 应返回配置了 genReqId 与 qs 解析器的 FastifyAdapter', () => {
+  it('createFastifyAdapter 应返回配置了 genReqId 的 FastifyAdapter', () => {
     const adapter = createFastifyAdapter();
     expect(adapter).toBeDefined();
     expect(typeof adapter.getInstance).toBe('function');

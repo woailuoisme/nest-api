@@ -3,6 +3,7 @@ import { z } from 'zod';
 
 import { Role } from '@/common/constants/roles';
 import { PageOptionsSchema, paginatedEnvelopeSchema } from '@/common/dto/pagination.dto';
+import { SpatieQueryParamsSchema } from '@/common/dto/query.dto';
 
 // ─── 请求 DTO（Nest 12 原生 Standard Schema：schema 即契约，类型由 z.infer 派生）────────
 
@@ -16,11 +17,9 @@ export const CreateUserSchema = z.object({
 
 export type CreateUserRequest = z.infer<typeof CreateUserSchema>;
 
-export const FindUsersSchema = PageOptionsSchema.extend({
+export const FindUsersSchema = PageOptionsSchema.extend(SpatieQueryParamsSchema.shape).extend({
   search: z.string().optional().describe('按姓名或邮箱模糊搜索'),
-  role: z.enum(Role).optional().describe('按角色筛选'),
-  sort: z.string().optional().describe('排序表达式 (如 -createdAt,name)'),
-  filter: z.record(z.string(), z.string()).optional().describe('Spatie 风格过滤对象'),
+  role: z.enum(Role).optional().describe('按角色筛选（等价 filter[role]=<role>）'),
 });
 
 export type FindUsersRequest = z.infer<typeof FindUsersSchema>;

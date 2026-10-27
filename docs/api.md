@@ -367,23 +367,29 @@ Authorization: Bearer <your_access_token>
   }
   ```
 
-### 6.3 查询过滤、排序与检索规范 (Spatie / JSON:API 规范)
+### 6.3 查询过滤、排序与检索规范 (Spatie Query Builder v7)
 
-- **字段过滤**：
-  - 精确匹配：`?filter[<field>]=<value>`
-  - 多值匹配 (IN 查询)：`?filter[<field>]=<val1>,<val2>`
-  - 区间过滤：`?filter[<field>After]=<date>` 或 `?filter[<field>Min]=<num>`
-- **紧凑链式排序**：
-  - 升序：`?sort=<field>`；降序：`?sort=-<field>`；复合排序：`?sort=-<field1>,<field2>`
-  - **确定性保底**：服务端必须默认提供唯一确定性排序策略（如 ID 或创建时间倒序），防止分页遍历数据漂移（Page Drift）。
-- **全局搜索**：`?search=<keyword>`（服务端在多个核心列执行模糊检索）。
-- **关联加载与字段投影**：
-  - 关联预加载：`?include=<relation1>,<relation2>`（杜绝 N+1 查询）
-  - 稀疏字段集：`?fields[<resource>]=<field1>,<field2>`（精简传输体积）
+> **解析口径**：`filter[...]` / `fields[...]` 由适配器展开为一层嵌套对象（`src/setup/query-expander.ts`），
+> 其余参数保持扁平；随后交由 `parseSpatieQuery` 归一化。仅支持一层括号，`filter[a][b]` 不被展开。
+
+| 功能 | URL 语法 | 语义 |
+|---|---|---|
+| 普通过滤 | `?filter[<field>]=<value>` | 精确匹配（模糊匹配需服务端声明 partial 白名单） |
+| 多值过滤 | `?filter[<field>]=<v1>,<v2>` | 精确过滤 → `IN`；partial 过滤 → 多值之间 `OR` |
+| 动态比较算子 | `?filter[<field>]=>=3000` | 支持 `=` `!=` `>` `>=` `<` `<=`（`<>` 等价 `!=`）；算子紧贴值前缀，`>=` 需编码为 `%3E%3D` |
+| 排序 | `?sort=-<field1>,<field2>` | `-` 前缀为降序，逗号分隔多字段 |
+| 关联加载 | `?include=<relation1>,<relation2>` | **预留参数**：解析为去重列表并透出，当前未自动应用（端点如需预加载自行消费） |
+| 字段选择 | `?fields[<resource>]=<field1>,<field2>` | **预留参数**：解析为稀疏字段集并透出，当前未自动应用 |
+
+- **确定性保底**：服务端必须默认提供唯一确定性排序策略（如 ID 或创建时间倒序），防止分页遍历数据漂移（Page Drift）。
+- **全局搜索**：`?search=<keyword>`（服务端在多个核心列执行模糊检索，LIKE 通配符由服务端转义）。
+- **未声明字段静默忽略**：只有映射进 `filterableColumns` / `partialColumns` / `sortableColumns` 白名单的字段才生效；未声明的 `filter[...]`、`sort` 字段不会报错，也不会进入 SQL（对齐 Spatie 白名单语义）。`buildSpatieConditions` 会回传 `ignoredFilters` / `ignoredSorts`，端点可据此返回 400 实现严格模式。
+- **解析防御上限**：单条过滤最多保留 100 个值（超出截断）；数字列非数值、日期列非法日期一律忽略该过滤条件，不让非法输入落到数据库引发 5xx。
+- **DTO 声明要求**：`@Query({ schema })` 使用 Zod `strip` 语义，端点必须在 DTO 中声明 `filter` / `fields` / `include` / `sort`，否则对应参数会被静默丢弃，表现为「请求 200 但过滤未生效」。
 - **综合请求示例**：
 
   ```http
-  GET /{version}/{resources}?page=1&pageSize=20&search=<keyword>&filter[<field>]=<value>&sort=-<field>&include=<relation>
+  GET /{version}/{resources}?page=1&pageSize=20&search=<keyword>&filter[<field>]=<value>&filter[<numField>]=%3E%3D100&sort=-<field>&include=<relation>&fields[<resource>]=id,name
   ```
 
 ---

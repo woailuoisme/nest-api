@@ -81,7 +81,6 @@ src/
 ├── common/         # 全局 Filter/Guard/Interceptor/Pipe/Decorator/DTO/utils
 │   ├── constants/  # PATHS、NETWORK、Role、Permission 等常量
 │   ├── decorators/ # @Roles() @Permissions() @CurrentUser() 等
-│   ├── excel/      # ExcelJS 封装
 │   ├── mail/       # 统一邮件服务 (直连 nodemailer + 自持 Handlebars 渲染器 + MJML 模板)
 │   ├── media/      # 媒体处理服务 (imgproxy JIT动态实时渲染/纯JS元数据/矢量二维码/命名策略)
 │   ├── search/     # Laravel Scout 风格搜索引擎抽象 (Meilisearch / Noop / 队列异步同步)
@@ -161,7 +160,7 @@ tests/
 - **全文搜索模型解耦 (Laravel Scout 模式)**：数据表/实体如需支持全文检索，统一在 `src/database/search/` 目录下实现 `Searchable` 契约（如 `user.searchable.ts`）并注册入全局索引映射；业务数据增删改时通过 `SearchSyncService` 发布队列异步同步任务，严禁在业务 Service 中直接硬编码调用底层搜索引擎 SDK（如 Meilisearch 客户端），保障驱动可插拔性（Meilisearch / Noop 空驱动降级）。
 - **工业物联网总线解耦 (Decoupled MQTT & Telemetry)**：物联网设备指令交互与遥测采集集中收敛于顶级目录 `src/iot/`。传输层与业务服务一体化内聚，监听统一使用声明式 `@MqttSubscribe(topic, options)` 装饰器；向物理/仿真设备下发控制指令统一调用 `IotCommandService` 或 `MqttService.publish()` / RPC，禁止外部业务逻辑直连外部 MQTT Broker 客户端。
 - **上传链路 (Native Multipart Pipeline)**：文件上传统一使用平台原生能力 —— 路由级 `FileInterceptor` / `FilesInterceptor` / `FileStreamInterceptor`（`@nestjs/platform-fastify/multipart`）+ `@nestjs/common` 的 `@UploadedFile/@UploadedFiles` 参数装饰器。大小上限由拦截器 `limits.fileSize` 在流式写入过程中强制（超限即 413）；MIME / 扩展名白名单由 `createUploadFileFilter()` 注入 `fileFilter`（违规 400）。载荷类型 `UploadedFile = MemoryUpload | MultipartFileStream`（`src/common/storage/interfaces/upload.interface.ts`）交由 `MediaService.save()` 落盘。**表单字段名（如头像的 `file`）属对外契约的一部分**（原生拦截器按字段名精确匹配）；**禁止再引入自研的全局 multipart 收集拦截器或第二套解析实现**（历史自研实现因争抢同一条 busboy 流、需自管三层临时文件清理，已在 Nest 12 对齐中删除）。
-- **模块可见性 (@Global 政策)**：仅**叶基础设施**（Storage / Excel / Mail / Search / Cache / Logger / Redis / Drizzle / Idempotency / Jobs / Wechat）使用 `@Global()`；**领域模块一律显式 import**（`MediaModule` / `IotModule` / `RealtimeModule`），保证依赖关系可追溯。新增领域模块时请在使用方 `imports` 中显式声明，不要依赖全局可见性。
+- **模块可见性 (@Global 政策)**：仅**叶基础设施**（Storage / Mail / Search / Cache / Logger / Redis / Drizzle / Idempotency / Jobs / Wechat）使用 `@Global()`；**领域模块一律显式 import**（`MediaModule` / `IotModule` / `RealtimeModule`），保证依赖关系可追溯。新增领域模块时请在使用方 `imports` 中显式声明，不要依赖全局可见性。
 
 ### 环境变量
 

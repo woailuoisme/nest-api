@@ -76,7 +76,7 @@ describe('PinoLoggerService', () => {
       const mockPino = createMockPino();
       const service = new PinoLoggerService(mockPino as never);
 
-      service.log('ExcelModule dependencies initialized', 'InstanceLoader');
+      service.log('UsersModule dependencies initialized', 'InstanceLoader');
       service.log('AppController {/} (version: Neutral):', 'RoutesResolver');
       service.log('Mapped {/, GET} (version: Neutral) route', 'RouterExplorer');
       service.log('Nest application successfully started', 'NestApplication');

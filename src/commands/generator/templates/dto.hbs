@@ -2,6 +2,7 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { z } from 'zod';
 import { PageOptionsSchema, paginatedEnvelopeSchema } from '@/common/dto/pagination.dto';
+import { SpatieQueryParamsSchema } from '@/common/dto/query.dto';
 
 // ─── Request DTO schemas (Nest 12 native Standard Schema: the schema IS the contract, types derived via z.infer) ──
 
@@ -13,7 +14,7 @@ export const Create{{FeatureName}}Schema = z.object({
 
 export type Create{{FeatureName}}Request = z.infer<typeof Create{{FeatureName}}Schema>;
 
-export const Find{{FeatureName}}sSchema = PageOptionsSchema.extend({
+export const Find{{FeatureName}}sSchema = PageOptionsSchema.extend(SpatieQueryParamsSchema.shape).extend({
 {{#if searchFields.length}}
   search: z.string().optional().describe('Search keyword'),
 {{/if}}

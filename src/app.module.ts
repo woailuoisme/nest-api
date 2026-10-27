@@ -14,7 +14,6 @@ import { FEATURE_MODULES } from '@/features';
 
 import { CommandsModule } from './commands/commands.module';
 import { CacheModule } from './common/cache';
-import { ExcelModule } from './common/excel/excel.module';
 import { HttpModule } from './common/http';
 import { IdempotencyModule } from './common/idempotency';
 import { MailModule } from './common/mail';
@@ -71,7 +70,6 @@ import { LoggerModule } from './setup/logger/logger.module';
     WepayModule,
     MiniprogramModule,
     SearchModule,
-    ExcelModule,
     IotModule,
     HttpModule,
     ResilienceModule,

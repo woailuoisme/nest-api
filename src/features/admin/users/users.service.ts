@@ -92,13 +92,19 @@ export class UsersService {
 
   async findAll(query: FindUsersRequest) {
     const parsed = parseSpatieQuery(query as unknown as Record<string, unknown>);
-    if (query.role && !parsed.filters.role) {
-      parsed.filters.role = query.role;
+    // 顶层 role 为历史兼容参数：等价 filter[role]=<role>，已显式过滤时不覆盖
+    if (query.role && !parsed.filters.some((filter) => filter.field === 'role')) {
+      parsed.filters.push({ field: 'role', operator: '=', values: [query.role] });
     }
 
     const { rows, total } = await paginateSpatieQuery(this.db, user, parsed, {
       filterableColumns: {
         role: user.role,
+        createdAt: user.createdAt,
+      },
+      partialColumns: {
+        name: user.name,
+        email: user.email,
       },
       searchableColumns: [user.name, user.email],
       sortableColumns: {

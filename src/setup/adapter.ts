@@ -1,9 +1,9 @@
 import { FastifyAdapter } from '@nestjs/platform-fastify';
-import qs from 'qs';
 
 import { isProductionEnv, isTruthyEnv } from '@/common/constants/app.constants';
 
 import { createRequestId } from './logger';
+import { parseSpatieQuerystring } from './query-expander';
 
 /** `trustProxy` 支持的类型（与 Fastify 的类型声明严格对齐） */
 type TrustProxyOption = boolean | string | string[];
@@ -54,7 +54,11 @@ export function resolveTrustProxy(raw?: string): TrustProxyOption {
 }
 
 /**
- * 创建预配置的 FastifyAdapter 实例（集成全链路 Request ID 生成与扩展 QueryString 解析）
+ * 创建预配置的 FastifyAdapter 实例（集成全链路 Request ID 生成与 Spatie 查询串展开）
+ *
+ * QueryString 解析：在 Fastify 内置扁平解析之上只做 `filter[...]` / `fields[...]` 的
+ * 一层展开（见 `query-expander.ts`），使 `@Query({ schema })` 能按 `filter` / `fields`
+ * 键做 Zod 校验；其余参数保持扁平，`sort` / `include` / `search` 等由 `parseSpatieQuery` 解析。
  */
 export function createFastifyAdapter(): FastifyAdapter {
   return new FastifyAdapter({
@@ -64,7 +68,7 @@ export function createFastifyAdapter(): FastifyAdapter {
     trustProxy: resolveTrustProxy(process.env.TRUST_PROXY),
     genReqId: createRequestId,
     routerOptions: {
-      querystringParser: (str: string) => qs.parse(str, { allowDots: true, comma: true, depth: 5 }),
+      querystringParser: parseSpatieQuerystring,
     },
   });
 }
