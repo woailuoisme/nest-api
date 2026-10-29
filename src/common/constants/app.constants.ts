@@ -23,12 +23,15 @@ export const DEFAULT_DB_URL = 'postgresql://postgres:postgres@localhost:5432/nes
 export const DEFAULT_APP_NAME = 'nest-api';
 
 /**
- * 公开的开发用 Better Auth 密钥（曾长期作为 schema 默认值与 `.env.example` 预置值）。
+ * 公开的开发用 JWT 签名密钥。
  *
  * 仅限非生产环境：生产环境除「必填」外还必须校验「不得等于此值」，
  * 否则从旧模板拷贝 `.env` 的部署会带着公开密钥静默上线。
  */
-export const DEV_ONLY_AUTH_SECRET = 'nestforge-better-auth-secret-key-32-chars!';
+export const DEV_ONLY_JWT_SECRET = 'nestforge-dev-only-jwt-secret-32-chars!!';
+
+/** 公开的开发用 MFA 加密密钥（同样禁止在生产环境使用） */
+export const DEV_ONLY_MFA_KEY = 'nestforge-dev-only-mfa-encryption-key-32ch';
 
 /**
  * 公开的开发用 IoT 设备胡椒值（Pepper）。

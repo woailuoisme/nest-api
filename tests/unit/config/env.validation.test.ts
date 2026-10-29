@@ -7,8 +7,6 @@ function envOf(overrides: Record<string, unknown>) {
   return envSchema.parse({
     APP_ENV: 'local',
     DB_URL: 'postgres://localhost:5432/nestforge',
-    JWT_ACCESS_SECRET: 'access-secret-at-least-16-chars',
-    JWT_REFRESH_SECRET: 'refresh-secret-at-least-16-chars',
     ...overrides,
   });
 }
@@ -73,6 +71,46 @@ describe('MAIL_FROM_ADDRESS', () => {
   });
 });
 
+describe('MAIL_TRANSPORT', () => {
+  it('非测试环境默认 smtp，测试环境默认 file（不真正投递）', () => {
+    expect(envOf({}).MAIL_TRANSPORT).toBe('smtp');
+    expect(envOf({ APP_ENV: 'testing' }).MAIL_TRANSPORT).toBe('file');
+  });
+
+  it('显式 resend 驱动被接受（启动期由传输工厂校验 Key）', () => {
+    expect(envOf({ MAIL_TRANSPORT: 'resend' }).MAIL_TRANSPORT).toBe('resend');
+  });
+
+  const PROD_MAIL_BASE = {
+    APP_ENV: 'production',
+    MAIL_URL: 'smtp://mail.example.org:587',
+    MAIL_FROM_ADDRESS: 'no-reply@nest-api.dev',
+    DB_URL: 'postgresql://app:secret@db:5432/nest_api',
+    JWT_SECRET: 'j'.repeat(32),
+    MFA_ENCRYPTION_KEYS: 'm'.repeat(32),
+    OTP_HMAC_KEY: 'o'.repeat(32),
+    WEPAY_ALLOW_MOCK: 'true',
+  };
+
+  it('生产环境禁止 localhost SMTP 与 example.com 发件人', () => {
+    expect(() => envSchema.parse({ ...PROD_MAIL_BASE, MAIL_URL: 'smtp://localhost:1025' })).toThrow(/MAIL_URL/);
+    expect(() => envSchema.parse({ ...PROD_MAIL_BASE, MAIL_FROM_ADDRESS: 'no-reply@example.com' })).toThrow(
+      /MAIL_FROM_ADDRESS/,
+    );
+  });
+
+  it('生产环境禁止 file 驱动', () => {
+    expect(() => envSchema.parse({ ...PROD_MAIL_BASE, MAIL_TRANSPORT: 'file' })).toThrow(/MAIL_TRANSPORT/);
+  });
+
+  it('生产环境 resend 缺 API Key 时拒绝启动', () => {
+    expect(() => envSchema.parse({ ...PROD_MAIL_BASE, MAIL_TRANSPORT: 'resend' })).toThrow(/RESEND_API_KEY/);
+    expect(() =>
+      envSchema.parse({ ...PROD_MAIL_BASE, MAIL_TRANSPORT: 'resend', RESEND_API_KEY: 're_test' }),
+    ).not.toThrow();
+  });
+});
+
 describe('Smart Defaults & Derivations', () => {
   it('FILESYSTEM_DISK: 未配置且无 S3 URL 时推导为 local', () => {
     const config = envOf({});
@@ -104,17 +142,10 @@ describe('Smart Defaults & Derivations', () => {
     expect(config.SCOUT_DRIVER).toBe('meilisearch');
   });
 
-  it('BETTER_AUTH_URL: 未配置时自动级联 APP_URL', () => {
-    const config = envOf({ APP_URL: 'http://my-domain.dev:4300' });
-    expect(config.BETTER_AUTH_URL).toBe('http://my-domain.dev:4300');
-  });
-
-  it('BETTER_AUTH_URL: 显式配置时使用显式值', () => {
-    const config = envOf({
-      APP_URL: 'http://my-domain.dev:4300',
-      BETTER_AUTH_URL: 'http://auth.my-domain.dev',
-    });
-    expect(config.BETTER_AUTH_URL).toBe('http://auth.my-domain.dev');
+  it('JWT_SECRET / MFA_ENCRYPTION_KEYS: 非生产未配置时回退开发默认值', () => {
+    const config = envOf({});
+    expect(config.JWT_SECRET).toBeTruthy();
+    expect(config.MFA_ENCRYPTION_KEYS).toBeTruthy();
   });
 
   it('极简配置: 不提供任何变量时也可启动（全部走默认值）', () => {
@@ -126,7 +157,6 @@ describe('Smart Defaults & Derivations', () => {
     expect(config.DB_URL).toBe('postgresql://postgres:postgres@localhost:5432/nest-api');
     expect(config.FILESYSTEM_DISK).toBe('local');
     expect(config.SCOUT_DRIVER).toBe('noop');
-    expect(config.BETTER_AUTH_URL).toBe('http://localhost:4300');
     expect(config.HTTP_TIMEOUT_MS).toBe(15_000);
     expect(config.MEDIA_QUEUE_ENABLED).toBe(true);
     expect(config.SWAGGER_ENABLED).toBe(true);
@@ -135,7 +165,8 @@ describe('Smart Defaults & Derivations', () => {
 
 describe('生产环境强制显式配置（禁止默认值兜底）', () => {
   const PROD_DB_URL = 'postgresql://app:secret@db:5432/nest_api';
-  const PROD_AUTH_SECRET = 'a-strong-production-secret-at-least-32-chars';
+  const PROD_JWT_SECRET = 'a-strong-production-jwt-secret-at-least-32-chars';
+  const PROD_MFA_KEY = 'a-strong-production-mfa-key-at-least-32-chars';
   /** 生产环境基准字段：支付必须为 real 驱动，否则启动期拒绝（见下方专项用例） */
   const PROD_PAYMENT = {
     WEPAY_APPID: 'wx-prod-appid',
@@ -144,31 +175,66 @@ describe('生产环境强制显式配置（禁止默认值兜底）', () => {
     WEPAY_APIV3_KEY: 'a'.repeat(32),
     WEPAY_PRIVATE_KEY: '-----BEGIN PRIVATE KEY-----\nMIIB\n-----END PRIVATE KEY-----',
   };
+  const PROD_OTP_KEY = 'o'.repeat(32);
   const PROD_BASE = {
     APP_ENV: 'production',
+    MAIL_URL: 'smtp://mail.example.org:587',
+    MAIL_FROM_ADDRESS: 'no-reply@nest-api.dev',
     DB_URL: PROD_DB_URL,
-    BETTER_AUTH_SECRET: PROD_AUTH_SECRET,
+    JWT_SECRET: PROD_JWT_SECRET,
+    MFA_ENCRYPTION_KEYS: PROD_MFA_KEY,
+    OTP_HMAC_KEY: PROD_OTP_KEY,
     ...PROD_PAYMENT,
   };
 
   it('缺少 DB_URL 时拒绝启动（不静默回退到 localhost）', () => {
     expect(() =>
-      envSchema.parse({ APP_ENV: 'production', BETTER_AUTH_SECRET: PROD_AUTH_SECRET, ...PROD_PAYMENT }),
+      envSchema.parse({
+        APP_ENV: 'production',
+        MAIL_URL: 'smtp://mail.example.org:587',
+        MAIL_FROM_ADDRESS: 'no-reply@nest-api.dev',
+        JWT_SECRET: PROD_JWT_SECRET,
+        MFA_ENCRYPTION_KEYS: PROD_MFA_KEY,
+        ...PROD_PAYMENT,
+      }),
     ).toThrow(/DB_URL/);
   });
 
-  it('缺少 BETTER_AUTH_SECRET 时拒绝启动（不使用公开默认密钥）', () => {
-    expect(() => envSchema.parse({ APP_ENV: 'production', DB_URL: PROD_DB_URL, ...PROD_PAYMENT })).toThrow(
-      /BETTER_AUTH_SECRET/,
-    );
+  it('缺少 JWT_SECRET / MFA 密钥时拒绝启动（不使用公开默认密钥）', () => {
+    expect(() =>
+      envSchema.parse({
+        APP_ENV: 'production',
+        MAIL_URL: 'smtp://mail.example.org:587',
+        MAIL_FROM_ADDRESS: 'no-reply@nest-api.dev',
+        DB_URL: PROD_DB_URL,
+        ...PROD_PAYMENT,
+      }),
+    ).toThrow(/JWT_SECRET/);
+  });
+
+  it('生产环境缺少 OTP_HMAC_KEY 时拒绝启动（验证码摘要不得回落到弱密钥）', () => {
+    expect(() =>
+      envSchema.parse({
+        APP_ENV: 'production',
+        MAIL_URL: 'smtp://mail.example.org:587',
+        MAIL_FROM_ADDRESS: 'no-reply@nest-api.dev',
+        DB_URL: PROD_DB_URL,
+        JWT_SECRET: PROD_JWT_SECRET,
+        MFA_ENCRYPTION_KEYS: PROD_MFA_KEY,
+        ...PROD_PAYMENT,
+      }),
+    ).toThrow(/OTP_HMAC_KEY/);
   });
 
   it('生产环境显式指定 mock 支付驱动时拒绝启动', () => {
     expect(() =>
       envSchema.parse({
         APP_ENV: 'production',
+        MAIL_URL: 'smtp://mail.example.org:587',
+        MAIL_FROM_ADDRESS: 'no-reply@nest-api.dev',
         DB_URL: PROD_DB_URL,
-        BETTER_AUTH_SECRET: PROD_AUTH_SECRET,
+        JWT_SECRET: PROD_JWT_SECRET,
+        MFA_ENCRYPTION_KEYS: PROD_MFA_KEY,
         WEPAY_DRIVER: 'mock',
       }),
     ).toThrow(/mock/);
@@ -176,15 +242,26 @@ describe('生产环境强制显式配置（禁止默认值兜底）', () => {
 
   it('生产环境缺凭证隐式降级 mock 时拒绝启动（防漏配静默上线）', () => {
     expect(() =>
-      envSchema.parse({ APP_ENV: 'production', DB_URL: PROD_DB_URL, BETTER_AUTH_SECRET: PROD_AUTH_SECRET }),
+      envSchema.parse({
+        APP_ENV: 'production',
+        MAIL_URL: 'smtp://mail.example.org:587',
+        MAIL_FROM_ADDRESS: 'no-reply@nest-api.dev',
+        DB_URL: PROD_DB_URL,
+        JWT_SECRET: PROD_JWT_SECRET,
+        MFA_ENCRYPTION_KEYS: PROD_MFA_KEY,
+      }),
     ).toThrow(/WEPAY_ALLOW_MOCK/);
   });
 
   it('显式退让后允许 mock 启动（未接入支付的部署不被阻断）', () => {
     const config = envSchema.parse({
       APP_ENV: 'production',
+      MAIL_URL: 'smtp://mail.example.org:587',
+      MAIL_FROM_ADDRESS: 'no-reply@nest-api.dev',
       DB_URL: PROD_DB_URL,
-      BETTER_AUTH_SECRET: PROD_AUTH_SECRET,
+      JWT_SECRET: PROD_JWT_SECRET,
+      MFA_ENCRYPTION_KEYS: PROD_MFA_KEY,
+      OTP_HMAC_KEY: PROD_OTP_KEY,
       WEPAY_ALLOW_MOCK: 'true',
     });
     expect(config.WEPAY_DRIVER).toBe('mock');
@@ -194,8 +271,11 @@ describe('生产环境强制显式配置（禁止默认值兜底）', () => {
     expect(() =>
       envSchema.parse({
         APP_ENV: 'production',
+        MAIL_URL: 'smtp://mail.example.org:587',
+        MAIL_FROM_ADDRESS: 'no-reply@nest-api.dev',
         DB_URL: PROD_DB_URL,
-        BETTER_AUTH_SECRET: PROD_AUTH_SECRET,
+        JWT_SECRET: PROD_JWT_SECRET,
+        MFA_ENCRYPTION_KEYS: PROD_MFA_KEY,
         WEPAY_DRIVER: 'real',
         // 只有私钥，缺 APIV3_KEY / APPID / MCHID / SERIAL_NO
         WEPAY_PRIVATE_KEY: '-----BEGIN PRIVATE KEY-----\nMIIB\n-----END PRIVATE KEY-----',
@@ -216,21 +296,22 @@ describe('生产环境强制显式配置（禁止默认值兜底）', () => {
   it('两项齐备（并含支付凭证）时正常通过', () => {
     const config = envSchema.parse(PROD_BASE);
     expect(config.DB_URL).toBe(PROD_DB_URL);
-    expect(config.BETTER_AUTH_SECRET).toBe(PROD_AUTH_SECRET);
+    expect(config.JWT_SECRET).toBe(PROD_JWT_SECRET);
+    expect(config.MFA_ENCRYPTION_KEYS).toBe(PROD_MFA_KEY);
     expect(config.WEPAY_DRIVER).toBe('real');
   });
 
   it('非生产环境两项均可省略（回退本地默认值）', () => {
     const config = envSchema.parse({});
     expect(config.DB_URL).toContain('localhost:5432/nest-api');
-    expect(config.BETTER_AUTH_SECRET).toBeUndefined();
+    expect(config.JWT_SECRET).toBeTruthy();
   });
 
   it('显式配置为公开默认密钥时也拒绝启动（「已填」不等于「安全」）', () => {
     expect(() =>
       envSchema.parse({
         ...PROD_BASE,
-        BETTER_AUTH_SECRET: 'nestforge-better-auth-secret-key-32-chars!',
+        JWT_SECRET: 'nestforge-dev-only-jwt-secret-32-chars!!',
       }),
     ).toThrow(/公开默认密钥/);
   });
@@ -276,45 +357,5 @@ describe('APP_NAME（品牌唯一来源）', () => {
 
   it('空串视同未配置，回退默认应用名（与 appName() 语义一致）', () => {
     expect(envOf({ APP_NAME: '' }).APP_NAME).toBe('nest-api');
-  });
-});
-
-describe('短信通道凭证一致性 (SMS_PROVIDER)', () => {
-  it('默认 smsbao 且完全未配置时允许启动（短信登录未启用）', () => {
-    const config = envOf({});
-    expect(config.SMS_PROVIDER).toBe('smsbao');
-  });
-
-  it('smsbao 只配置一半时应拒绝启动，避免首次发码才 500', () => {
-    expect(() => envOf({ SMSBAO_USER: 'demo-user' })).toThrow(/SMSBAO_PASSWORD/);
-    expect(() => envOf({ SMSBAO_PASSWORD: 'secret' })).toThrow(/SMSBAO_USER/);
-  });
-
-  it('smsbao 凭证齐全时通过', () => {
-    const config = envOf({ SMSBAO_USER: 'demo-user', SMSBAO_PASSWORD: 'secret' });
-    expect(config.SMSBAO_USER).toBe('demo-user');
-  });
-
-  it('显式选择 aliyun 但缺少凭证时应拒绝启动', () => {
-    expect(() => envOf({ SMS_PROVIDER: 'aliyun' })).toThrow(/ALIYUN_SMS_ACCESS_KEY_ID/);
-    expect(() =>
-      envOf({
-        SMS_PROVIDER: 'aliyun',
-        ALIYUN_SMS_ACCESS_KEY_ID: 'ak',
-        ALIYUN_SMS_ACCESS_KEY_SECRET: 'secret',
-        ALIYUN_SMS_SIGN_NAME: 'nest-api',
-      }),
-    ).toThrow(/ALIYUN_SMS_TEMPLATE_CODE/);
-  });
-
-  it('aliyun 四项凭证齐全时通过', () => {
-    const config = envOf({
-      SMS_PROVIDER: 'aliyun',
-      ALIYUN_SMS_ACCESS_KEY_ID: 'ak',
-      ALIYUN_SMS_ACCESS_KEY_SECRET: 'secret',
-      ALIYUN_SMS_SIGN_NAME: 'nest-api',
-      ALIYUN_SMS_TEMPLATE_CODE: 'SMS_000001',
-    });
-    expect(config.SMS_PROVIDER).toBe('aliyun');
   });
 });

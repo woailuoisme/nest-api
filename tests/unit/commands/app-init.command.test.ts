@@ -2,20 +2,23 @@ import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'no
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
-import { migrate } from 'drizzle-orm/postgres-js/migrator';
+import { migrate } from 'drizzle-orm/node-postgres/migrator';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { AppInitCommand } from '@/commands/app-init.command';
 import type { StorageService } from '@/common/storage/storage.service';
-import type { DrizzleDB } from '@/database/drizzle/drizzle.service';
+import type { Database } from '@/database/drizzle/database';
 
-vi.mock('drizzle-orm/postgres-js/migrator', () => ({ migrate: vi.fn() }));
+vi.mock('drizzle-orm/node-postgres/migrator', () => ({ migrate: vi.fn() }));
 
 /** 未配置 S3 的存储门面桩：disk('s3') 返回非 S3 驱动实例 */
 const noS3Storage = { disk: () => ({}) } as unknown as StorageService;
 
-const makeCommand = (storage: StorageService = noS3Storage): AppInitCommand =>
-  new AppInitCommand({} as unknown as DrizzleDB, storage);
+/** 迁移前的 journal 探测：返回「journal 表不存在」，让 migrate 桩继续执行 */
+const makeDb = (): Database => ({ execute: vi.fn(async () => ({ rows: [{ exists: false }] })) }) as unknown as Database;
+
+const makeCommand = (storage: StorageService = noS3Storage, db: Database = makeDb()): AppInitCommand =>
+  new AppInitCommand(db, storage);
 
 const readEnv = (path: string): string => readFileSync(path, 'utf8');
 
@@ -45,9 +48,8 @@ describe('AppInitCommand', () => {
     await makeCommand().run([], { env: envPath });
 
     const content = readEnv(envPath);
-    expect(envValue(content, 'BETTER_AUTH_SECRET')).toBeTruthy();
-    expect(envValue(content, 'JWT_ACCESS_SECRET')).toBeTruthy();
-    expect(envValue(content, 'JWT_REFRESH_SECRET')).toBeTruthy();
+    expect(envValue(content, 'JWT_SECRET')).toBeTruthy();
+    expect(envValue(content, 'MFA_ENCRYPTION_KEYS')).toBeTruthy();
     expect(migrate).toHaveBeenCalledTimes(1);
   });
 
@@ -76,19 +78,14 @@ describe('AppInitCommand', () => {
   });
 
   it('--force 时重新生成密钥', async () => {
-    const original = [
-      'BETTER_AUTH_SECRET=old-value',
-      'JWT_ACCESS_SECRET=old-access',
-      'JWT_REFRESH_SECRET=old-refresh',
-    ].join('\n');
+    const original = ['JWT_SECRET=old-value', 'MFA_ENCRYPTION_KEYS=old-access'].join('\n');
     writeFileSync(envPath, `${original}\n`, 'utf8');
 
     await makeCommand().run([], { env: envPath, force: true });
 
     const content = readEnv(envPath);
-    expect(envValue(content, 'BETTER_AUTH_SECRET')).not.toBe('old-value');
-    expect(envValue(content, 'JWT_ACCESS_SECRET')).not.toBe('old-access');
-    expect(envValue(content, 'JWT_REFRESH_SECRET')).not.toBe('old-refresh');
+    expect(envValue(content, 'JWT_SECRET')).not.toBe('old-value');
+    expect(envValue(content, 'MFA_ENCRYPTION_KEYS')).not.toBe('old-access');
   });
 
   it('未配置 S3 时跳过且不触达 SDK', async () => {
@@ -146,7 +143,7 @@ describe('AppInitCommand', () => {
       }
     }
 
-    await new MissingMigrationsCommand({} as unknown as DrizzleDB, noS3Storage).run([], { env: envPath });
+    await new MissingMigrationsCommand({} as unknown as Database, noS3Storage).run([], { env: envPath });
 
     expect(migrate).not.toHaveBeenCalled();
     expect(process.exitCode).toBe(1);

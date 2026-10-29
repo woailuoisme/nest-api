@@ -24,7 +24,8 @@ describe('Swagger & Scalar Split Integration Test', () => {
     expect(clientJson.info.description).toContain('/docs/auth');
     expect(clientJson.tags.map((t: { name: string }) => t.name)).toEqual(['用户中心']);
     expect(Object.keys(clientJson.paths)).not.toContain('/auth/{path}');
-    expect(Object.keys(clientJson.paths)).not.toContain('/v1/auth/sign-in/email');
+    expect(Object.keys(clientJson.paths)).not.toContain('/v1/auth/sign-in');
+    expect(Object.keys(clientJson.paths)).not.toContain('/v1/auth/sign-up');
     expect(Object.keys(clientJson.paths)).not.toContain('/v1/auth/sign-up/email');
     expect(Object.keys(clientJson.paths)).toContain('/users/me');
     expect(Object.keys(clientJson.paths)).not.toContain('/admin/users');
@@ -53,17 +54,16 @@ describe('Swagger & Scalar Split Integration Test', () => {
     expect(adminJson.components.securitySchemes).toHaveProperty('bearerAuth');
     expect(adminJson.components.securitySchemes).toHaveProperty('cookieAuth');
 
-    // 3. Better Auth 全量专本文档 JSON Spec 校验 (全量 78 个端点完整聚合)
+    // 3. 认证 API 专本文档 JSON Spec 校验（@nestjs/authentication 端点）
     const authJsonRes = await app.inject({ method: 'GET', url: '/docs-auth-json' });
     expect(authJsonRes.statusCode).toBe(200);
     const authJson = JSON.parse(authJsonRes.body);
-    expect(authJson.info.title).toBe('Better Auth API Reference');
-    expect(authJson.tags.map((t: { name: string }) => t.name)).toEqual(
-      expect.arrayContaining(['认证-核心凭据', '认证-双因素(2FA)', '认证-管理员治理']),
+    expect(authJson.info.title).toBe('认证 API');
+    expect(authJson.tags.map((t: { name: string }) => t.name)).toEqual(['认证']);
+    expect(Object.keys(authJson.paths)).toEqual(
+      expect.arrayContaining(['/auth/sign-up', '/auth/sign-in', '/auth/token', '/auth/mfa/enroll']),
     );
-    expect(Object.keys(authJson.paths)).toContain('/v1/auth/sign-in/email');
-    expect(Object.keys(authJson.paths)).toContain('/v1/auth/admin/list-users');
-    expect(Object.keys(authJson.paths).length).toBe(78);
+    expect(Object.keys(authJson.paths)).not.toContain('/v1/auth/admin/list-users');
     expect(authJson.components.securitySchemes).toHaveProperty('bearerAuth');
     expect(authJson.components.securitySchemes).toHaveProperty('cookieAuth');
 
@@ -91,11 +91,11 @@ describe('Swagger & Scalar Split Integration Test', () => {
     expect(adminHtmlRes.body).toContain('"orderRequiredPropertiesFirst": true');
     expect(adminHtmlRes.body).toContain('"orderSchemaPropertiesBy": "preserve"');
 
-    // 6. Better Auth 专本文档 Scalar HTML 校验 (包含统一配置)
+    // 6. 认证专本文档 Scalar HTML 校验 (包含统一配置)
     const authHtmlRes = await app.inject({ method: 'GET', url: '/docs/auth' });
     expect(authHtmlRes.statusCode).toBe(200);
     expect(authHtmlRes.headers['content-type']).toContain('text/html');
-    expect(authHtmlRes.body).toContain('Better Auth API Reference');
+    expect(authHtmlRes.body).toContain('认证 API Reference');
     expect(authHtmlRes.body).toContain('"persistAuth": true');
     expect(authHtmlRes.body).toContain('"telemetry": false');
     expect(authHtmlRes.body).toContain('"theme": "purple"');

@@ -1,9 +1,10 @@
-import { Processor, WorkerHost } from '@nestjs/bullmq';
+import { Processor } from '@nestjs/bullmq';
 import { Logger } from '@nestjs/common';
 import type { Job } from 'bullmq';
 
 import { SEARCH_QUEUE } from '@/common/constants/queues';
 import { SearchService } from '@/common/search/search.service';
+import { QueueProcessorHost } from '@/jobs/queue-processor.host';
 
 import { type SearchDeleteJobData, type SearchIndexJobData, SearchJobName } from './search.jobs';
 
@@ -11,7 +12,7 @@ import { type SearchDeleteJobData, type SearchIndexJobData, SearchJobName } from
  * 搜索队列消费者 — 消费 BullMQ 任务并调用 SearchService 同步文档至搜索引擎（如 Meilisearch）。
  */
 @Processor(SEARCH_QUEUE, { concurrency: 5 })
-export class SearchProcessor extends WorkerHost {
+export class SearchProcessor extends QueueProcessorHost {
   private readonly logger = new Logger(SearchProcessor.name);
 
   constructor(private readonly searchService: SearchService) {

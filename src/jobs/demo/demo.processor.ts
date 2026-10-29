@@ -1,8 +1,9 @@
-import { Processor, WorkerHost } from '@nestjs/bullmq';
+import { Processor } from '@nestjs/bullmq';
 import { Injectable, Logger } from '@nestjs/common';
 import type { Job } from 'bullmq';
 
 import { DEMO_QUEUE } from '@/common/constants/queues';
+import { QueueProcessorHost } from '@/jobs/queue-processor.host';
 
 import { type DemoJobData, DemoJobName } from './demo.jobs';
 
@@ -12,7 +13,7 @@ import { type DemoJobData, DemoJobName } from './demo.jobs';
  */
 @Injectable()
 @Processor(DEMO_QUEUE)
-export class DemoProcessor extends WorkerHost {
+export class DemoProcessor extends QueueProcessorHost {
   private readonly logger = new Logger(DemoProcessor.name);
 
   async process(job: Job<DemoJobData>): Promise<void> {

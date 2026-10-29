@@ -1,0 +1,6 @@
+{
+  "uniqueViolation": "Data already exists, please do not duplicate operation",
+  "foreignKeyViolation": "Referenced target record does not exist or cannot be linked",
+  "notNullViolation": "Required database field is missing",
+  "invalidFormat": "Invalid data format or parameter type"
+}

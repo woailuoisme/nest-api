@@ -8,7 +8,9 @@ describe('paginateQuery', () => {
     const limitMock = vi.fn(() => ({ offset: offsetMock }));
     const orderByMock = vi.fn(() => ({ limit: limitMock }));
     const whereMock = vi.fn(() => ({ orderBy: orderByMock, limit: limitMock }));
-    const fromMock = vi.fn(() => ({ where: whereMock, orderBy: orderByMock, limit: limitMock }));
+    const queryState: any = { where: whereMock, orderBy: orderByMock, limit: limitMock };
+    queryState.$dynamic = () => queryState;
+    const fromMock = vi.fn(() => queryState);
     const selectMock = vi.fn(() => ({ from: fromMock }));
     const countMock = vi.fn().mockResolvedValue(total);
 

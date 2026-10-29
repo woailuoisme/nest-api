@@ -3,14 +3,14 @@ import { join, posix } from 'node:path';
 
 import fastifyMultipart from '@fastify/multipart';
 import fastifyStatic from '@fastify/static';
+import { JwtVerifier, SessionService } from '@nestjs/authentication';
 import { UnauthorizedException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import type { NestFastifyApplication } from '@nestjs/platform-fastify';
-import { fromNodeHeaders } from 'better-auth/node';
 import type { FastifyReply, FastifyRequest } from 'fastify';
 
-import { auth } from '@/common/auth/better-auth';
 import { applyQueryTokenAsBearer } from '@/common/auth/request-token.util';
+import { UsersRepository } from '@/common/auth/users.repository';
 import { PATHS, ROUTES } from '@/common/constants/app.constants';
 import { RequestContext } from '@/common/context';
 import { resolveErrorEnvelope } from '@/common/filters/http-exception.filter';
@@ -70,6 +70,13 @@ export async function registerFastifyPlugins(app: NestFastifyApplication): Promi
   type RegisterPlugin = Parameters<typeof app.register>[0];
   const config = app.get(ConfigService);
   const loggerService = app.get(PinoLoggerService);
+  const sessionService = app.get(SessionService);
+  const usersRepository = app.get(UsersRepository);
+  const jwtVerifier = new JwtVerifier({
+    key: config.get('JWT_SECRET'),
+    issuer: config.get('APP_URL'),
+    audience: config.get('APP_NAME'),
+  });
   const fastify = app.getHttpAdapter().getInstance() as unknown as FastifyLike;
 
   // 1. 全链路 Request ID 与 AsyncLocalStorage 请求上下文 Hook
@@ -132,11 +139,38 @@ export async function registerFastifyPlugins(app: NestFastifyApplication): Promi
     prefix: '/uploads/',
   });
 
-  // 私有上传文件鉴权：公开子目录放行，其余需合法 Better Auth 会话凭证
+  // 私有上传文件鉴权：公开子目录放行，其余需合法会话 Cookie 或 Bearer JWT
   // 响应信封复用全局异常过滤器的纯函数，避免手写 body 与统一错误契约分叉
   const sendUnauthorized = (reply: FastifyReply) => {
     const { status, body } = resolveErrorEnvelope(new UnauthorizedException());
     return reply.code(status).send(body);
+  };
+
+  /**
+   * 解析私有上传的访问者：会话 Cookie 优先，其次 Bearer JWT（`?token=` 先归一化为 Bearer）。
+   * 任一环节失败（令牌非法、DB 不可用）或用户被封禁一律返回 null，由调用方统一 401。
+   */
+  const resolveUploadViewer = async (request: FastifyRequest): Promise<string | null> => {
+    try {
+      applyQueryTokenAsBearer(request.headers, request.query as { token?: unknown } | undefined);
+
+      const sessionToken = sessionService.tokenFrom({ headers: request.headers, method: request.method });
+      let userId = sessionToken ? (await sessionService.validate(sessionToken))?.userId : undefined;
+
+      if (!userId) {
+        const authorization = request.headers.authorization;
+        const bearer =
+          typeof authorization === 'string' && authorization.startsWith('Bearer ')
+            ? authorization.slice('Bearer '.length)
+            : undefined;
+        if (bearer) userId = (await jwtVerifier.verify(bearer)).sub;
+      }
+
+      const currentUser = userId ? await usersRepository.findById(userId) : null;
+      return currentUser && !currentUser.banned ? currentUser.id : null;
+    } catch {
+      return null;
+    }
   };
 
   fastify.addHook('onRequest', async (request: FastifyRequest, reply: FastifyReply) => {
@@ -153,19 +187,8 @@ export async function registerFastifyPlugins(app: NestFastifyApplication): Promi
       return;
     }
 
-    const headers = fromNodeHeaders(request.headers);
-    applyQueryTokenAsBearer(headers, request.query as { token?: unknown } | undefined);
-
-    try {
-      const sessionData = await auth.api.getSession({ headers });
-      const user = sessionData?.user as { banned?: boolean | null } | undefined;
-      if (!user || user.banned) {
-        await sendUnauthorized(reply);
-        return;
-      }
-    } catch {
+    if (!(await resolveUploadViewer(request))) {
       await sendUnauthorized(reply);
-      return;
     }
   });
 

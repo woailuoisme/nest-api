@@ -1,11 +1,13 @@
-import { Processor, WorkerHost } from '@nestjs/bullmq';
+import { Processor } from '@nestjs/bullmq';
 import { Injectable, Logger } from '@nestjs/common';
+import { InjectDrizzle } from '@nestjs/drizzle';
 import type { Job } from 'bullmq';
 import { and, inArray, lt } from 'drizzle-orm';
 
 import { TOKEN_CLEANUP_QUEUE } from '@/common/constants/queues';
-import { type DrizzleDB, InjectDb } from '@/database/drizzle/drizzle.service';
+import type { Database } from '@/database/drizzle/database';
 import * as schema from '@/database/drizzle/schema';
+import { QueueProcessorHost } from '@/jobs/queue-processor.host';
 
 import { type TokenCleanupJobData, TokenCleanupJobName } from './token-cleanup.jobs';
 
@@ -24,14 +26,14 @@ const MAX_BATCHES = 1_000;
 const IDEMPOTENCY_RETENTION_GRACE_MS = 24 * 60 * 60 * 1000;
 
 /**
- * 过期记录清理消费者 — 消费定时任务，分批清理过期 Better Auth 会话/验证码与幂等键。
+ * 过期记录清理消费者 — 消费定时任务，分批清理过期会话/刷新令牌/邮件令牌与幂等键。
  */
 @Injectable()
 @Processor(TOKEN_CLEANUP_QUEUE)
-export class TokenCleanupProcessor extends WorkerHost {
+export class TokenCleanupProcessor extends QueueProcessorHost {
   private readonly logger = new Logger(TokenCleanupProcessor.name);
 
-  constructor(@InjectDb() private readonly db: DrizzleDB) {
+  constructor(@InjectDrizzle() private readonly db: Database) {
     super();
   }
 
@@ -46,33 +48,91 @@ export class TokenCleanupProcessor extends WorkerHost {
         // 锁住热表 session 并让任务超出 BullMQ 锁时长而被并发重跑。
         const deletedSessions = await this.purgeInBatches(
           (ids) =>
-            this.db.delete(schema.session).where(inArray(schema.session.id, ids)).returning({ id: schema.session.id }),
+            this.db
+              .delete(schema.sessions)
+              .where(inArray(schema.sessions.id, ids))
+              .returning({ id: schema.sessions.id }),
           () =>
             this.db
-              .select({ id: schema.session.id })
-              .from(schema.session)
-              .where(lt(schema.session.expiresAt, now))
+              .select({ id: schema.sessions.id })
+              .from(schema.sessions)
+              .where(lt(schema.sessions.expiresAt, now))
               .limit(batchSize),
         );
 
-        const deletedVerifications = await this.purgeInBatches(
+        const deletedRefreshTokens = await this.purgeInBatches(
           (ids) =>
             this.db
-              .delete(schema.verification)
-              .where(inArray(schema.verification.id, ids))
-              .returning({ id: schema.verification.id }),
+              .delete(schema.refreshTokens)
+              .where(inArray(schema.refreshTokens.id, ids))
+              .returning({ id: schema.refreshTokens.id }),
           () =>
             this.db
-              .select({ id: schema.verification.id })
-              .from(schema.verification)
-              .where(lt(schema.verification.expiresAt, now))
+              .select({ id: schema.refreshTokens.id })
+              .from(schema.refreshTokens)
+              .where(lt(schema.refreshTokens.familyExpiresAt, now))
               .limit(batchSize),
         );
 
-        if (deletedSessions > 0 || deletedVerifications > 0) {
+        const deletedEmailTokens = await this.purgeInBatches(
+          (ids) =>
+            this.db
+              .delete(schema.emailTokens)
+              .where(inArray(schema.emailTokens.id, ids))
+              .returning({ id: schema.emailTokens.id }),
+          () =>
+            this.db
+              .select({ id: schema.emailTokens.id })
+              .from(schema.emailTokens)
+              .where(lt(schema.emailTokens.expiresAt, now))
+              .limit(batchSize),
+        );
+
+        const deletedOtpCodes = await this.purgeInBatches(
+          (ids) =>
+            this.db
+              .delete(schema.otpCodes)
+              .where(inArray(schema.otpCodes.id, ids))
+              .returning({ id: schema.otpCodes.id }),
+          () =>
+            this.db
+              .select({ id: schema.otpCodes.id })
+              .from(schema.otpCodes)
+              .where(lt(schema.otpCodes.expiresAt, now))
+              .limit(batchSize),
+        );
+
+        // 发送窗口按 target 清理（复合主键 target+purpose 无单一 id）：
+        // DELETE 内复验 window_started_at，避免误删「刚被重新打开」的窗口
+        const windowCutoff = new Date(now.getTime() - 24 * 60 * 60 * 1000);
+        const deletedOtpSendWindows = await this.purgeInBatches(
+          (targets) =>
+            this.db
+              .delete(schema.otpSendWindows)
+              .where(
+                and(
+                  inArray(schema.otpSendWindows.target, targets),
+                  lt(schema.otpSendWindows.windowStartedAt, windowCutoff),
+                ),
+              )
+              .returning({ id: schema.otpSendWindows.target }),
+          () =>
+            this.db
+              .select({ id: schema.otpSendWindows.target })
+              .from(schema.otpSendWindows)
+              .where(lt(schema.otpSendWindows.windowStartedAt, windowCutoff))
+              .limit(batchSize),
+        );
+
+        if (deletedSessions + deletedRefreshTokens + deletedEmailTokens + deletedOtpCodes > 0) {
           this.logger.log(
-            `Session/token cleanup complete: ${deletedSessions} sessions and ${deletedVerifications} verifications purged (batchSize=${batchSize})`,
+            `Auth state cleanup complete: ${deletedSessions} sessions, ${deletedRefreshTokens} refresh tokens, ` +
+              `${deletedEmailTokens} email tokens, ${deletedOtpCodes} otp codes purged (batchSize=${batchSize})`,
           );
+        }
+
+        if (deletedOtpSendWindows > 0) {
+          this.logger.log(`OTP send window cleanup complete: ${deletedOtpSendWindows} stale target(s) purged`);
         }
 
         // 幂等记录同样只增不减：每次 @Idempotent() 写入与微信回调都会留下一行，
@@ -102,6 +162,7 @@ export class TokenCleanupProcessor extends WorkerHost {
         if (deletedIdempotencyKeys > 0) {
           this.logger.log(`Idempotency cleanup complete: ${deletedIdempotencyKeys} expired keys purged`);
         }
+
         break;
       }
       default:

@@ -27,6 +27,7 @@ function isTimeoutError(error: unknown): boolean {
   const name = (error as { name?: string } | undefined)?.name;
   return name === 'TimeoutError' || name === 'AbortError';
 }
+
 /** 默认短信正文模板（未配置 `SMSBAO_CONTENT` 时使用）：签名跟随 APP_NAME */
 function defaultSmsbaoContent(): string {
   return `【${appName()}】您的验证码为 {code}，5 分钟内有效。`;
@@ -54,25 +55,29 @@ export function normalizeCnPhone(raw: string): string {
   return local;
 }
 
+/** 通道名 → 发送实现（新增通道只需在此登记一次） */
+const SMS_PROVIDERS: Record<string, (phone: string, code: string) => Promise<void>> = {
+  smsbao: sendViaSmsbao,
+  aliyun: sendViaAliyun,
+};
+
 /**
- * 发送登录/验证码短信。
+ * 发送验证码短信。
  *
  * 通道由 `SMS_PROVIDER` 决定（默认 `smsbao`），未配置对应凭证时抛出明确错误，
- * 由调用方（Better Auth `phoneNumber.sendOTP`）转为接口错误返回。
+ * 由调用方（OTP 端点）转为接口错误返回。
  */
 export async function sendSmsOtp({ phone, code }: SmsOtpInput): Promise<void> {
   const provider = (process.env.SMS_PROVIDER ?? 'smsbao').toLowerCase();
+  // 先归一化号码：非法号码优先报错，与通道是否已配置无关
   const target = normalizeCnPhone(phone);
 
-  if (provider === 'smsbao') {
-    await sendViaSmsbao(target, code);
-    return;
+  const send = SMS_PROVIDERS[provider];
+  if (!send) {
+    throw new Error(`未知的短信服务商：SMS_PROVIDER=${provider}（可选 smsbao | aliyun）`);
   }
-  if (provider === 'aliyun') {
-    await sendViaAliyun(target, code);
-    return;
-  }
-  throw new Error(`未知的短信服务商：SMS_PROVIDER=${provider}（可选 smsbao | aliyun）`);
+
+  await send(target, code);
 }
 
 /** SMSBao：GET /sms?u=&p=MD5(password)&m=&c=，返回体 "0" 为成功 */

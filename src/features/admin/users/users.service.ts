@@ -1,5 +1,6 @@
+import { PasswordHasher } from '@nestjs/authentication';
 import { ConflictException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
-import { hashPassword } from 'better-auth/crypto';
+import { InjectDrizzle } from '@nestjs/drizzle';
 import { desc, eq } from 'drizzle-orm';
 import { pick } from 'es-toolkit';
 import { v7 as uuidv7 } from 'uuid';
@@ -9,8 +10,8 @@ import { PageMetaResource, PaginatedResultResource } from '@/common/dto/paginati
 import { parseSpatieQuery } from '@/common/query/spatie-query';
 import { SearchSyncService } from '@/common/search/search-sync.service';
 import { SearchService } from '@/common/search/search.service';
+import type { Database } from '@/database/drizzle/database';
 import { paginateSpatieQuery } from '@/database/drizzle/drizzle-pagination';
-import { type DrizzleDB, InjectDb } from '@/database/drizzle/drizzle.service';
 import { account, user } from '@/database/drizzle/schema';
 import { userSearchable } from '@/database/search/user.searchable';
 
@@ -28,7 +29,7 @@ const ROLE_RANK: Record<Role, number> = {
  * 解析角色权重（fail-closed）。
  *
  * `user.role` 是自由文本列（可空、无 CHECK 约束），可能包含历史值、小写值或
- * 仅存在于 better-auth 的角色。直接下标取值会得到 `undefined`，而 `undefined >= n` 为 false，
+ * 仅存在于历史认证系统的角色。直接下标取值会得到 `undefined`，而 `undefined >= n` 为 false，
  * 会让「不得变更同级/更高角色」的检查静默失效——因此未知角色一律视为无权重并拒绝。
  */
 function rankOf(role: string | null): number {
@@ -42,21 +43,27 @@ function rankOf(role: string | null): number {
 @Injectable()
 export class UsersService {
   constructor(
-    @InjectDb() private readonly db: DrizzleDB,
+    @InjectDrizzle() private readonly db: Database,
     private readonly searchService: SearchService,
     private readonly searchSyncService: SearchSyncService,
+    private readonly passwordHasher: PasswordHasher,
   ) {}
 
-  async create(dto: CreateUserRequest) {
+  async create(actor: { id: string; role: Role }, dto: CreateUserRequest) {
+    const role = dto.role ?? Role.USER;
+    this.assertAssignable(actor.role, role);
+
     const existing = await this.db.query.user.findFirst({
-      where: eq(user.email, dto.email),
+      where: { email: dto.email },
     });
     if (existing) {
       throw new ConflictException('Email already in use');
     }
 
     const userId = uuidv7();
-    const passwordHash = await hashPassword(dto.password);
+    const passwordHash = await this.passwordHasher.hash(dto.password);
+    // user 与 account 属于同一次创建：共享同一时间戳，避免两行出现毫秒级漂移
+    const now = new Date();
 
     const newUser = await this.db.transaction(async (tx) => {
       const [insertedUser] = await tx
@@ -66,9 +73,9 @@ export class UsersService {
           name: dto.name,
           email: dto.email,
           emailVerified: true,
-          role: dto.role || Role.USER,
-          createdAt: new Date(),
-          updatedAt: new Date(),
+          role,
+          createdAt: now,
+          updatedAt: now,
         })
         .returning();
 
@@ -78,8 +85,8 @@ export class UsersService {
         accountId: userId,
         providerId: 'credential',
         password: passwordHash,
-        createdAt: new Date(),
-        updatedAt: new Date(),
+        createdAt: now,
+        updatedAt: now,
       });
 
       return insertedUser;
@@ -115,16 +122,17 @@ export class UsersService {
       defaultOrderBy: desc(user.createdAt),
     });
 
-    const pageMeta = new PageMetaResource({ page: parsed.page, pageSize: parsed.pageSize }, total);
-    return new PaginatedResultResource(
+    return this.toPage(
       rows.map((row) => new UserEntity(row)),
-      pageMeta,
+      parsed.page,
+      parsed.pageSize,
+      total,
     );
   }
 
   async findOne(id: string) {
     const foundUser = await this.db.query.user.findFirst({
-      where: eq(user.id, id),
+      where: { id },
     });
     if (!foundUser) {
       throw new NotFoundException('User not found');
@@ -132,24 +140,34 @@ export class UsersService {
     return new UserEntity(foundUser);
   }
 
-  /** 原子更新用户 — 显式构造类型安全的更新对象，消除 as 类型断言 */
-  async update(id: string, dto: UpdateUserRequest) {
-    // 邮箱唯一性预检查 — 防止修改为已被其他用户占用的邮箱
+  /** 原子更新用户 — 邮箱变更额外要求管理级别与严格低于目标角色（防账号接管） */
+  async update(actor: { id: string; role: Role }, id: string, dto: UpdateUserRequest) {
+    const target = await this.findTarget(id);
+    if (actor.id !== id) {
+      this.assertCanManageTarget(actor.role, target.role);
+    }
+
     if (dto.email !== undefined) {
+      this.assertCanChangeEmail(actor, id, target.role);
       const existing = await this.db.query.user.findFirst({
-        where: eq(user.email, dto.email),
+        where: { email: dto.email },
       });
       if (existing && existing.id !== id) {
         throw new ConflictException('Email is already in use by another user');
       }
     }
 
-    return this.applyUserUpdate(id, { ...pick(dto, ['name', 'email']), updatedAt: new Date() });
+    const patch = {
+      ...pick(dto, ['name', 'email']),
+      ...(dto.email !== undefined ? { emailVerified: false } : {}),
+      updatedAt: new Date(),
+    };
+    return this.applyUserUpdate(id, patch);
   }
 
   /**
    * 变更用户角色 —— 三层防护：
-   * 1. 路由层 `@Roles(ADMIN, SUPER_ADMIN)` 拒绝 OPERATOR 进入；
+   * 1. 路由层 `@Can(AdminPolicy, 'changeUserRole')` 拒绝 OPERATOR 进入（SUPER_ADMIN 由 before 直通）；
    * 2. 服务层校验「不得自改」与「不得越级授予」；
    * 3. 服务层还校验目标**当前**角色不得等于/高于调用者，
    *    否则 ADMIN 可把一个 SUPER_ADMIN 降级为 USER（同级互相降权）= 变相提权。
@@ -159,26 +177,10 @@ export class UsersService {
       throw new ForbiddenException('Cannot change your own role');
     }
 
-    const target = await this.db.query.user.findFirst({
-      columns: { id: true, role: true },
-      where: eq(user.id, id),
-    });
-    if (!target) {
-      throw new NotFoundException('User not found');
-    }
-
-    const actorRank = rankOf(actor.role);
-    const currentRank = rankOf(target.role);
-    const nextRank = ROLE_RANK[role];
-    // 同级操作默认拒绝：仅 SUPER_ADMIN 之间可以互相委任/降级
-    const peerSuperAdmin = actor.role === Role.SUPER_ADMIN && target.role === Role.SUPER_ADMIN;
-
-    if (currentRank >= actorRank && !peerSuperAdmin) {
-      throw new ForbiddenException('Cannot modify a user at or above your own role');
-    }
-    if (nextRank >= actorRank && !(actor.role === Role.SUPER_ADMIN && role === Role.SUPER_ADMIN)) {
-      throw new ForbiddenException('Cannot assign a role at or above your own');
-    }
+    const target = await this.findTarget(id);
+    // 目标不得同级/更高（防同级互降），下一角色不得同级/更高（防越级授予）
+    this.assertCanManageTarget(actor.role, target.role);
+    this.assertAssignable(actor.role, role);
 
     return this.applyUserUpdate(id, { role, updatedAt: new Date() });
   }
@@ -195,13 +197,51 @@ export class UsersService {
     return new UserEntity(updatedUser);
   }
 
-  /** 原子删除 — 一步完成删+查，消除竞态条件 */
-  async remove(id: string): Promise<void> {
+  /** 原子删除 — 禁止自删，且不得删除同级/更高角色（SUPER_ADMIN 之间除外） */
+  async remove(actor: { id: string; role: Role }, id: string): Promise<void> {
+    if (actor.id === id) {
+      throw new ForbiddenException('Cannot delete your own account');
+    }
+    const target = await this.findTarget(id);
+    this.assertCanManageTarget(actor.role, target.role);
+
     const [deletedUser] = await this.db.delete(user).where(eq(user.id, id)).returning();
     if (!deletedUser) {
       throw new NotFoundException('User not found');
     }
     await this.searchSyncService.remove(userSearchable, id);
+  }
+
+  /** 代他人改邮箱：仅管理员可操作，且目标角色必须严格低于自己（邮箱是账号恢复入口） */
+  private assertCanChangeEmail(actor: { id: string; role: Role }, targetId: string, targetRole: string | null): void {
+    if (actor.id === targetId) return;
+
+    if (rankOf(actor.role) < ROLE_RANK[Role.ADMIN]) {
+      throw new ForbiddenException('Only administrators can change an email address');
+    }
+    if (rankOf(targetRole) >= rankOf(actor.role)) {
+      throw new ForbiddenException('Cannot change the email of a user at or above your own role');
+    }
+  }
+
+  /** 授予角色：不得授予同级/更高角色（SUPER_ADMIN 委任同级除外） */
+  private assertAssignable(actorRole: Role, role: Role): void {
+    const actorRank = rankOf(actorRole);
+    const nextRank = ROLE_RANK[role];
+    const peerSuperAdmin = actorRole === Role.SUPER_ADMIN && role === Role.SUPER_ADMIN;
+    if (nextRank >= actorRank && !peerSuperAdmin) {
+      throw new ForbiddenException('Cannot assign a role at or above your own');
+    }
+  }
+
+  /** 管理目标：不得操作同级/更高角色（SUPER_ADMIN 之间除外） */
+  private assertCanManageTarget(actorRole: Role, targetRole: string | null): void {
+    const actorRank = rankOf(actorRole);
+    const targetRank = rankOf(targetRole);
+    const peerSuperAdmin = actorRole === Role.SUPER_ADMIN && targetRole === Role.SUPER_ADMIN;
+    if (targetRank >= actorRank && !peerSuperAdmin) {
+      throw new ForbiddenException('Cannot modify a user at or above your own role');
+    }
   }
 
   /** 全文搜索用户（支持 Meilisearch 检索与角色过滤，保持相关度排序） */
@@ -214,11 +254,33 @@ export class UsersService {
       hydrate: true,
     });
 
-    const pageMeta = new PageMetaResource({ page: result.page, pageSize: result.limit }, result.total);
-
-    return new PaginatedResultResource(
+    return this.toPage(
       result.items.map((u) => new UserEntity(u as typeof user.$inferSelect)),
-      pageMeta,
+      result.page,
+      result.limit,
+      result.total,
     );
+  }
+
+  /** 取目标用户的最小投影（id + 当前角色）；不存在统一 404 */
+  private async findTarget(id: string): Promise<{ id: string; role: string | null }> {
+    const target = await this.db.query.user.findFirst({
+      columns: { id: true, role: true },
+      where: { id },
+    });
+    if (!target) {
+      throw new NotFoundException('User not found');
+    }
+    return target;
+  }
+
+  /** 统一分页信封（列表与全文搜索共用，避免两处各拼一次 meta） */
+  private toPage(
+    items: UserEntity[],
+    page: number,
+    pageSize: number,
+    total: number,
+  ): PaginatedResultResource<UserEntity> {
+    return new PaginatedResultResource(items, new PageMetaResource({ page, pageSize }, total));
   }
 }

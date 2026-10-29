@@ -1,8 +1,4 @@
-import { SetMetadata } from '@nestjs/common';
+import { Public as AuthenticationPublic } from '@nestjs/authentication';
 
-export const IS_PUBLIC_KEY = 'isPublic';
-
-/**
- * 公开接口装饰器：用于将路由标注为公共接口（跳过 JwtAuthGuard 身份验证）。
- */
-export const Public = () => SetMetadata(IS_PUBLIC_KEY, true);
+/** 公开接口装饰器（项目统一入口，语义等价于官方 `@Public`） */
+export const Public = AuthenticationPublic;

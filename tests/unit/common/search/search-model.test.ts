@@ -3,7 +3,7 @@ import { describe, expect, it, vi } from 'vitest';
 import type { SearchDriver, SearchResult } from '@/common/search/interfaces/search.interface';
 import type { SearchableDefinition } from '@/common/search/scout/searchable.interface';
 import { SearchService } from '@/common/search/search.service';
-import type { DrizzleDB } from '@/database/drizzle/drizzle.service';
+import type { Database } from '@/database/drizzle/database';
 
 describe('SearchService.searchModel (模型检索与水合)', () => {
   type TestItem = {
@@ -40,7 +40,7 @@ describe('SearchService.searchModel (模型检索与水合)', () => {
     checkHealth: vi.fn(),
   });
 
-  const createSearchService = (driver: SearchDriver, db?: DrizzleDB): SearchService => {
+  const createSearchService = (driver: SearchDriver, db: Database = {} as Database): SearchService => {
     const configService = { get: vi.fn().mockReturnValue('noop') } as any;
     const service = new SearchService(configService, db);
     (service as any).activeDriver = driver;
@@ -83,10 +83,10 @@ describe('SearchService.searchModel (模型检索与水合)', () => {
       index: 'no_loader',
       toSearchableArray: (i) => i,
     };
-    const service = createSearchService(driver, {} as DrizzleDB);
+    const service = createSearchService(driver, {} as Database);
 
     await expect(service.searchModel(searchableWithoutLoader, { hydrate: true })).rejects.toThrow(
-      'Hydration is enabled for search index "no_loader", but loadRecords or DrizzleDB instance is missing',
+      'Hydration is enabled for search index "no_loader", but loadRecords or Database instance is missing',
     );
   });
 
@@ -105,7 +105,7 @@ describe('SearchService.searchModel (模型检索与水合)', () => {
       { id: '3', title: 'DB 3 (Latest)', role: 'admin' },
     ];
 
-    const mockDb = {} as DrizzleDB;
+    const mockDb = {} as Database;
     const searchableWithLoader: SearchableDefinition<TestItem, TestItem> = {
       index: 'test_items',
       primaryKey: 'id',

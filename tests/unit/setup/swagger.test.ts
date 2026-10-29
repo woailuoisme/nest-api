@@ -27,8 +27,8 @@ describe('setupApiDocumentation', () => {
     const appUrl = 'http://localhost:4300';
     const returnedUrls = await setupApiDocumentation(fakeApp, appUrl);
 
-    // 1. 断言 SwaggerModule.createDocument 被调用两次（Client 与 Admin，Auth 专本文档直接基于 Better Auth OpenAPI 规范构建）
-    expect(SwaggerModule.createDocument).toHaveBeenCalledTimes(2);
+    // 1. 断言 SwaggerModule.createDocument 被调用三次（Client / Admin / Auth）
+    expect(SwaggerModule.createDocument).toHaveBeenCalledTimes(3);
 
     // 2. 断言注册了客户端、管理后台与认证专用 JSON 数据源路由
     expect(getMock).toHaveBeenCalledWith(`/${ROUTES.DOCS_JSON}`, expect.any(Function));

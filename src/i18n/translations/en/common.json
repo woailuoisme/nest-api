@@ -1,0 +1,8 @@
+{
+  "internalError": "Internal server error, please try again later",
+  "badRequest": "Invalid request parameters",
+  "unauthorized": "Unauthorized access",
+  "forbidden": "Forbidden resource access",
+  "notFound": "Requested resource not found",
+  "validationFailed": "Validation failed"
+}

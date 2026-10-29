@@ -1,11 +1,14 @@
 /**
- * 将 Query String `?token=<session>` 归一化为 `Authorization: Bearer` 头。
+ * 将 Query String `?token=<jwt>` 归一化为 `Authorization: Bearer` 头。
  *
  * 供 EventSource / 无法自定义请求头的移动端场景使用；请求已带 Authorization 时不覆盖。
- * 全局鉴权守卫与 /uploads 私有文件鉴权共用，避免两条鉴权路径的取值方式出现分歧。
+ * 私有 `/uploads/*` 鉴权 Hook 使用，避免「Cookie / Bearer / query token」三条取值路径分叉。
  */
-export function applyQueryTokenAsBearer(headers: Headers, query?: { token?: unknown }): void {
+export function applyQueryTokenAsBearer(
+  headers: Record<string, string | string[] | undefined>,
+  query?: { token?: unknown },
+): void {
   const token = query?.token;
-  if (typeof token !== 'string' || headers.has('authorization')) return;
-  headers.set('authorization', `Bearer ${token.trim()}`);
+  if (typeof token !== 'string' || headers.authorization) return;
+  headers.authorization = `Bearer ${token.trim()}`;
 }

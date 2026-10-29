@@ -114,22 +114,20 @@ function resolveLogLevel(): pino.LevelWithSilent {
  * 不再落盘：日志留存由容器日志驱动承担（见 docker-compose.yml 的 json-file 上限）。
  */
 export async function createPinoLogger(customDestination?: Writable): Promise<pino.Logger> {
+  // 所有通道共享的基础选项：级别、脱敏、链路关联
+  const baseOptions = {
+    level: resolveLogLevel(),
+    redact: { paths: REDACT_PATHS, censor: '[redacted]' },
+    mixin: traceMixin,
+  } satisfies pino.LoggerOptions;
+
   if (customDestination) {
-    return pino(
-      {
-        level: resolveLogLevel(),
-        redact: { paths: REDACT_PATHS, censor: '[redacted]' },
-        mixin: traceMixin,
-      },
-      customDestination,
-    );
+    return pino(baseOptions, customDestination);
   }
 
   const isProduction = isProductionEnv();
   const options: pino.LoggerOptions = {
-    level: resolveLogLevel(),
-    redact: { paths: REDACT_PATHS, censor: '[redacted]' },
-    mixin: traceMixin,
+    ...baseOptions,
     // 开发/测试走 pretty，无需 JSON 基字段（pretty 本就忽略 pid/hostname），故只喂给生产通道
     ...(isProduction
       ? {

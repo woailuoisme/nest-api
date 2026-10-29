@@ -34,7 +34,7 @@ worker:
 
 # 提交前完整检查（修复并格式化 → 类型 → 密钥 → 架构规则 → 多语言）
 [group('quality')]
-check: fix type secret-check rbac-check i18n-check
+check: fix type secret-check i18n-check
 
 # TypeScript 类型检查（tsc --noEmit）
 [group('quality')]
@@ -95,6 +95,7 @@ db-gen:
 # 应用数据库迁移（开发与生产同一命令；生产入口用别名 db-deploy）
 [group('db')]
 db-migrate:
+    bun scripts/repair-migration-journal.ts
     bun x drizzle-kit migrate
 
 # 应用数据库迁移（生产别名，等同 db-migrate）
@@ -120,51 +121,15 @@ alias db-reset := db-fresh
 db-studio:
     bun x drizzle-kit studio
 
-# 应用 Better Auth 表结构变更（生成迁移 + 执行）
-[group('auth')]
-ba-migrate:
-    just db-gen
-    just db-migrate
-
-# 依据 better-auth.ts 重新生成 Drizzle Schema
-[group('auth')]
-ba-generate:
-    bun x --bun auth generate --config src/common/auth/better-auth.ts --output src/database/drizzle/schema/better-auth.schema.ts -y
-
-# 生成新的 Better Auth secret
-[group('auth')]
-ba-secret:
-    bun x --bun auth secret
-
-# 显示 Better Auth 与系统配置信息
-[group('auth')]
-ba-info:
-    bun x --bun auth info --config src/common/auth/better-auth.ts
-
 # 编译 MJML 邮件模板为 Handlebars (.hbs)
 [group('codegen')]
 mail-build:
     bash scripts/build-mail.sh
 
-# 生成 i18n TypeScript 强类型定义
-[group('codegen')]
-i18n-gen:
-    bun x nestjs-i18n -p src/i18n/translations -o src/i18n/i18n.generated.ts
-
-# 校验各语言翻译字典的键值对称性
+# 校验各语言目录的键、占位符与复数形式对称性（官方 JsonI18nLoader）
 [group('codegen')]
 i18n-check:
-    bun x nestjs-i18n check -p src/i18n/translations
-
-# 由 ROLE_PERMISSIONS 重新生成 Casbin 策略（policy.csv）
-[group('codegen')]
-rbac-gen:
-    bun scripts/rbac-policy.gen.ts
-
-# 校验 policy.csv 与 ROLE_PERMISSIONS 是否一致（漂移即非零退出，CI 用）
-[group('codegen')]
-rbac-check:
-    bun scripts/rbac-policy.gen.ts --check
+    bun scripts/i18n-check.ts
 
 # 查看文件或目录的紧凑 AST 结构大纲（ast-grep）
 [group('codegen')]

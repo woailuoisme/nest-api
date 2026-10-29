@@ -1,0 +1,24 @@
+<mjml>
+  <mj-head>
+    <mj-title>邮箱验证码</mj-title>
+    <mj-attributes>
+      <mj-all font-family="'Helvetica Neue', Helvetica, Arial, sans-serif" />
+    </mj-attributes>
+  </mj-head>
+  <mj-body background-color="#F9FAFB">
+    <mj-include path="./partials/header.mjml" />
+    <mj-section background-color="#FFFFFF" border-radius="8px" padding="24px">
+      <mj-column>
+        <mj-text font-size="20px" font-weight="bold" color="#1F2937">邮箱验证码</mj-text>
+        <mj-text font-size="14px" color="#4B5563" line-height="1.6"> 您好 {{ name }}，您的登录验证码为： </mj-text>
+        <mj-text font-size="32px" font-weight="bold" color="#4F46E5" letter-spacing="6px" align="center">
+          {{ code }}
+        </mj-text>
+        <mj-text font-size="12px" color="#9CA3AF" line-height="1.6">
+          验证码 5 分钟内有效，请勿向他人泄露。如果这不是您的操作，请忽略此邮件。
+        </mj-text>
+      </mj-column>
+    </mj-section>
+    <mj-include path="./partials/footer.mjml" />
+  </mj-body>
+</mjml>

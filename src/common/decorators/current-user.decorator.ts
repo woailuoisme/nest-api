@@ -8,6 +8,8 @@ export interface CurrentUserPayload {
   name?: string;
   role: Role;
   image?: string | null;
+  emailVerified?: boolean;
+  banned?: boolean;
 }
 
 /**

@@ -1,7 +1,7 @@
 import { asc, gt, inArray } from 'drizzle-orm';
 
 import type { SearchableDefinition } from '@/common/search/scout/searchable.interface';
-import type { DrizzleDB } from '@/database/drizzle/drizzle.service';
+import type { Database } from '@/database/drizzle/database';
 import { user } from '@/database/drizzle/schema';
 
 export type UserEntity = typeof user.$inferSelect;
@@ -10,8 +10,6 @@ export type UserSearchDocument = {
   id: string;
   name: string;
   email: string;
-  username: string | null;
-  phoneNumber: string | null;
   role: string | null;
   banned: boolean;
   createdAt: number;
@@ -22,8 +20,6 @@ const toUserSearchDocument = (entity: UserEntity): UserSearchDocument => ({
   id: entity.id,
   name: entity.name,
   email: entity.email,
-  username: entity.username ?? null,
-  phoneNumber: entity.phoneNumber ?? null,
   role: entity.role ?? 'user',
   banned: Boolean(entity.banned),
   createdAt: entity.createdAt ? Math.floor(new Date(entity.createdAt).getTime() / 1000) : 0,
@@ -34,20 +30,20 @@ export const userSearchable: SearchableDefinition<UserEntity, UserSearchDocument
   indexName: 'users',
   primaryKey: 'id',
   settings: {
-    searchableAttributes: ['name', 'email', 'username', 'phoneNumber'],
+    searchableAttributes: ['name', 'email'],
     filterableAttributes: ['role', 'banned', 'createdAt'],
     sortableAttributes: ['createdAt', 'name'],
   },
   toSearchableArray: toUserSearchDocument,
   toSearchable: toUserSearchDocument,
-  loadRecords: async (db: DrizzleDB, ids: (string | number)[]): Promise<UserEntity[]> => {
+  loadRecords: async (db: Database, ids: (string | number)[]): Promise<UserEntity[]> => {
     if (ids.length === 0) {
       return [];
     }
     const stringIds = ids.map(String);
     return db.select().from(user).where(inArray(user.id, stringIds));
   },
-  cursorLoader: async (db: DrizzleDB, { batchSize, afterId }) => {
+  cursorLoader: async (db: Database, { batchSize, afterId }) => {
     const query = afterId
       ? db
           .select()

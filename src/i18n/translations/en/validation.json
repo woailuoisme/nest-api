@@ -1,0 +1,40 @@
+{
+  "required": "{field} is required",
+  "minLength": "{field} must be at least {length} characters",
+  "email": "Please provide a valid email address",
+  "invalid_type": "{path} must be of type {expected}",
+  "too_small": {
+    "string": {
+      "one": "{path} must be at least {count} character",
+      "other": "{path} must be at least {count} characters"
+    },
+    "number": "{path} must be at least {minimum}",
+    "array": {
+      "one": "{path} must contain at least {count} item",
+      "other": "{path} must contain at least {count} items"
+    }
+  },
+  "too_big": {
+    "string": {
+      "one": "{path} must be at most {count} character",
+      "other": "{path} must be at most {count} characters"
+    },
+    "number": "{path} must be at most {maximum}",
+    "array": {
+      "one": "{path} must contain at most {count} item",
+      "other": "{path} must contain at most {count} items"
+    }
+  },
+  "invalid_format": {
+    "regex": "{path} has an invalid format",
+    "email": "{path} must be a valid email address",
+    "url": "{path} must be a valid URL"
+  },
+  "invalid_value": "{path} has an invalid value",
+  "unrecognized_keys": "{path} contains unknown fields",
+  "custom": "{path} is invalid",
+  "mfaCodeExclusive": "Provide exactly one of code or recoveryCode",
+  "sessionId": "Invalid session identifier",
+  "otp": "The code must be 6 digits",
+  "deviceId": "Device IDs may contain only letters, digits and _ . : -"
+}

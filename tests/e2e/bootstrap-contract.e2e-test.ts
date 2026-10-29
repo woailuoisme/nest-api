@@ -38,7 +38,7 @@ describe('引导期 HTTP 契约 (e2e)', () => {
     const body = JSON.parse(response.payload) as { error: { code: string; message: string } };
 
     expect(response.statusCode).toBe(401);
-    expect(body.error.code).toBe('UNAUTHORIZED');
+    expect(body.error.code).toBe('missing_credentials');
     expect(typeof body.error.message).toBe('string');
   });
 
@@ -46,7 +46,7 @@ describe('引导期 HTTP 契约 (e2e)', () => {
     const response = await app.inject({
       method: 'POST',
       url: '/v1/iot/devices/token',
-      headers: { 'content-type': 'application/json' },
+      headers: { 'content-type': 'application/json', 'x-lang': 'en' },
       payload: { deviceId: 'bad id!', deviceSecret: 'x' },
     });
     const body = JSON.parse(response.payload) as {
@@ -63,7 +63,7 @@ describe('引导期 HTTP 契约 (e2e)', () => {
   it('跨站写请求 → 403（内置 CSRF 基于 Fetch Metadata 拒绝）', async () => {
     const response = await app.inject({
       method: 'POST',
-      url: '/v1/auth/sign-in/email',
+      url: '/v1/auth/sign-in',
       headers: {
         'content-type': 'application/json',
         origin: 'https://evil.example.com',
@@ -78,7 +78,7 @@ describe('引导期 HTTP 契约 (e2e)', () => {
   it('服务端调用（无 Origin / Sec-Fetch-Site）不被 CSRF 拦截', async () => {
     const response = await app.inject({
       method: 'POST',
-      url: '/v1/auth/sign-in/email',
+      url: '/v1/auth/sign-in',
       headers: { 'content-type': 'application/json' },
       payload: {},
     });

@@ -4,6 +4,7 @@ import { z } from 'zod';
 import { Role } from '@/common/constants/roles';
 import { PageOptionsSchema, paginatedEnvelopeSchema } from '@/common/dto/pagination.dto';
 import { SpatieQueryParamsSchema } from '@/common/dto/query.dto';
+import { toDate } from '@/common/utils/date.util';
 
 // ─── 请求 DTO（Nest 12 原生 Standard Schema：schema 即契约，类型由 z.infer 派生）────────
 
@@ -48,23 +49,11 @@ export type ChangeRoleRequest = z.infer<typeof ChangeRoleSchema>;
 
 // ─── 响应 DTO ────────────────────────────────────────────
 
-/** 秒级时间戳上界：小于该量级视为秒级（毫秒时间戳自 1973 年起即远超此值） */
-const SECONDS_TIMESTAMP_UPPER_BOUND = 1e11;
-
-/** 归一化时间字段：兼容 Date / 秒级或毫秒级时间戳 / 日期字符串 */
-function toDate(value: Date | number | string): Date {
-  if (value instanceof Date) {
-    return value;
-  }
-  const ms = typeof value === 'number' && value < SECONDS_TIMESTAMP_UPPER_BOUND ? value * 1000 : value;
-  return new Date(ms);
-}
-
 /**
  * 用户资源输出契约（运行时响应序列化 + OpenAPI 文档的单一事实源）
  *
- * 以白名单方式裁剪 `new UserEntity(row)` 自 `user` 表带入的其余列
- * （twoFactorEnabled / phoneNumber / lastLoginMethod 等），杜绝敏感字段意外外泄。
+ * 以白名单方式裁剪 `new UserEntity(row)` 自 `user` 表带入的其余列，
+ * 杜绝内部字段意外外泄。
  */
 export const UserResourceSchema = z.object({
   id: z.string().describe('用户ID'),

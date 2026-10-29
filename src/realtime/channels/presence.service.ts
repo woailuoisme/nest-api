@@ -82,8 +82,9 @@ export class PresenceService {
       return false;
     }
 
-    item.member.updatedAt = Date.now();
-    item.expiresAt = Date.now() + ttlSeconds * 1000;
+    const now = Date.now();
+    item.member.updatedAt = now;
+    item.expiresAt = now + ttlSeconds * 1000;
     return true;
   }
 
@@ -95,12 +96,14 @@ export class PresenceService {
     if (this.centrifugoTransport) {
       const remoteMembers = await this.centrifugoTransport.getPresence<T>(channel);
       if (remoteMembers.length > 0 || !this.memoryStore.has(channel)) {
+        // 网关不返回加入时间：以本次查询时刻作为快照时间（同一快照内各成员一致）
+        const now = Date.now();
         return remoteMembers.map((m) => ({
           userId: m.userId,
           clientId: m.clientId,
           userInfo: m.info as T,
-          joinedAt: Date.now(),
-          updatedAt: Date.now(),
+          joinedAt: now,
+          updatedAt: now,
         }));
       }
     }

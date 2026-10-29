@@ -28,6 +28,8 @@ describe('AdminUsersController', () => {
     search: ReturnType<typeof vi.fn>;
   };
 
+  const actor = { id: 'actor-uuid-1', email: 'admin@example.com', role: Role.SUPER_ADMIN };
+
   const mockUser = new UserEntity({
     id: 'user-uuid-1',
     name: '张三',
@@ -69,9 +71,9 @@ describe('AdminUsersController', () => {
         password: 'Password123',
       };
 
-      const result = await controller.create(dto);
+      const result = await controller.create(actor, dto);
 
-      expect(usersService.create).toHaveBeenCalledWith(dto);
+      expect(usersService.create).toHaveBeenCalledWith(actor, dto);
       expect(result).toEqual(mockUser);
     });
   });
@@ -97,9 +99,9 @@ describe('AdminUsersController', () => {
   describe('PATCH /admin/users/:id — 更新用户', () => {
     it('应调用 UsersService.update 更新用户信息', async () => {
       const dto = { name: '李四' };
-      const result = await controller.update('user-uuid-1', dto);
+      const result = await controller.update(actor, 'user-uuid-1', dto);
 
-      expect(usersService.update).toHaveBeenCalledWith('user-uuid-1', dto);
+      expect(usersService.update).toHaveBeenCalledWith(actor, 'user-uuid-1', dto);
       expect(result).toEqual(mockUser);
     });
   });
@@ -117,9 +119,9 @@ describe('AdminUsersController', () => {
 
   describe('DELETE /admin/users/:id — 删除用户', () => {
     it('应调用 UsersService.remove 删除用户', async () => {
-      const result = await controller.remove('user-uuid-1');
+      const result = await controller.remove(actor, 'user-uuid-1');
 
-      expect(usersService.remove).toHaveBeenCalledWith('user-uuid-1');
+      expect(usersService.remove).toHaveBeenCalledWith(actor, 'user-uuid-1');
       expect(result).toBeUndefined();
     });
   });

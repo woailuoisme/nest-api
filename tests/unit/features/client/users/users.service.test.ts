@@ -5,13 +5,13 @@
  * 管理面测试见 tests/unit/admin/users/users.service.test.ts
  */
 import { NotFoundException } from '@nestjs/common';
+import { getDrizzleToken } from '@nestjs/drizzle';
 import { Test } from '@nestjs/testing';
 import { createMockDrizzleDb } from 'tests/mocks/drizzle.mock';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { MediaService } from '@/common/media/media.service';
 import type { UploadedFile } from '@/common/storage/interfaces/upload.interface';
-import { DRIZZLE_DB } from '@/database/drizzle/drizzle.service';
 import { UserEntity } from '@/features/client/users/users.dto';
 import { UsersService } from '@/features/client/users/users.service';
 
@@ -71,7 +71,7 @@ describe('UsersService (前端自助面)', () => {
     const module = await Test.createTestingModule({
       providers: [
         UsersService,
-        { provide: DRIZZLE_DB, useValue: db },
+        { provide: getDrizzleToken(), useValue: db },
         { provide: MediaService, useValue: mediaService },
       ],
     }).compile();

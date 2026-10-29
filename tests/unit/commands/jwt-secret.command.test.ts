@@ -31,17 +31,14 @@ describe('JwtSecretCommand', () => {
     await command.run([], { env: testEnvPath });
 
     const updatedContent = readFileSync(testEnvPath, 'utf8');
-    expect(updatedContent).toContain('BETTER_AUTH_SECRET=');
-    expect(updatedContent).toContain('JWT_ACCESS_SECRET=');
-    expect(updatedContent).toContain('JWT_REFRESH_SECRET=');
+    expect(updatedContent).toContain('JWT_SECRET=');
+    expect(updatedContent).toContain('MFA_ENCRYPTION_KEYS=');
 
-    const betterAuthMatch = updatedContent.match(/BETTER_AUTH_SECRET=([A-Za-z0-9_-]+)/);
-    const accessMatch = updatedContent.match(/JWT_ACCESS_SECRET=([A-Za-z0-9_-]+)/);
-    const refreshMatch = updatedContent.match(/JWT_REFRESH_SECRET=([A-Za-z0-9_-]+)/);
+    const betterAuthMatch = updatedContent.match(/JWT_SECRET=([A-Za-z0-9_-]+)/);
+    const accessMatch = updatedContent.match(/MFA_ENCRYPTION_KEYS=([A-Za-z0-9_-]+)/);
     expect(betterAuthMatch).not.toBeNull();
     expect(accessMatch).not.toBeNull();
-    expect(refreshMatch).not.toBeNull();
-    expect(accessMatch?.[1]).not.toBe(refreshMatch?.[1]);
+    expect(accessMatch).not.toBeNull();
   });
 
   it('当目标 .env 不存在时应自动创建并写入密钥', async () => {
@@ -49,9 +46,8 @@ describe('JwtSecretCommand', () => {
 
     expect(existsSync(testEnvPath)).toBe(true);
     const createdContent = readFileSync(testEnvPath, 'utf8');
-    expect(createdContent).toMatch(/BETTER_AUTH_SECRET=.+/);
-    expect(createdContent).toMatch(/JWT_ACCESS_SECRET=.+/);
-    expect(createdContent).toMatch(/JWT_REFRESH_SECRET=.+/);
+    expect(createdContent).toMatch(/JWT_SECRET=.+/);
+    expect(createdContent).toMatch(/MFA_ENCRYPTION_KEYS=.+/);
   });
 
   it('should display secrets in console if show option is true', async () => {
@@ -60,9 +56,8 @@ describe('JwtSecretCommand', () => {
     await command.run([], { env: testEnvPath, show: true });
 
     expect(logSpy).toHaveBeenCalledWith(expect.stringContaining('[auth:secret]'));
-    expect(logSpy).toHaveBeenCalledWith(expect.stringContaining('BETTER_AUTH_SECRET:'));
-    expect(logSpy).toHaveBeenCalledWith(expect.stringContaining('JWT_ACCESS_SECRET:'));
-    expect(logSpy).toHaveBeenCalledWith(expect.stringContaining('JWT_REFRESH_SECRET:'));
+    expect(logSpy).toHaveBeenCalledWith(expect.stringContaining('JWT_SECRET:'));
+    expect(logSpy).toHaveBeenCalledWith(expect.stringContaining('MFA_ENCRYPTION_KEYS:'));
   });
 
   it('should correctly parse options methods', () => {

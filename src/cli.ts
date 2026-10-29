@@ -14,7 +14,7 @@ import { setupTimezone } from './config/timezone';
 const paint = (code: string) => (text: string) =>
   process.stdout.isTTY && !('NO_COLOR' in process.env) ? `\x1b[${code}m${text}\x1b[0m` : text;
 
-const boldCyan = (t: string) => paint('1;36')(t);
+const boldCyan = paint('1;36');
 const cyan = paint('36');
 const green = paint('32');
 const yellow = paint('33');

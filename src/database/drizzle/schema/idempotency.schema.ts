@@ -1,5 +1,5 @@
 import type { IdempotencyStoredPayload } from '@nestjs/idempotency';
-import { bigint, index, jsonb, pgTable, text, timestamp, varchar } from 'drizzle-orm/pg-core';
+import { bigint, index, json, pgTable, text, timestamp, varchar } from 'drizzle-orm/pg-core';
 
 /**
  * API 幂等记录与并发租约表 (idempotency_keys)
@@ -20,7 +20,8 @@ export const idempotencyKeys = pgTable(
     key: text('key').notNull(),
     fingerprint: text('fingerprint').notNull(),
     owner: text('owner'),
-    response: jsonb('response').$type<IdempotencyStoredPayload>(),
+    // json 而非 jsonb：jsonb 拒绝字符串中的 \u0000（官方文档明确要求），否则特定响应体会写不进去
+    response: json('response').$type<IdempotencyStoredPayload>(),
     expiresAt: bigint('expires_at', { mode: 'number' }).notNull(),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),

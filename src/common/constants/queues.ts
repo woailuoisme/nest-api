@@ -7,7 +7,7 @@
 /** 演示队列名 */
 export const DEMO_QUEUE = 'demo';
 
-/** 邮件队列名 */
+/** 邮件队列名（验证码 / 验证链接 / 重置密码 / 欢迎邮件） */
 export const MAIL_QUEUE = 'mail';
 
 /** Token 清理队列名 */

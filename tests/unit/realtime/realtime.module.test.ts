@@ -1,9 +1,9 @@
 import { Global, Module } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import { getDrizzleToken } from '@nestjs/drizzle';
 import { Test, type TestingModule } from '@nestjs/testing';
 import { beforeEach, describe, expect, it } from 'vitest';
 
-import { DRIZZLE_DB } from '@/database/drizzle/drizzle.service';
 import { ChannelExplorerService } from '@/realtime/channels/channel-explorer.service';
 import { ChannelManager } from '@/realtime/channels/channel-manager.service';
 import { PresenceService } from '@/realtime/channels/presence.service';
@@ -33,11 +33,11 @@ describe('RealtimeModule', () => {
       { provide: ConfigService, useValue: mockConfigService },
       // Proxy webhook 鉴权需回查用户，开发环境由全局 DrizzleModule 提供，这里手动补上
       {
-        provide: DRIZZLE_DB,
+        provide: getDrizzleToken(),
         useValue: { query: { user: { findFirst: () => Promise.resolve(null) } } },
       },
     ],
-    exports: [ConfigService, DRIZZLE_DB],
+    exports: [ConfigService, getDrizzleToken()],
   })
   class MockGlobalModule {}
 

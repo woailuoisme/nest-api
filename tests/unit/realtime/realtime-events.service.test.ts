@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { Role } from '@/common/constants/roles';
 import type { CurrentUserPayload } from '@/common/decorators/current-user.decorator';
-import type { DrizzleDB } from '@/database/drizzle/drizzle.service';
+import type { Database } from '@/database/drizzle/database';
 import type { RealtimeService } from '@/realtime';
 import { REALTIME_CHANNELS } from '@/realtime/channels/realtime-channels.service';
 import { RealtimeEventsService } from '@/realtime/realtime-events.service';
@@ -54,7 +54,7 @@ describe('RealtimeEventsService', () => {
 
     service = new RealtimeEventsService(
       mockRealtimeService as unknown as RealtimeService,
-      mockDb as unknown as DrizzleDB,
+      mockDb as unknown as Database,
     );
   });
 

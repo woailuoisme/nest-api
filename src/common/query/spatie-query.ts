@@ -66,6 +66,12 @@ const FILTER_KEY_PATTERN = /^filter\[([A-Za-z0-9_]{1,64})\]$/;
 const FIELDS_KEY_PATTERN = /^fields\[([A-Za-z0-9_]{1,64})\]$/;
 /** 原型链敏感键：写入对象前一律拒绝 */
 const FORBIDDEN_KEYS = new Set(['__proto__', 'constructor', 'prototype']);
+/** 关系名允许点号（如 `posts.comments`）；字段名不允许 */
+const RELATION_TOKEN_PATTERN = /^[A-Za-z0-9_.]{1,64}$/;
+/** 排序 token 允许 `-` 前缀（降序） */
+const SORT_TOKEN_PATTERN = /^-?[A-Za-z0-9_.]{1,64}$/;
+/** 稀疏字段集里的列名 */
+const FIELD_TOKEN_PATTERN = /^[A-Za-z0-9_]{1,64}$/;
 
 /**
  * 解析 HTTP Query 中的 Spatie Query Builder 风格参数（v7 口径）：
@@ -104,30 +110,44 @@ function parseSearch(raw: unknown): string | undefined {
   return keyword === '' ? undefined : keyword;
 }
 
-/** 收集过滤原始值：嵌套对象形态与扁平 `filter[field]` 形态合并 */
-function collectFilterEntries(rawQuery: Record<string, unknown>): [string, unknown][] {
-  const entries: [string, unknown][] = [];
-
-  const nested = rawQuery.filter;
-  if (nested && typeof nested === 'object' && !Array.isArray(nested)) {
-    for (const [field, value] of Object.entries(nested as Record<string, unknown>)) {
-      entries.push([field, value]);
-    }
-  }
+/**
+ * 收集「嵌套对象 + 扁平 `prefix[key]`」两种形态的条目。
+ *
+ * 例如 `{ filter: { role: 'ADMIN' } }` 与 `{ 'filter[role]': 'ADMIN' }` 都能取到 `['role', 'ADMIN']`。
+ */
+function collectEntries(nested: unknown, flatPattern: RegExp, rawQuery: Record<string, unknown>): [string, unknown][] {
+  const entries: [string, unknown][] =
+    nested && typeof nested === 'object' && !Array.isArray(nested)
+      ? Object.entries(nested as Record<string, unknown>)
+      : [];
 
   for (const [key, value] of Object.entries(rawQuery)) {
-    const matched = FILTER_KEY_PATTERN.exec(key);
+    const matched = flatPattern.exec(key);
     if (matched?.[1]) entries.push([matched[1], value]);
   }
 
   return entries;
 }
 
+/** 展开重复参数与逗号分隔值，按模式过滤并去重（保持首次出现的顺序） */
+function flattenTokens(raw: unknown, pattern: RegExp): string[] {
+  const tokens = new Set<string>();
+
+  for (const expression of toValueList(raw)) {
+    for (const token of expression.split(',')) {
+      const value = token.trim();
+      if (pattern.test(value)) tokens.add(value);
+    }
+  }
+
+  return [...tokens];
+}
+
 /** 解析全部过滤条件；同一字段 + 同一算子合并多值，同字段不同算子各自生效（AND） */
 function parseFilters(rawQuery: Record<string, unknown>): ParsedFilter[] {
   const merged = new Map<string, ParsedFilter>();
 
-  for (const [field, rawValue] of collectFilterEntries(rawQuery)) {
+  for (const [field, rawValue] of collectEntries(rawQuery.filter, FILTER_KEY_PATTERN, rawQuery)) {
     if (FORBIDDEN_KEYS.has(field)) continue;
 
     for (const raw of toValueList(rawValue)) {
@@ -154,7 +174,8 @@ function parseFilterValue(field: string, raw: string): ParsedFilter | undefined 
   if (trimmed === '') return undefined;
 
   const match = DYNAMIC_OPERATORS.find((op) => trimmed.startsWith(op));
-  const operator: FilterOperator = match === '<>' ? '!=' : ((match ?? '=') as FilterOperator);
+  // `<>` 归一化为 `!=`；其余前缀本身就是合法算子，无需断言
+  const operator: FilterOperator = match === '<>' ? '!=' : (match ?? '=');
   const rawValues = match ? trimmed.slice(match.length) : trimmed;
 
   const values = rawValues
@@ -176,23 +197,18 @@ function toValueList(value: unknown): string[] {
   return [];
 }
 
-/** 解析 `sort=-createdAt,name`（支持重复 sort 参数） */
+/** 解析 `sort=-createdAt,name`（支持重复 sort 参数）；同字段只保留首次出现的方向 */
 function parseSorts(raw: unknown): ParsedSort[] {
-  const sorts: ParsedSort[] = [];
   const seen = new Set<string>();
+  const sorts: ParsedSort[] = [];
 
-  for (const expression of toValueList(raw)) {
-    for (const token of expression.split(',')) {
-      const trimmed = token.trim();
-      if (trimmed === '') continue;
+  for (const token of flattenTokens(raw, SORT_TOKEN_PATTERN)) {
+    const descending = token.startsWith('-');
+    const field = descending ? token.slice(1) : token;
+    if (seen.has(field)) continue;
 
-      const descending = trimmed.startsWith('-');
-      const field = (descending ? trimmed.slice(1) : trimmed).trim();
-      if (!/^[A-Za-z0-9_.]{1,64}$/.test(field) || seen.has(field)) continue;
-
-      seen.add(field);
-      sorts.push({ field, direction: descending ? 'desc' : 'asc' });
-    }
+    seen.add(field);
+    sorts.push({ field, direction: descending ? 'desc' : 'asc' });
   }
 
   return sorts;
@@ -200,43 +216,25 @@ function parseSorts(raw: unknown): ParsedSort[] {
 
 /** 解析 `include=posts,comments` */
 function parseIncludes(raw: unknown): string[] {
-  const includes: string[] = [];
-
-  for (const expression of toValueList(raw)) {
-    for (const token of expression.split(',')) {
-      const relation = token.trim();
-      if (!/^[A-Za-z0-9_.]{1,64}$/.test(relation) || includes.includes(relation)) continue;
-      includes.push(relation);
-    }
-  }
-
-  return includes;
+  return flattenTokens(raw, RELATION_TOKEN_PATTERN);
 }
 
 /** 解析 `fields[users]=id,name`（兼容嵌套 `{ fields: { users: 'id,name' } }`） */
 function parseFields(rawFields: unknown, rawQuery: Record<string, unknown>): Record<string, string[]> {
-  const entries: [string, unknown][] = [];
+  // 同一资源可能同时出现在嵌套对象与扁平键中：先按资源归并再统一去重
+  const valuesByResource = new Map<string, unknown[]>();
 
-  if (rawFields && typeof rawFields === 'object' && !Array.isArray(rawFields)) {
-    entries.push(...Object.entries(rawFields as Record<string, unknown>));
-  }
-  for (const [key, value] of Object.entries(rawQuery)) {
-    const matched = FIELDS_KEY_PATTERN.exec(key);
-    if (matched?.[1]) entries.push([matched[1], value]);
+  for (const [resource, rawValue] of collectEntries(rawFields, FIELDS_KEY_PATTERN, rawQuery)) {
+    if (FORBIDDEN_KEYS.has(resource)) continue;
+
+    const values = valuesByResource.get(resource) ?? [];
+    values.push(rawValue);
+    valuesByResource.set(resource, values);
   }
 
   const fields: Record<string, string[]> = {};
-  for (const [resource, rawValue] of entries) {
-    if (FORBIDDEN_KEYS.has(resource)) continue;
-
-    const selected: string[] = [];
-    for (const expression of toValueList(rawValue)) {
-      for (const token of expression.split(',')) {
-        const column = token.trim();
-        if (!/^[A-Za-z0-9_]{1,64}$/.test(column) || selected.includes(column)) continue;
-        selected.push(column);
-      }
-    }
+  for (const [resource, values] of valuesByResource) {
+    const selected = flattenTokens(values, FIELD_TOKEN_PATTERN);
     if (selected.length > 0) fields[resource] = selected;
   }
 
@@ -369,7 +367,10 @@ function buildFilterCondition(filter: ParsedFilter, options: SpatieMappingOption
  * 其余类型直接透传。
  */
 function coerceValue(column: PgColumn, raw: string): string | number | boolean | Date | undefined {
-  switch (column.dataType) {
+  // Drizzle v1 的 dataType 是复合值（如 `number int32` / `object date` / `string uuid`），首段才是基础类型
+  const [baseType, subType] = column.dataType.split(' ');
+
+  switch (baseType) {
     case 'number': {
       const value = Number(raw);
       return Number.isFinite(value) ? value : undefined;
@@ -380,7 +381,9 @@ function coerceValue(column: PgColumn, raw: string): string | number | boolean |
       if (['false', '0', 'f', 'no'].includes(normalized)) return false;
       return undefined;
     }
-    case 'date': {
+    case 'object': {
+      // 仅 timestamp 需要转为 Date；json 列（`object json`）保持原值
+      if (subType !== 'date') return raw;
       const timestamp = Date.parse(raw);
       return Number.isNaN(timestamp) ? undefined : new Date(timestamp);
     }

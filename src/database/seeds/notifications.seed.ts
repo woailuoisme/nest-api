@@ -1,13 +1,13 @@
 import { seed } from 'drizzle-seed';
 
-import type { DrizzleDB } from '@/database/drizzle/drizzle.service';
+import type { Database } from '@/database/drizzle/database';
 import * as schema from '@/database/drizzle/schema';
 
 export const description = 'Seed notifications via drizzle-seed — polymorphic user message inbox';
 
 const NOTIFICATION_TYPES = ['system.alert', 'user.welcome', 'security.login', 'billing.invoice', 'device.offline'];
 
-export async function run(db: DrizzleDB): Promise<void> {
+export async function run(db: Database): Promise<void> {
   console.log('🌱 Seeding notifications via drizzle-seed...\n');
 
   // 查询已初始化的用户以多态关联通知

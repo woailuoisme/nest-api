@@ -9,7 +9,7 @@ import type { CommandOptions } from './types';
  * (always lands inside the /admin boundary unless scope=client).
  *
  * Artifacts go to src/features/<scope>/<feature>/ and are auto-registered into
- * AdminModule (protected by AdminPrefixGuard) or the client feature list.
+ * AdminModule (protected by @Can(AdminPolicy)) or the client feature list.
  *
  * Usage:
  *   just cmd crud:generate -n product --from-schema auth --from-entity users
@@ -71,7 +71,7 @@ export class CrudGenerateCommand extends CommandRunner {
       return;
     }
 
-    this.printSummary(result.ctx.FeatureName, result.ctx.featureName, result.ctx.scope, result.ctx.routePrefix);
+    this.printSummary(result.ctx.FeatureName, result.ctx.scope, result.ctx.routePrefix);
   }
 
   // ── Options ──────────────────────────────────────
@@ -148,17 +148,12 @@ export class CrudGenerateCommand extends CommandRunner {
     }
   }
 
-  private printSummary(
-    FeatureName: string,
-    _featureName: string,
-    scope: 'admin' | 'client',
-    routePrefix: string,
-  ): void {
+  private printSummary(FeatureName: string, scope: 'admin' | 'client', routePrefix: string): void {
     this.logger.log('----------------------------------------');
     this.logger.log(`crud:generate — ${FeatureName} module generated. [scope=${scope}]`);
     if (scope === 'admin') {
       this.logger.log(
-        `1. Module auto-registered into AdminModule (/${routePrefix} routes protected by AdminPrefixGuard, ADMIN only)`,
+        `1. Module auto-registered into AdminModule (/${routePrefix} routes protected by @Can(AdminPolicy), ADMIN only)`,
       );
     } else {
       this.logger.log(
@@ -167,7 +162,7 @@ export class CrudGenerateCommand extends CommandRunner {
     }
     this.logger.log('2. Run just db-gen && just db-migrate to apply the new table migration');
     this.logger.log(
-      `3. Add permissions in src/common/constants/permissions.ts: ${FeatureName}Create / ${FeatureName}Read / ${FeatureName}Update / ${FeatureName}Delete, then uncomment the matching @Permissions decorators in the controller`,
+      `3. Add abilities to a @Policy() class and annotate the controller routes with @Can() / @Can.Anyone() (authorization is deny-by-default)`,
     );
     this.logger.log('----------------------------------------');
   }

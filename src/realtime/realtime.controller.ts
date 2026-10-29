@@ -1,5 +1,6 @@
 import { createHash, timingSafeEqual } from 'node:crypto';
 
+import { Can } from '@nestjs/authorization';
 import {
   Body,
   Controller,
@@ -16,6 +17,7 @@ import { ConfigService } from '@nestjs/config';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import type { FastifyRequest } from 'fastify';
 
+import { isProductionEnv } from '@/common/constants/app.constants';
 import { CurrentUser, type CurrentUserPayload } from '@/common/decorators/current-user.decorator';
 import { Public } from '@/common/decorators/public.decorator';
 import { ApiSuccessResponse } from '@/common/decorators/swagger-response.decorator';
@@ -43,6 +45,7 @@ import { RealtimeEventsService } from './realtime-events.service';
  */
 @ApiTags('实时通信')
 @ApiBearerAuth()
+@Can.Anyone()
 @Controller(['realtime', 'websocket', 'sse'])
 export class RealtimeController {
   constructor(
@@ -108,11 +111,20 @@ export class RealtimeController {
   }
 
   /**
-   * 恒定时间校验网关共享密钥；未配置时跳过（与网关未发头的默认状态保持一致）。
+   * 恒定时间校验网关共享密钥。
+   *
+   * 生产环境 fail-closed：未配置密钥时直接拒绝，避免公开路由退化为「任意 user + 频道」
+   * 的授权探测接口（env 校验只在启用 REALTIME_URL 时强制该密钥，未启用 realtime 的
+   * 生产部署仍需单独兜底）。本地开发未配置时跳过，便于直连调试。
    */
   private assertTrustedProxy(provided?: string): void {
     const expected = this.config.get('CENTRIFUGO_PROXY_SECRET', { infer: true });
-    if (!expected) return;
+    if (!expected) {
+      if (isProductionEnv()) {
+        throw new UnauthorizedException('Centrifugo proxy secret is not configured');
+      }
+      return;
+    }
 
     // 先哈希再比较：长度差异不参与计时，消除密钥长度的旁路信息
     const digest = (value: string) => createHash('sha256').update(value).digest();

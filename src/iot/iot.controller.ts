@@ -1,10 +1,10 @@
+import { Can } from '@nestjs/authorization';
 import { Body, Controller, Get, HttpCode, HttpStatus, Param, Post, Query } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { Throttle } from '@nestjs/throttler';
 
-import { Role } from '@/common/constants/roles';
+import { IotPolicy } from '@/common/authorization/policies/iot.policy';
 import { Public } from '@/common/decorators/public.decorator';
-import { Roles } from '@/common/decorators/roles.decorator';
 import { ApiSuccessResponse } from '@/common/decorators/swagger-response.decorator';
 
 import {
@@ -34,6 +34,7 @@ import { IotTelemetryService } from './services/iot-telemetry.service';
  */
 @ApiTags('物联网与设备控制')
 @ApiBearerAuth()
+@Can(IotPolicy, 'accessDevices')
 @Controller('iot/devices')
 export class IotController {
   constructor(
@@ -42,7 +43,6 @@ export class IotController {
   ) {}
 
   @Get()
-  @Roles(Role.OPERATOR, Role.ADMIN, Role.SUPER_ADMIN)
   @ApiOperation({ summary: '获取设备影子列表' })
   @ApiSuccessResponse(DeviceShadowEntity, { isArray: true, description: '设备影子列表' })
   listDevices(@Query({ schema: DeviceShadowQuerySchema }) query: DeviceShadowQueryDto): DeviceShadowEntity[] {
@@ -50,7 +50,6 @@ export class IotController {
   }
 
   @Get(':deviceId/shadow')
-  @Roles(Role.OPERATOR, Role.ADMIN, Role.SUPER_ADMIN)
   @ApiOperation({ summary: '查询设备实时状态影子' })
   @ApiSuccessResponse(DeviceShadowEntity, { description: '设备影子状态' })
   getShadow(
@@ -61,7 +60,6 @@ export class IotController {
   }
 
   @Post(':deviceId/command')
-  @Roles(Role.OPERATOR, Role.ADMIN, Role.SUPER_ADMIN)
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: '向工业设备下发控制指令' })
   @ApiSuccessResponse(CommandResponseEntity, { description: '设备指令执行回执' })
@@ -83,7 +81,6 @@ export class IotController {
   }
 
   @Post('mock-telemetry')
-  @Roles(Role.OPERATOR, Role.ADMIN, Role.SUPER_ADMIN)
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: '模拟工业设备遥测上报' })
   @ApiSuccessResponse(DeviceShadowEntity, { description: '遥测上报成功并更新影子' })
@@ -92,7 +89,6 @@ export class IotController {
   }
 
   @Post('mock-event')
-  @Roles(Role.OPERATOR, Role.ADMIN, Role.SUPER_ADMIN)
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: '模拟工业设备硬件告警' })
   async mockEvent(

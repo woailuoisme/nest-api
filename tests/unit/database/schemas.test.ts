@@ -8,12 +8,14 @@ describe('Drizzle Schemas Integrity', () => {
   describe('schema/index.ts 统一聚合导出', () => {
     it('应完整导出所有领域表定义', () => {
       expect(schema.user).toBeDefined();
-      expect(schema.session).toBeDefined();
       expect(schema.account).toBeDefined();
-      expect(schema.verification).toBeDefined();
-      expect(schema.twoFactor).toBeDefined();
-      expect(schema.apikey).toBeDefined();
-      expect(schema.jwks).toBeDefined();
+      expect(schema.sessions).toBeDefined();
+      expect(schema.refreshTokens).toBeDefined();
+      expect(schema.mfaAuthenticators).toBeDefined();
+      expect(schema.mfaRecoveryCodes).toBeDefined();
+      expect(schema.mfaFailures).toBeDefined();
+      expect(schema.emailTokens).toBeDefined();
+      expect(schema.apiKeys).toBeDefined();
       expect(schema.media).toBeDefined();
       expect(schema.notifications).toBeDefined();
     });

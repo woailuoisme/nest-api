@@ -1,10 +1,11 @@
 -- =============================================================================
--- Better Auth Core & Plugins DDL (PostgreSQL)
+-- 用户 / 凭据与认证状态 DDL (PostgreSQL)
 -- 100% Strictly Generated from:
---   src/database/drizzle/schema/better-auth.schema.ts
+--   src/database/drizzle/schema/auth.schema.ts           (user / account)
+--   src/database/drizzle/schema/authentication.schema.ts (认证状态表)
 --
 -- ⚠️ 仅作**参考实现 / 人工核对**，权威来源是 drizzle/migrations（应用启动与 CI 只跑迁移）。
---    改表流程：插件变更 → `just ba-generate` 重生成 schema → `just db-gen` 产出迁移 → 再同步本文件。
+--    改表流程：修改 schema → `just db-gen` 产出迁移 → 再同步本文件。
 -- =============================================================================
 
 -- -----------------------------------------------------------------------------
@@ -21,45 +22,18 @@ CREATE TABLE IF NOT EXISTS "user" (
     "role" text,
     "banned" boolean DEFAULT false,
     "ban_reason" text,
-    "ban_expires" timestamp,
-    "two_factor_enabled" boolean DEFAULT false,
-    "username" text UNIQUE,
-    "display_username" text,
     "phone_number" text UNIQUE,
-    "phone_number_verified" boolean,
-    "last_login_method" text
+    "phone_number_verified" boolean DEFAULT false
 );
 
 -- -----------------------------------------------------------------------------
--- 2. Session Table
--- -----------------------------------------------------------------------------
-CREATE TABLE IF NOT EXISTS "session" (
-    "id" text PRIMARY KEY,
-    "expires_at" timestamp NOT NULL,
-    "token" text NOT NULL UNIQUE,
-    "created_at" timestamp NOT NULL,
-    "updated_at" timestamp NOT NULL,
-    "ip_address" text,
-    "user_agent" text,
-    "user_id" text NOT NULL REFERENCES "user"("id") ON DELETE CASCADE,
-    "impersonated_by" text
-);
-CREATE INDEX IF NOT EXISTS "session_userId_idx" ON "session" ("user_id");
-
--- -----------------------------------------------------------------------------
--- 3. Account Table (OAuth & Credentials)
+-- 2. Account Table (Credentials / OAuth)
 -- -----------------------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS "account" (
     "id" text PRIMARY KEY,
     "account_id" text NOT NULL,
     "provider_id" text NOT NULL,
     "user_id" text NOT NULL REFERENCES "user"("id") ON DELETE CASCADE,
-    "access_token" text,
-    "refresh_token" text,
-    "id_token" text,
-    "access_token_expires_at" timestamp,
-    "refresh_token_expires_at" timestamp,
-    "scope" text,
     "password" text,
     "created_at" timestamp NOT NULL,
     "updated_at" timestamp NOT NULL
@@ -67,77 +41,121 @@ CREATE TABLE IF NOT EXISTS "account" (
 CREATE INDEX IF NOT EXISTS "account_userId_idx" ON "account" ("user_id");
 
 -- -----------------------------------------------------------------------------
--- 4. Verification Table (Tokens & OTPs)
+-- 3. Sessions (@nestjs/authentication)
 -- -----------------------------------------------------------------------------
-CREATE TABLE IF NOT EXISTS "verification" (
+CREATE TABLE IF NOT EXISTS "sessions" (
     "id" text PRIMARY KEY,
-    "identifier" text NOT NULL,
-    "value" text NOT NULL,
-    "expires_at" timestamp NOT NULL,
-    "created_at" timestamp NOT NULL,
-    "updated_at" timestamp NOT NULL
+    "user_id" text NOT NULL,
+    "created_at" timestamp with time zone NOT NULL,
+    "expires_at" timestamp with time zone NOT NULL,
+    "last_active_at" timestamp with time zone NOT NULL,
+    "mfa" text,
+    "metadata" jsonb
 );
-CREATE INDEX IF NOT EXISTS "verification_identifier_idx" ON "verification" ("identifier");
+CREATE INDEX IF NOT EXISTS "sessions_user_id_idx" ON "sessions" ("user_id");
+CREATE INDEX IF NOT EXISTS "sessions_expires_at_idx" ON "sessions" ("expires_at");
 
 -- -----------------------------------------------------------------------------
--- 5. Two-Factor Authentication Table
+-- 4. Refresh Tokens
 -- -----------------------------------------------------------------------------
-CREATE TABLE IF NOT EXISTS "two_factor" (
+CREATE TABLE IF NOT EXISTS "refresh_tokens" (
     "id" text PRIMARY KEY,
+    "family_id" text NOT NULL,
+    "user_id" text NOT NULL,
+    "created_at" timestamp with time zone NOT NULL,
+    "expires_at" timestamp with time zone NOT NULL,
+    "family_expires_at" timestamp with time zone NOT NULL,
+    "used_at" timestamp with time zone,
+    "revoked" boolean DEFAULT false NOT NULL,
+    "claims" jsonb
+);
+CREATE INDEX IF NOT EXISTS "refresh_tokens_family_id_idx" ON "refresh_tokens" ("family_id");
+CREATE INDEX IF NOT EXISTS "refresh_tokens_user_id_idx" ON "refresh_tokens" ("user_id");
+CREATE INDEX IF NOT EXISTS "refresh_tokens_family_expires_at_idx" ON "refresh_tokens" ("family_expires_at");
+
+-- -----------------------------------------------------------------------------
+-- 5. TOTP Authenticators / Recovery Codes / Failures
+-- -----------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS "mfa_authenticators" (
+    "user_id" text PRIMARY KEY,
     "secret" text NOT NULL,
-    "backup_codes" text NOT NULL,
-    "user_id" text NOT NULL REFERENCES "user"("id") ON DELETE CASCADE,
-    "verified" boolean DEFAULT true,
-    "failed_verification_count" integer DEFAULT 0,
-    "locked_until" timestamp
+    "confirmed" boolean NOT NULL,
+    "pending_secret" text,
+    "last_used_step" integer
 );
-CREATE INDEX IF NOT EXISTS "twoFactor_secret_idx" ON "two_factor" ("secret");
-CREATE INDEX IF NOT EXISTS "twoFactor_userId_idx" ON "two_factor" ("user_id");
+
+CREATE TABLE IF NOT EXISTS "mfa_recovery_codes" (
+    "user_id" text,
+    "code_hash" text,
+    CONSTRAINT "mfa_recovery_codes_pkey" PRIMARY KEY ("user_id", "code_hash")
+);
+
+CREATE TABLE IF NOT EXISTS "mfa_failures" (
+    "id" integer PRIMARY KEY GENERATED ALWAYS AS IDENTITY,
+    "user_id" text NOT NULL,
+    "failed_at" timestamp with time zone NOT NULL
+);
+CREATE INDEX IF NOT EXISTS "mfa_failures_user_id_failed_at_idx" ON "mfa_failures" ("user_id", "failed_at");
+CREATE INDEX IF NOT EXISTS "mfa_failures_failed_at_idx" ON "mfa_failures" ("failed_at");
 
 -- -----------------------------------------------------------------------------
--- 6. API Key Table
+-- 6. Email Tokens (password reset / email verification)
 -- -----------------------------------------------------------------------------
-CREATE TABLE IF NOT EXISTS "apikey" (
+CREATE TABLE IF NOT EXISTS "email_tokens" (
     "id" text PRIMARY KEY,
-    "config_id" text NOT NULL DEFAULT 'default',
+    "purpose" text NOT NULL,
+    "user_id" text NOT NULL,
+    "email" text NOT NULL,
+    "fingerprint" text,
+    "created_at" timestamp with time zone NOT NULL,
+    "expires_at" timestamp with time zone NOT NULL
+);
+CREATE INDEX IF NOT EXISTS "email_tokens_user_id_purpose_idx" ON "email_tokens" ("user_id", "purpose");
+CREATE INDEX IF NOT EXISTS "email_tokens_expires_at_idx" ON "email_tokens" ("expires_at");
+
+-- -----------------------------------------------------------------------------
+-- 7. API Keys
+-- -----------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS "api_keys" (
+    "id" text PRIMARY KEY,
+    "user_id" text NOT NULL,
     "name" text,
-    "start" text,
-    "reference_id" text NOT NULL,
-    "prefix" text,
-    "key" text NOT NULL,
-    "refill_interval" integer,
-    "refill_amount" integer,
-    "last_refill_at" timestamp,
-    "enabled" boolean DEFAULT true,
-    "rate_limit_enabled" boolean DEFAULT true,
-    "rate_limit_time_window" integer DEFAULT 86400000,
-    "rate_limit_max" integer DEFAULT 10,
-    "request_count" integer DEFAULT 0,
-    "remaining" integer,
-    "last_request" timestamp,
-    "expires_at" timestamp,
-    "created_at" timestamp NOT NULL,
-    "updated_at" timestamp NOT NULL,
-    "permissions" text,
-    "metadata" text
+    "prefix" text NOT NULL,
+    "hash" text NOT NULL,
+    "created_at" timestamp with time zone NOT NULL,
+    "expires_at" timestamp with time zone,
+    "last_used_at" timestamp with time zone,
+    "revoked" boolean DEFAULT false NOT NULL
 );
-CREATE INDEX IF NOT EXISTS "apikey_configId_idx" ON "apikey" ("config_id");
-CREATE INDEX IF NOT EXISTS "apikey_referenceId_idx" ON "apikey" ("reference_id");
-CREATE INDEX IF NOT EXISTS "apikey_key_idx" ON "apikey" ("key");
-
--- SSO / Organization / Member / Invitation / Passkey / Device Code 表随插件移除而废弃
+CREATE INDEX IF NOT EXISTS "api_keys_user_id_idx" ON "api_keys" ("user_id");
+CREATE INDEX IF NOT EXISTS "api_keys_expires_at_idx" ON "api_keys" ("expires_at");
 
 -- -----------------------------------------------------------------------------
--- 7. JWKS Table (Key Rotation & Discovery)
+-- 8. Email / SMS OTP Codes（归属验证，5 分钟有效）
 -- -----------------------------------------------------------------------------
-CREATE TABLE IF NOT EXISTS "jwks" (
+CREATE TABLE IF NOT EXISTS "otp_codes" (
     "id" text PRIMARY KEY,
-    "public_key" text NOT NULL,
-    "private_key" text NOT NULL,
-    "created_at" timestamp NOT NULL,
-    "expires_at" timestamp,
-    "alg" text,
-    "crv" text
+    "channel" text NOT NULL,
+    "target" text NOT NULL,
+    "purpose" text NOT NULL,
+    "user_id" text,
+    "code_hash" text NOT NULL,
+    "attempts" integer DEFAULT 0 NOT NULL,
+    "created_at" timestamp with time zone NOT NULL,
+    "expires_at" timestamp with time zone NOT NULL
 );
+CREATE UNIQUE INDEX IF NOT EXISTS "otp_codes_target_purpose_uidx" ON "otp_codes" ("target", "purpose");
+CREATE INDEX IF NOT EXISTS "otp_codes_expires_at_idx" ON "otp_codes" ("expires_at");
 
--- SSO / Organization / Member / Invitation / Passkey / Device Code 表已随插件移除（历史库回收见后续迁移）
+-- -----------------------------------------------------------------------------
+-- 9. OTP Send Windows（验证码发送窗口：每小时次数上限的原子计数）
+-- -----------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS "otp_send_windows" (
+    "target" text NOT NULL,
+    "purpose" text NOT NULL,
+    "window_started_at" timestamp with time zone NOT NULL,
+    "send_count" integer DEFAULT 0 NOT NULL,
+    "last_sent_at" timestamp with time zone NOT NULL,
+    CONSTRAINT "otp_send_windows_target_purpose_pk" PRIMARY KEY ("target", "purpose")
+);
+CREATE INDEX IF NOT EXISTS "otp_send_windows_window_started_at_idx" ON "otp_send_windows" ("window_started_at");

@@ -11,31 +11,33 @@
 import { randomUUID } from 'node:crypto';
 import { existsSync, readFileSync } from 'node:fs';
 
+import { IdempotencyStorage } from '@nestjs/idempotency';
 import { parse } from 'dotenv';
 import { like } from 'drizzle-orm';
-import { drizzle, type PostgresJsDatabase } from 'drizzle-orm/postgres-js';
-import postgres from 'postgres';
+import type { Pool } from 'pg';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
 import { DrizzleIdempotencyStore } from '@/common/idempotency/drizzle-idempotency.store';
+import { createDatabase, type Database } from '@/database/drizzle/database';
+import { createPgPool } from '@/database/drizzle/pg';
 import * as schema from '@/database/drizzle/schema';
 
 const envFile = existsSync('.env') ? parse(readFileSync('.env')) : {};
 const DB_URL = process.env.DB_URL ?? envFile.DB_URL ?? 'postgresql://postgres:postgres@localhost:5432/nest-api';
 
 type Connection = {
-  client: ReturnType<typeof postgres>;
-  db: PostgresJsDatabase<typeof schema>;
+  client: Pool;
+  db: Database;
 };
 
 /** 探测真实 PostgreSQL 且确认幂等表已迁移；任一不满足返回 null（用例整体跳过） */
 async function connectDb(): Promise<Connection | null> {
-  const client = postgres(DB_URL, { max: 1, connect_timeout: 2, idle_timeout: 2, onnotice: () => {} });
+  const client = createPgPool(DB_URL, { max: 1, idleTimeoutMillis: 2000, connectionTimeoutMillis: 2000 });
   try {
-    await client`SELECT 1 FROM idempotency_keys LIMIT 1`;
-    return { client, db: drizzle(client, { schema }) };
+    await client.query('SELECT 1 FROM idempotency_keys LIMIT 1');
+    return { client, db: createDatabase(client) };
   } catch {
-    await client.end({ timeout: 1 }).catch(() => {});
+    await client.end().catch(() => {});
     return null;
   }
 }
@@ -48,13 +50,13 @@ describe.skipIf(!connection)('DrizzleIdempotencyStore（真实 PostgreSQL 集成
 
   beforeAll(() => {
     if (!connection) return;
-    store = new DrizzleIdempotencyStore(connection.db);
+    store = new DrizzleIdempotencyStore(connection.db, new IdempotencyStorage());
   });
 
   afterAll(async () => {
     if (!connection) return;
     await connection.db.delete(schema.idempotencyKeys).where(like(schema.idempotencyKeys.key, `${keyPrefix}%`));
-    await connection.client.end({ timeout: 5 }).catch(() => {});
+    await connection.client.end().catch(() => {});
   });
 
   /** 每个用例使用独立键名，避免相互干扰 */

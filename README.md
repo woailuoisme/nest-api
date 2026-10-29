@@ -1,14 +1,14 @@
 # nest-api <!-- rumdl-disable-line first-line-heading -->
 
 现代、开箱即用的 NestJS 12 + Fastify 5 企业级后端脚手架，纯 ESM 架构。
-集成 Better Auth 认证、Drizzle ORM、BullMQ 队列、Centrifugo 实时中枢、MQTT 5.0 物联网总线、
+集成 @nestjs/authentication 认证、Drizzle ORM、BullMQ 队列、Centrifugo 实时中枢、MQTT 5.0 物联网总线、
 Meilisearch 检索、imgproxy 媒体处理、幂等与弹性治理，以及 Vitest 5 测试套件。
 
 ---
 
 ## 核心特性
 
-- **认证与权限**：Better Auth（账号密码、TOTP 两步验证、手机号 / 邮箱 OTP、用户名、API Key、Bearer、JWT、一次性 Token）；角色 `SUPER_ADMIN / ADMIN / OPERATOR / USER` 配合 Casbin 声明式权限（`@Roles()` / `@Permissions()`），`/admin` 前缀由全局守卫强制隔离。
+- **认证与权限**：`@nestjs/authentication`（账号密码、用户名/邮箱 OTP/短信 OTP 登录、会话 Cookie、JWT + refresh、TOTP 两步验证、邮箱验证、找回密码、API Key、一次性登录令牌、管理员冒充）；角色 `SUPER_ADMIN / ADMIN / OPERATOR / USER`，授权由 `@nestjs/authorization` 域级 policy（`@Can()` / `@Can.Anyone()`）默认拒绝式判定。
 - **实时通信**：Centrifugo 无状态中枢，WebSocket / SSE 双协议、模式匹配频道授权（`@ChannelAuth`）与 Presence 在线感知；Proxy 回调支持恒定时间密钥校验。
 - **全文检索**：Laravel Scout 风格驱动抽象（Meilisearch / Noop 降级），`searchModel` 作为统一入口，BullMQ 异步同步索引。
 - **工业物联网**：MQTT 5.0 总线，声明式 `@MqttSubscribe()` 路由、RPC 指令下发、遥测影子与设备仿真。
@@ -16,7 +16,7 @@ Meilisearch 检索、imgproxy 媒体处理、幂等与弹性治理，以及 Vite
 - **安全基线**：跨副本一致限流（Redis 原子 Lua，故障自动降级进程内）、CSRF（Fetch Metadata）、请求超时、gitleaks 凭据扫描、非 root + tini 运行。安全响应头与传输压缩交由边缘代理（Traefik / Nginx）承担，应用层不再重复处理。
 - **媒体与存储**：imgproxy JIT 实时渲染与 HMAC-SHA256 签名、纯 JS 元数据探测、矢量二维码；`@nestjs/storage` 提供 local / memory / s3 磁盘与补偿性写入（`storeWithCompensation`）。
 - **可观测性**：原生 Pino 单通道 stdout、OpenTelemetry 三信号（logs / metrics / traces）、`/livez` 与 `/readyz` 探针。
-- **API 文档**：客户端 `/docs`、管理后台 `/docs/admin`、Better Auth `/docs/auth` 三份物理隔离的 Scalar UI。
+- **API 文档**：客户端 `/docs`、管理后台 `/docs/admin`、认证 `/docs/auth` 三份物理隔离的 Scalar UI。
 
 ---
 
@@ -26,8 +26,8 @@ Meilisearch 检索、imgproxy 媒体处理、幂等与弹性治理，以及 Vite
 | :----------------- | :---------------------------------------------------- |
 | 运行时             | Bun ≥ 1.2 + Node ≥ 24，纯 ESM                         |
 | 核心框架           | NestJS 12 + Fastify 5                                 |
-| 持久层             | Drizzle ORM 0.45 + PostgreSQL（原生 `uuidv7()` 主键） |
-| 认证授权           | Better Auth 1.7                                       |
+| 持久层             | Drizzle ORM 1.0 RC（`@nestjs/drizzle` + node-postgres）+ PostgreSQL（原生 `uuidv7()` 主键） |
+| 认证授权           | @nestjs/authentication 0.1                            |
 | 缓存与队列         | Redis + BullMQ 6                                      |
 | 实时 / 检索 / 物联 | Centrifugo / Meilisearch / MQTT 5.0                   |
 | 校验与文档         | Zod 4 Standard Schema + OpenAPI 3.1（Scalar UI）      |
@@ -100,7 +100,7 @@ docker compose up -d     # 仅 api + worker；依赖组件见 deploy/ 各自编�
 | :---------------- | :--------------------------------- | :--------------------------------------- |
 | 客户端 API 文档   | `http://localhost:4300/docs`       | 客户端公共业务接口与在线调试             |
 | 管理后台 API 文档 | `http://localhost:4300/docs/admin` | 管理领域接口（`/v1/admin` 前缀）         |
-| Better Auth 文档  | `http://localhost:4300/docs/auth`  | 认证插件端点参考                         |
+| 认证 API 文档     | `http://localhost:4300/docs/auth`  | 注册/登录/令牌/2FA 端点参考              |
 | 存活探针          | `http://localhost:4300/livez`      | 纯文本 `ok`，零外部 I/O                  |
 | 就绪探针          | `http://localhost:4300/readyz`     | 检测 DB、Redis、实时、存储等依赖与停机态 |
 
@@ -119,12 +119,13 @@ docker compose up -d     # 仅 api + worker；依赖组件见 deploy/ 各自编�
 | `USER`        | `user@nestforge.dev`   | `password123`    | 普通用户（另生成 100 位随机用户） |
 
 - 前后台共用同一 `user` 主表，角色决定管理权限。
-- `/admin` 前缀路由由全局 `AdminPrefixGuard` 默认拒绝，仅管理角色可入（`@Public()` 显式豁免，如登录）。
-- `@Roles()` 声明即生效，管理员无隐式通行权；权限维度由 Casbin 策略判定。
+- 未声明 `@Can()` / `@Can.Anyone()` / `@Public()` 的路由一律拒绝（deny-by-default）。
+- `/admin` 管理面由 `AdminPolicy` 按能力判定：SUPER_ADMIN 直通，ADMIN / OPERATOR 按能力细分。
 
 ```typescript
-@Roles(Role.ADMIN, Role.SUPER_ADMIN)      // 角色级
-@Permissions(Permission.UserCreate)       // 细粒度（Casbin）
+@Can(AdminPolicy, 'changeUserRole')          // 管理能力
+@Can(UserPolicy, 'view', param('id'))      // 路由参数能力
+@Can.Anyone()                                // 任意已登录用户（访客仍受认证拦截）
 ```
 
 ---
@@ -140,7 +141,7 @@ just worker               # 运行已构建的队列 Worker
 just cli <命令>           # 运行已构建 CLI（node dist/cli.js）
 
 # 质量门禁
-just check                # fix + fmt + type + secret-check + rbac-check + i18n-check
+just check                # fix + fmt + type + secret-check + i18n-check
 just type / lint / fix / fmt
 just secret-check         # gitleaks 凭据扫描
 just check-deprecated     # 扫描 @deprecated 依赖与符号
@@ -149,13 +150,11 @@ just outline <path>       # 紧凑 AST 结构大纲
 # 测试
 just test / test-watch / test-cov / test-e2e
 
-# 数据库与 Better Auth
+# 数据库与认证
 just db-gen / db-migrate / db-seed / db-fresh / db-studio
-just ba-migrate / ba-generate / ba-secret / ba-info
 
 # 代码与资产生成
-just rbac-gen / rbac-check   # 由 ROLE_PERMISSIONS 生成并校验 policy.csv
-just i18n-gen / i18n-check
+just i18n-check              # catalog 键 / 占位符 / 复数形式对称性
 just mail-build              # MJML → Handlebars 邮件模板
 just cmd <命令>              # 直接运行 TS CLI（如 just cmd route:list）
 just cmd app:init            # 幂等初始化：密钥 / 迁移 / S3 桶

@@ -1,9 +1,10 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
+import { InjectDrizzle } from '@nestjs/drizzle';
 import { eq } from 'drizzle-orm';
 
 import { MediaService } from '@/common/media/media.service';
 import type { UploadedFile } from '@/common/storage/interfaces/upload.interface';
-import { type DrizzleDB, InjectDb } from '@/database/drizzle/drizzle.service';
+import type { Database } from '@/database/drizzle/database';
 import { user } from '@/database/drizzle/schema';
 
 import { UserEntity } from './users.dto';
@@ -17,13 +18,13 @@ import { UserEntity } from './users.dto';
 @Injectable()
 export class UsersService {
   constructor(
-    @InjectDb() private readonly db: DrizzleDB,
+    @InjectDrizzle() private readonly db: Database,
     private readonly mediaService: MediaService,
   ) {}
 
   async findOne(id: string) {
     const foundUser = await this.db.query.user.findFirst({
-      where: eq(user.id, id),
+      where: { id },
     });
     if (!foundUser) {
       throw new NotFoundException('User not found');

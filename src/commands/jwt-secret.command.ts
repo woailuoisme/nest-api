@@ -15,7 +15,7 @@ interface JwtSecretCommandOptions {
 @Command({
   name: 'jwt:secret',
   aliases: ['auth:secret'],
-  description: 'Generate and update BETTER_AUTH_SECRET and JWT secrets in .env',
+  description: 'Generate and update JWT_SECRET and MFA_ENCRYPTION_KEYS in .env',
 })
 @Injectable()
 export class JwtSecretCommand extends CommandRunner {
@@ -23,9 +23,8 @@ export class JwtSecretCommand extends CommandRunner {
     const show = options?.show ?? false;
     const envFile = options?.env ?? '.env';
 
-    const betterAuthSecret = randomBytes(32).toString('base64url');
-    const accessSecret = randomBytes(64).toString('base64url');
-    const refreshSecret = randomBytes(64).toString('base64url');
+    const jwtSecret = randomBytes(32).toString('base64url');
+    const mfaKey = randomBytes(32).toString('base64url');
 
     const targetPath = resolve(envFile);
 
@@ -34,9 +33,8 @@ export class JwtSecretCommand extends CommandRunner {
       content = readFileSync(targetPath, 'utf8');
     }
 
-    content = upsertEnvValue(content, 'BETTER_AUTH_SECRET', betterAuthSecret);
-    content = upsertEnvValue(content, 'JWT_ACCESS_SECRET', accessSecret);
-    content = upsertEnvValue(content, 'JWT_REFRESH_SECRET', refreshSecret);
+    content = upsertEnvValue(content, 'JWT_SECRET', jwtSecret);
+    content = upsertEnvValue(content, 'MFA_ENCRYPTION_KEYS', mfaKey);
 
     mkdirSync(dirname(targetPath), { recursive: true });
     writeFileSync(targetPath, content, 'utf8');
@@ -44,9 +42,8 @@ export class JwtSecretCommand extends CommandRunner {
     console.log(`\x1b[32m[auth:secret]\x1b[0m Successfully updated auth secrets in ${targetPath}`);
 
     if (show) {
-      console.log(`\n\x1b[36mBETTER_AUTH_SECRET:\x1b[0m\n${betterAuthSecret}`);
-      console.log(`\x1b[36mJWT_ACCESS_SECRET:\x1b[0m\n${accessSecret}`);
-      console.log(`\x1b[36mJWT_REFRESH_SECRET:\x1b[0m\n${refreshSecret}\n`);
+      console.log(`\n\x1b[36mJWT_SECRET:\x1b[0m\n${jwtSecret}`);
+      console.log(`\x1b[36mMFA_ENCRYPTION_KEYS:\x1b[0m\n${mfaKey}\n`);
     }
   }
 

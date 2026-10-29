@@ -6,13 +6,13 @@ import { NoopSearchDriver } from '@/common/search/drivers/noop.driver';
 import type { SearchableDefinition } from '@/common/search/scout/searchable.interface';
 import { SearchService } from '@/common/search/search.service';
 import type { EnvConfig } from '@/config/env.validation';
-import type { DrizzleDB } from '@/database/drizzle/drizzle.service';
+import type { Database } from '@/database/drizzle/database';
 
 describe('SearchService 核心门面', () => {
   let mockConfigService: {
     get: ReturnType<typeof vi.fn>;
   };
-  const mockDb = {} as DrizzleDB;
+  const mockDb = {} as Database;
 
   beforeEach(() => {
     mockConfigService = {

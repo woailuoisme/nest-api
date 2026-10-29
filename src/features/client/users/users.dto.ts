@@ -2,6 +2,7 @@ import { ApiProperty } from '@nestjs/swagger';
 import { z } from 'zod';
 
 import { Role } from '@/common/constants/roles';
+import { toDate } from '@/common/utils/date.util';
 
 // ─── 响应 DTO ────────────────────────────────────────────
 
@@ -22,18 +23,6 @@ export const UserResourceSchema = z.object({
   createdAt: z.date().describe('创建时间'),
   updatedAt: z.date().describe('更新时间'),
 });
-
-/** 秒级时间戳上界：小于该量级视为秒级（毫秒时间戳自 1973 年起即远超此值） */
-const SECONDS_TIMESTAMP_UPPER_BOUND = 1e11;
-
-/** 归一化时间字段：兼容 Date / 秒级或毫秒级时间戳 / 日期字符串 */
-function toDate(value: Date | number | string): Date {
-  if (value instanceof Date) {
-    return value;
-  }
-  const ms = typeof value === 'number' && value < SECONDS_TIMESTAMP_UPPER_BOUND ? value * 1000 : value;
-  return new Date(ms);
-}
 
 /**
  * 用户实体（前端自助面）

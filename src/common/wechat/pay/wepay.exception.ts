@@ -27,8 +27,6 @@ interface WepayApiErrorBody {
   detail?: WepayErrorDetail;
 }
 
-/** 安全解析 JSON 文本，失败返回 null（用于容错解析微信错误应答） */
-
 /** 查询错误码的处置描述 */
 export function getWepayErrorDescriptor(code: string | undefined): WepayErrorDescriptor | undefined {
   return code ? WEPAY_ERROR_MAP[code] : undefined;

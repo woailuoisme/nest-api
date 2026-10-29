@@ -1,6 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
+import { InjectDrizzle } from '@nestjs/drizzle';
 import { OnEvent } from '@nestjs/event-emitter';
-import { eq } from 'drizzle-orm';
 
 import { Role } from '@/common/constants/roles';
 import type { CurrentUserPayload } from '@/common/decorators/current-user.decorator';
@@ -12,8 +12,7 @@ import {
   type IotTelemetryReceivedEvent,
 } from '@/common/events';
 import type { NotificationBroadcastEvent, NotificationSentEvent } from '@/common/events/notification.event';
-import { type DrizzleDB, InjectDb } from '@/database/drizzle/drizzle.service';
-import { user } from '@/database/drizzle/schema';
+import type { Database } from '@/database/drizzle/database';
 
 import { REALTIME_CHANNELS } from './channels/realtime-channels.service';
 import type {
@@ -35,7 +34,7 @@ export class RealtimeEventsService {
 
   constructor(
     private readonly realtimeService: RealtimeService,
-    @InjectDb() private readonly db: DrizzleDB,
+    @InjectDrizzle() private readonly db: Database,
   ) {}
 
   /**
@@ -83,7 +82,7 @@ export class RealtimeEventsService {
 
     const foundUser = await this.db.query.user.findFirst({
       columns: { id: true, email: true, role: true },
-      where: eq(user.id, userId),
+      where: { id: userId },
     });
 
     if (!foundUser) {
@@ -216,9 +215,3 @@ export class RealtimeEventsService {
     await this.realtimeService.sendToUser(userId, event, data);
   }
 }
-
-// 兼容别名导出
-export const WebsocketService = RealtimeEventsService;
-export type WebsocketService = RealtimeEventsService;
-export const SseService = RealtimeEventsService;
-export type SseService = RealtimeEventsService;

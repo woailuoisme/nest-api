@@ -1,37 +1,28 @@
-import { All, Controller, Req, Res } from '@nestjs/common';
-import { ApiExcludeController, ApiOperation, ApiTags } from '@nestjs/swagger';
-import { fromNodeHeaders } from 'better-auth/node';
-import type { FastifyReply, FastifyRequest } from 'fastify';
+import { Body, Controller, HttpCode, Post } from '@nestjs/common';
+import { ApiOperation, ApiTags } from '@nestjs/swagger';
 
+import { AuthSessionService } from '@/common/auth/auth-session.service';
 import { Public } from '@/common/decorators/public.decorator';
 
-import { AuthService } from './auth.service';
+import { SignInSchema, type SignInRequest, SignUpSchema, type SignUpRequest } from './auth.schemas';
 
-@ApiExcludeController()
 @ApiTags('认证')
+@Public()
 @Controller('auth')
 export class AuthController {
-  constructor(private readonly authService: AuthService) {}
+  constructor(private readonly authSession: AuthSessionService) {}
 
-  @Public()
-  @All('*')
-  @ApiOperation({ summary: 'Better Auth 统一认证分发端点' })
-  async handleAuth(@Req() request: FastifyRequest, @Res() reply: FastifyReply): Promise<void> {
-    const protocol = request.protocol || 'http';
-    const host = request.headers.host || 'localhost:4300';
-    const rawUrl = request.raw.url || request.url;
-    const url = new URL(rawUrl, `${protocol}://${host}`);
+  @Post('sign-up')
+  @ApiOperation({ summary: '注册' })
+  signUp(@Body({ schema: SignUpSchema }) body: SignUpRequest) {
+    return this.authSession.signUpWithPassword(body.email, body.password);
+  }
 
-    const headers = fromNodeHeaders(request.headers);
-    const body = request.body ? JSON.stringify(request.body) : undefined;
-
-    const webReq = new Request(url.toString(), {
-      method: request.method,
-      headers,
-      body: ['GET', 'HEAD'].includes(request.method) ? undefined : body,
-    });
-
-    const response = await this.authService.auth.handler(webReq);
-    await this.authService.pipeResponse(response, reply);
+  @Post('sign-in')
+  @HttpCode(200)
+  @ApiOperation({ summary: '登录' })
+  async signIn(@Body({ schema: SignInSchema }) body: SignInRequest) {
+    const { session } = await this.authSession.signInWithPassword(body.email, body.password);
+    return { mfaRequired: session.mfa === 'pending' };
   }
 }

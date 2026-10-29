@@ -1,0 +1,1 @@
+ALTER TABLE "idempotency_keys" ALTER COLUMN "response" SET DATA TYPE json USING "response"::json;

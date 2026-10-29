@@ -9,6 +9,8 @@ import { vi } from 'vitest';
 
 // 强制测试环境标识（补充 vitest config 中的 env 设置）
 process.env.APP_ENV = 'testing';
+// OTP 摘要密钥：测试态固定值（生产要求显式配置 OTP_HMAC_KEY，见 env.validation）
+process.env.OTP_HMAC_KEY ??= 'test-otp-hmac-key-0123456789abcdef0123456789abcdef';
 // justfile 以 `set dotenv-load` 注入 .env，LOG_LEVEL 和 STORAGE_S3_URL 会泄漏进测试进程，
 // 使「非生产默认 level=debug」和存储测试随本机 .env 漂移；此处清空，由用例自行 stub
 delete process.env.LOG_LEVEL;

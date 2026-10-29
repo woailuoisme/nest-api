@@ -53,26 +53,12 @@ describe('UsersController', () => {
   });
 
   describe('GET /users/:id — 用户详情', () => {
-    it('本人应可读取自己的详情', async () => {
-      const result = await usersController.findOne('user-uuid-1', { id: 'user-uuid-1', role: Role.USER } as any);
+    // 归属校验已由 @Can(UserPolicy, 'view') 在守卫阶段完成
+    it('应调用 UsersService.findOne', async () => {
+      const result = await usersController.findOne('user-uuid-1');
 
       expect(usersService.findOne).toHaveBeenCalledWith('user-uuid-1');
       expect(result).toEqual(mockUser);
-    });
-
-    it('管理角色（OPERATOR/ADMIN/SUPER_ADMIN）应可读取他人详情', async () => {
-      for (const role of [Role.OPERATOR, Role.ADMIN, Role.SUPER_ADMIN]) {
-        usersService.findOne.mockClear();
-        await usersController.findOne('user-uuid-999', { id: 'admin-1', role } as any);
-        expect(usersService.findOne).toHaveBeenCalledWith('user-uuid-999');
-      }
-    });
-
-    it('普通用户读取他人详情应被拒绝（水平越权防护）', () => {
-      expect(() => usersController.findOne('user-uuid-999', { id: 'user-uuid-1', role: Role.USER } as any)).toThrow(
-        '无权查看其他用户信息',
-      );
-      expect(usersService.findOne).not.toHaveBeenCalled();
     });
   });
 

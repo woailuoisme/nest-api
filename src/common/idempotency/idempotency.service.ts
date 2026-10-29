@@ -2,8 +2,8 @@ import { createHash, randomUUID } from 'node:crypto';
 
 import {
   BadRequestException,
-  ConflictException,
   HttpException,
+  HttpStatus,
   Injectable,
   Logger,
   ServiceUnavailableException,
@@ -14,9 +14,43 @@ import { delay } from 'es-toolkit';
 
 import { DrizzleIdempotencyStore } from './drizzle-idempotency.store';
 
-/** IETF 草案与 Stripe 工业标准：Key 最大 256 字符，可见 ASCII 字符 */
-export const MAX_IDEMPOTENCY_KEY_LENGTH = 256;
+/** IETF 草案与官方契约：Key 为 1–255 个可见 ASCII 字符 */
+export const MAX_IDEMPOTENCY_KEY_LENGTH = 255;
 export const IDEMPOTENCY_KEY_PATTERN = /^[\x21-\x7E]+$/;
+
+/** 机器可读错误码：与 @nestjs/idempotency 官方 `IDEMPOTENCY_*` 对齐，客户端按 code 分支而非文案 */
+export const IDEMPOTENCY_ERROR_CODES = {
+  KEY_INVALID: 'IDEMPOTENCY_KEY_INVALID',
+  KEY_IN_USE: 'IDEMPOTENCY_KEY_IN_USE',
+  KEY_REUSED: 'IDEMPOTENCY_KEY_REUSED',
+} as const;
+
+/** 409 的默认建议重试间隔（秒），对齐官方 `retryAfter` 默认值 */
+const DEFAULT_RETRY_AFTER_SECONDS = 1;
+
+/** 幂等键仍在处理中：409 + `Retry-After`（响应头由全局异常过滤器写回） */
+class IdempotencyKeyInUseException extends HttpException {
+  readonly headers: Record<string, string>;
+
+  constructor(retryAfterSeconds: number) {
+    super(
+      {
+        code: IDEMPOTENCY_ERROR_CODES.KEY_IN_USE,
+        message: 'A request with this idempotency key is still being processed.',
+      },
+      HttpStatus.CONFLICT,
+    );
+    this.headers = { 'Retry-After': String(Math.max(1, Math.ceil(retryAfterSeconds))) };
+  }
+}
+
+/** 同 key 但 path / method / payload 任一不同：422 `IDEMPOTENCY_KEY_REUSED` */
+function reusedKeyException(): UnprocessableEntityException {
+  return new UnprocessableEntityException({
+    code: IDEMPOTENCY_ERROR_CODES.KEY_REUSED,
+    message: 'This idempotency key was already used for a different request.',
+  });
+}
 
 /** 容灾策略类型 */
 export type FallbackStrategy = 'fail-closed' | 'fail-open';
@@ -25,11 +59,15 @@ export interface AcquireIdempotencyParams {
   key: string;
   actor: string;
   requestPath: string;
+  /** HTTP 方法：与 path、payload 一同构成指纹（官方默认计入 method，防同路径不同方法互相回放） */
+  method?: string;
   payloadHash: string;
   ttlSeconds?: number;
   lockTtlMs?: number;
   waitTimeoutMs?: number;
   retryIntervalMs?: number;
+  /** 409 时 `Retry-After` 的建议等待秒数 */
+  retryAfterSeconds?: number;
   fallback?: FallbackStrategy;
 }
 
@@ -58,21 +96,26 @@ export function canonicalize(val: unknown, seen = new WeakSet()): unknown {
   if (seen.has(val)) {
     return '[Circular]';
   }
+
+  // seen 只标记「当前递归路径」：离开时出栈，兄弟属性复用同一对象不会被误判为循环引用
   seen.add(val);
-
-  if (Array.isArray(val)) {
-    return val.map((item) => canonicalize(item, seen));
-  }
-
-  const obj = val as Record<string, unknown>;
-  const sortedObj: Record<string, unknown> = {};
-  for (const key of Object.keys(obj).sort()) {
-    const propVal = obj[key];
-    if (propVal !== undefined && typeof propVal !== 'function' && typeof propVal !== 'symbol') {
-      sortedObj[key] = canonicalize(propVal, seen);
+  try {
+    if (Array.isArray(val)) {
+      return val.map((item) => canonicalize(item, seen));
     }
+
+    const obj = val as Record<string, unknown>;
+    const sortedObj: Record<string, unknown> = {};
+    for (const key of Object.keys(obj).sort()) {
+      const propVal = obj[key];
+      if (propVal !== undefined && typeof propVal !== 'function' && typeof propVal !== 'symbol') {
+        sortedObj[key] = canonicalize(propVal, seen);
+      }
+    }
+    return sortedObj;
+  } finally {
+    seen.delete(val);
   }
-  return sortedObj;
 }
 
 /**
@@ -117,16 +160,23 @@ export class IdempotencyService {
    */
   validateIdempotencyKey(key: string): void {
     if (!key) {
-      throw new BadRequestException('Idempotency-Key header cannot be empty');
+      throw this.invalidKey('An idempotency key is required for this operation.');
     }
     if (key.length > MAX_IDEMPOTENCY_KEY_LENGTH) {
-      throw new BadRequestException(`Idempotency-Key header must not exceed ${MAX_IDEMPOTENCY_KEY_LENGTH} characters`);
-    }
-    if (!IDEMPOTENCY_KEY_PATTERN.test(key)) {
-      throw new BadRequestException(
-        'Idempotency-Key header contains invalid characters. Only printable ASCII characters are allowed.',
+      throw this.invalidKey(
+        `The idempotency key must be 1 to ${MAX_IDEMPOTENCY_KEY_LENGTH} printable ASCII characters.`,
       );
     }
+    if (!IDEMPOTENCY_KEY_PATTERN.test(key)) {
+      throw this.invalidKey(
+        `The idempotency key must be 1 to ${MAX_IDEMPOTENCY_KEY_LENGTH} printable ASCII characters.`,
+      );
+    }
+  }
+
+  /** 非法 Key 统一 400 + `IDEMPOTENCY_KEY_INVALID`（详情见 message，code 供客户端分支） */
+  private invalidKey(message: string): BadRequestException {
+    return new BadRequestException({ code: IDEMPOTENCY_ERROR_CODES.KEY_INVALID, message });
   }
 
   /** 计算请求体 SHA-256 签名哈希（基于 Canonical JSON 键排序，消除字段乱序歧义） */
@@ -153,10 +203,12 @@ export class IdempotencyService {
       key,
       actor,
       requestPath,
+      method = 'POST',
       payloadHash,
       lockTtlMs = IdempotencyService.DEFAULT_LOCK_TTL_MS,
       waitTimeoutMs = IdempotencyService.DEFAULT_WAIT_TIMEOUT_MS,
       retryIntervalMs = IdempotencyService.DEFAULT_RETRY_INTERVAL_MS,
+      retryAfterSeconds = DEFAULT_RETRY_AFTER_SECONDS,
       fallback = 'fail-closed',
     } = params;
 
@@ -164,7 +216,8 @@ export class IdempotencyService {
     const cacheKey = this.buildCacheKey(actor, key);
     const lockKey = this.buildLockKey(actor, key);
     const lockToken = randomUUID();
-    const fingerprint = `${requestPath}:${payloadHash}`;
+    // method 计入指纹：同路径不同方法（PUT/POST）不得互相回放
+    const fingerprint = `${method.toUpperCase()} ${requestPath}:${payloadHash}`;
 
     const startTime = Date.now();
 
@@ -176,16 +229,9 @@ export class IdempotencyService {
           return { acquired: true, lockToken, cacheKey, lockKey };
         }
 
-        // 验证 fingerprint（路径与载荷防篡改校验）
-        const separatorIdx = res.fingerprint.indexOf(':');
-        const storedPath = separatorIdx !== -1 ? res.fingerprint.slice(0, separatorIdx) : res.fingerprint;
-        const storedPayloadHash = separatorIdx !== -1 ? res.fingerprint.slice(separatorIdx + 1) : '';
-
-        if (storedPath && storedPath !== requestPath) {
-          throw new UnprocessableEntityException('Idempotency key path mismatch');
-        }
-        if (storedPayloadHash && storedPayloadHash !== payloadHash) {
-          throw new UnprocessableEntityException('Idempotency key payload mismatch');
+        // 指纹整串比较：method / path / payload 任一变化都视为 key 复用
+        if (res.fingerprint !== fingerprint) {
+          throw reusedKeyException();
         }
 
         if (res.state === 'completed') {
@@ -202,9 +248,7 @@ export class IdempotencyService {
 
         // res.state === 'in-flight'：慢请求并发中，在超时窗口内自旋等待
         if (Date.now() - startTime >= waitTimeoutMs) {
-          throw new ConflictException(
-            'A previous request with the same Idempotency-Key is currently in progress. Please retry after a backoff.',
-          );
+          throw new IdempotencyKeyInUseException(retryAfterSeconds);
         }
 
         await delay(retryIntervalMs);

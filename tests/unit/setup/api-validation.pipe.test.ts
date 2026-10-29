@@ -11,7 +11,8 @@ const TestSchema = z.object({
 });
 
 describe('createApiValidationPipe (Standard Schema 校验管道)', () => {
-  const pipe = createApiValidationPipe();
+  // 与 HttpExceptionFilter 单测同构：注入翻译器，隔离真实 catalog 与请求上下文
+  const pipe = createApiValidationPipe((key) => (key === 'common.validationFailed' ? 'Validation failed' : key));
 
   it('合法入参应成功通过并执行 trim 与类型转换', async () => {
     const input = {

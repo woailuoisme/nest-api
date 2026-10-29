@@ -1,0 +1,6 @@
+{
+  "uniqueViolation": "数据已存在，请勿重复操作",
+  "foreignKeyViolation": "关联引用的目标数据不存在或无法关联",
+  "notNullViolation": "缺少必填的数据字段",
+  "invalidFormat": "数据格式或参数类型无效"
+}

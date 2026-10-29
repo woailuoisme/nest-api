@@ -210,28 +210,12 @@ export class RealWepayDriver implements IWepayDriver {
 
   /** 按商户订单号查询订单 */
   async queryByOutTradeNo(outTradeNo: string): Promise<WepayTransactionResult> {
-    return this.withReadRetry(async () => {
-      const data = await this.request<Record<string, unknown>>(
-        'GET',
-        WEPAY_API_PATHS.TRANSACTION_BY_OUT_TRADE_NO(outTradeNo),
-        { query: { mchid: this.mchid } },
-      );
-      return this.parseTransaction(data);
-    });
+    return this.queryTransaction(WEPAY_API_PATHS.TRANSACTION_BY_OUT_TRADE_NO(outTradeNo));
   }
 
   /** 按微信支付订单号查询订单 */
   async queryByTransactionId(transactionId: string): Promise<WepayTransactionResult> {
-    return this.withReadRetry(async () => {
-      const data = await this.request<Record<string, unknown>>(
-        'GET',
-        WEPAY_API_PATHS.TRANSACTION_BY_ID(transactionId),
-        {
-          query: { mchid: this.mchid },
-        },
-      );
-      return this.parseTransaction(data);
-    });
+    return this.queryTransaction(WEPAY_API_PATHS.TRANSACTION_BY_ID(transactionId));
   }
 
   /** 按商户退款单号查询退款 */
@@ -614,6 +598,14 @@ export class RealWepayDriver implements IWepayDriver {
       );
     }
     return notifyUrl;
+  }
+
+  /** 查询订单（幂等安全，接入受控重试）：两个单号维度仅路径不同 */
+  private async queryTransaction(path: string): Promise<WepayTransactionResult> {
+    return this.withReadRetry(async () => {
+      const data = await this.request<Record<string, unknown>>('GET', path, { query: { mchid: this.mchid } });
+      return this.parseTransaction(data);
+    });
   }
 
   /**

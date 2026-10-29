@@ -18,6 +18,17 @@ function digestCredential(deviceId: string, deviceSecret: string, pepper: string
   return createHmac('sha256', pepper).update(`${deviceId}:${deviceSecret}`).digest();
 }
 
+/** 拆分 `id:value` 形式的配置条目；空条目、缺少 `:` 或任一侧为空均返回 null */
+function splitPairEntry(entry: string): { id: string; value: string } | null {
+  const trimmed = entry.trim();
+  if (!trimmed) return null;
+
+  const separatorIndex = trimmed.indexOf(':');
+  const id = separatorIndex > 0 ? trimmed.slice(0, separatorIndex).trim() : '';
+  const value = separatorIndex > 0 ? trimmed.slice(separatorIndex + 1).trim() : '';
+  return id && value ? { id, value } : null;
+}
+
 /**
  * 解析设备凭证表 (deviceId:secret，英文逗号分隔) 为「设备 ID → 凭证摘要」映射
  * 非法条目仅告警跳过，不输出任何密钥内容
@@ -26,24 +37,16 @@ function parseCredentialTable(raw: string, pepper: string, logger: Logger): Map<
   const table = new Map<string, Buffer>();
 
   for (const entry of raw.split(',')) {
-    const trimmed = entry.trim();
-    if (!trimmed) {
+    const parsed = splitPairEntry(entry);
+    if (!parsed) {
+      if (entry.trim()) logger.warn('忽略 IOT_DEVICE_CREDENTIALS 中的非法条目 (应为 deviceId:secret 格式)');
       continue;
     }
 
-    const separatorIndex = trimmed.indexOf(':');
-    const deviceId = separatorIndex > 0 ? trimmed.slice(0, separatorIndex).trim() : '';
-    const deviceSecret = separatorIndex > 0 ? trimmed.slice(separatorIndex + 1).trim() : '';
-
-    if (!deviceId || !deviceSecret) {
-      logger.warn('忽略 IOT_DEVICE_CREDENTIALS 中的非法条目 (应为 deviceId:secret 格式)');
-      continue;
+    if (table.has(parsed.id)) {
+      logger.warn(`设备凭证表存在重复的 deviceId [${parsed.id}]，以最后一次配置为准`);
     }
-
-    if (table.has(deviceId)) {
-      logger.warn(`设备凭证表存在重复的 deviceId [${deviceId}]，以最后一次配置为准`);
-    }
-    table.set(deviceId, digestCredential(deviceId, deviceSecret, pepper));
+    table.set(parsed.id, digestCredential(parsed.id, parsed.value, pepper));
   }
 
   return table;
@@ -57,19 +60,12 @@ function parseTenantTable(raw: string, logger: Logger): Map<string, string> {
   const table = new Map<string, string>();
 
   for (const entry of raw.split(',')) {
-    const trimmed = entry.trim();
-    if (!trimmed) continue;
-
-    const separatorIndex = trimmed.indexOf(':');
-    const deviceId = separatorIndex > 0 ? trimmed.slice(0, separatorIndex).trim() : '';
-    const tenantId = separatorIndex > 0 ? trimmed.slice(separatorIndex + 1).trim() : '';
-
-    if (!deviceId || !tenantId) {
-      logger.warn('忽略 IOT_DEVICE_TENANTS 中的非法条目 (应为 deviceId:tenantId 格式)');
+    const parsed = splitPairEntry(entry);
+    if (!parsed) {
+      if (entry.trim()) logger.warn('忽略 IOT_DEVICE_TENANTS 中的非法条目 (应为 deviceId:tenantId 格式)');
       continue;
     }
-
-    table.set(deviceId, tenantId);
+    table.set(parsed.id, parsed.value);
   }
 
   return table;

@@ -182,12 +182,9 @@ export class RouteListCommand extends CommandRunner {
     return sortBy(uniqueRoutes, [(r) => r.path, (r) => r.method]);
   }
 
-  #normalizePaths(pathMetadata: string | string[] | undefined): string[] {
-    if (!pathMetadata) return [''];
-    if (Array.isArray(pathMetadata)) {
-      return pathMetadata.length > 0 ? pathMetadata : [''];
-    }
-    return [pathMetadata];
+  #normalizePaths(pathMetadata?: string | string[]): string[] {
+    const paths = Array.isArray(pathMetadata) ? pathMetadata : pathMetadata ? [pathMetadata] : [];
+    return paths.length > 0 ? paths : [''];
   }
 
   #combinePaths(controllerPath: string, methodPath: string, version?: string | string[] | symbol): string {

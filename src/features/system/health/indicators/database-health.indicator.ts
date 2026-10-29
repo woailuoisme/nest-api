@@ -1,12 +1,13 @@
 import { Injectable } from '@nestjs/common';
+import { InjectDrizzle } from '@nestjs/drizzle';
 import { type HealthIndicatorResult, HealthIndicatorService } from '@nestjs/terminus';
 
-import { type DrizzleDB, InjectDb } from '@/database/drizzle/drizzle.service';
+import type { Database } from '@/database/drizzle/database';
 
 @Injectable()
 export class DatabaseHealthIndicator {
   constructor(
-    @InjectDb() private readonly db: DrizzleDB,
+    @InjectDrizzle() private readonly db: Database,
     private readonly healthIndicatorService: HealthIndicatorService,
   ) {}
 

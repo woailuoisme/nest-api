@@ -1,12 +1,15 @@
+import { AuthenticationModule } from '@nestjs/authentication';
 import { BullModule } from '@nestjs/bullmq';
 import { Module } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { EventEmitterModule } from '@nestjs/event-emitter';
 
+import { createAuthenticationModuleOptions } from '@/common/auth/authentication.options';
 import { FEATURE_MODULES } from '@/features';
 
 import { CommandsModule } from './commands/commands.module';
 import { ProcessCommandsModule } from './commands/process-commands.module';
+import { MailModule } from './common/mail';
 import { MediaModule } from './common/media/media.module';
 import { SearchModule } from './common/search/search.module';
 import { StorageModule } from './common/storage/storage.module';
@@ -28,6 +31,12 @@ import { RealtimeModule } from './realtime/realtime.module';
       inject: [ConfigService],
       useFactory: createBullModuleConfig,
     }),
+    AuthenticationModule.forRootAsync({
+      globalGuard: false,
+      inject: [ConfigService],
+      useFactory: createAuthenticationModuleOptions,
+    }),
+    MailModule.forRoot(),
     DatabaseModule,
     RedisModule,
     StorageModule,

@@ -1,9 +1,9 @@
-import { hashPassword } from 'better-auth/crypto';
+import { PasswordHasher } from '@nestjs/authentication';
 import { seed } from 'drizzle-seed';
 import { v7 as uuidv7 } from 'uuid';
 
 import { Role } from '@/common/constants/roles';
-import type { DrizzleDB } from '@/database/drizzle/drizzle.service';
+import type { Database } from '@/database/drizzle/database';
 import * as schema from '@/database/drizzle/schema';
 
 export const description = 'Seed auth users via drizzle-seed — 3 fixed accounts + 100 random users';
@@ -29,11 +29,12 @@ const FIXED_ADMINS = [
   },
 ] as const;
 
-export async function run(db: DrizzleDB): Promise<void> {
+export async function run(db: Database): Promise<void> {
   console.log('🌱 Seeding authentication users & accounts via drizzle-seed...\n');
 
   // 1. 按 FIXED_ADMINS 顺序预计算密码哈希
-  const passwordHashes = await Promise.all(FIXED_ADMINS.map((admin) => hashPassword(admin.password)));
+  const passwordHasher = new PasswordHasher();
+  const passwordHashes = await Promise.all(FIXED_ADMINS.map((admin) => passwordHasher.hash(admin.password)));
   // 随机用户统一使用第三个账号的密码（password123）
   const defaultHash = passwordHashes[2];
 
@@ -61,7 +62,7 @@ export async function run(db: DrizzleDB): Promise<void> {
         updatedAt: now,
       });
 
-      // 凭据账号的 accountId 必须等于 userId（better-auth 以 userId + providerId 定位凭据账号）
+      // 凭据账号的 accountId 必须等于 userId（认证层以 userId + providerId 定位凭据账号）
       await tx.insert(schema.account).values({
         id: uuidv7(),
         accountId: userId,

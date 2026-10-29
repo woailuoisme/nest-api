@@ -8,7 +8,7 @@ import { MediaModule } from '@/common/media/media.module';
 import { SearchModule } from '@/common/search/search.module';
 import { StorageModule } from '@/common/storage/storage.module';
 import { envSchema } from '@/config/env.validation';
-import { createBullModuleConfig } from '@/database/bull.config';
+import { createBullModuleConfig, QUEUE_DEFAULT_JOB_OPTIONS } from '@/database/bull.config';
 import { DatabaseModule } from '@/database/drizzle/drizzle.module';
 import { DemoProcessor } from '@/jobs/demo/demo.processor';
 import { MailProcessor } from '@/jobs/mail/mail.processor';
@@ -19,7 +19,7 @@ import { SchedulesModule } from '@/schedules/schedules.module';
 import { LoggerModule } from '@/setup/logger/logger.module';
 
 /**
- * Worker 模块 — 独立进程（CLI `worker`）专用，只消费队列、不提供 HTTP。
+ * Worker 模块 — 独立进程（CLI `worker`）专用，消费队列（含邮件投递）且不提供 HTTP。
  * 聚合注册所有队列消费者，定时调度由 SchedulesModule 统一声明，与 AppModule（HTTP）进程分离部署。
  */
 @Module({
@@ -30,14 +30,16 @@ import { LoggerModule } from '@/setup/logger/logger.module';
       inject: [ConfigService],
       useFactory: createBullModuleConfig,
     }),
-    BullModule.registerQueue(...ALL_QUEUE_NAMES.map((name) => ({ name }))),
+    BullModule.registerQueue(
+      ...ALL_QUEUE_NAMES.map((name) => ({ name, defaultJobOptions: QUEUE_DEFAULT_JOB_OPTIONS })),
+    ),
     DatabaseModule,
     StorageModule,
-    MailModule,
+    MailModule.forRoot(),
     MediaModule,
     SearchModule,
     SchedulesModule,
   ],
-  providers: [MailProcessor, TokenCleanupProcessor, DemoProcessor, MediaProcessor, SearchProcessor],
+  providers: [TokenCleanupProcessor, DemoProcessor, MediaProcessor, SearchProcessor, MailProcessor],
 })
 export class WorkerModule {}

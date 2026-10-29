@@ -1,2 +1,2 @@
 export * from './i18n.config';
-export * from './i18n.generated';
+export * from './i18n.translations';

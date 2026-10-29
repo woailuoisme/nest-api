@@ -1,9 +1,10 @@
-import { Injectable, Logger, Optional } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import { InjectDrizzle } from '@nestjs/drizzle';
 import { keyBy } from 'es-toolkit';
 
 import type { EnvConfig } from '@/config/env.validation';
-import { type DrizzleDB, InjectDb } from '@/database/drizzle/drizzle.service';
+import type { Database } from '@/database/drizzle/database';
 
 import { MeiliSearchDriver } from './drivers/meilisearch.driver';
 import { NoopSearchDriver } from './drivers/noop.driver';
@@ -33,7 +34,7 @@ export class SearchService {
 
   constructor(
     private readonly configService: ConfigService<EnvConfig, true>,
-    @Optional() @InjectDb() private readonly db?: DrizzleDB,
+    @InjectDrizzle() private readonly db: Database,
   ) {
     this.activeDriver = this.resolveDriver();
   }
@@ -96,7 +97,7 @@ export class SearchService {
 
     if (!searchable.loadRecords || !this.db) {
       throw new Error(
-        `Hydration is enabled for search index "${searchable.index}", but loadRecords or DrizzleDB instance is missing.`,
+        `Hydration is enabled for search index "${searchable.index}", but loadRecords or Database instance is missing.`,
       );
     }
 

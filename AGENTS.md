@@ -6,8 +6,8 @@
 
 生产级 NestJS 企业后端脚手架。
 
-- 运行时: Bun ≥ 1.2 + Node ≥ 24，纯 ESM（`"type": "module"`）
-- 框架: NestJS 12 + Fastify 5（非 Express）· ORM: Drizzle 0.45（PostgreSQL 多文件 schema）· 校验: Zod 4 · Redis + BullMQ
+- 运行时: Bun ≥ 1.2 + Node ^24.15 或 ≥26（Nest CLI v12 生成器下限），纯 ESM（`"type": "module"`）
+- 框架: NestJS 12 + Fastify 5（非 Express）· ORM: Drizzle 1.0 RC（官方 `@nestjs/drizzle` + node-postgres）· 校验: Zod 4 · Redis + BullMQ · TypeScript 6
 - 构建: SWC（`resolveFully`），类型检查 `tsc --noEmit` · 测试: Vitest 5 · Lint: oxlint · 格式: oxfmt · 任务: Just
 - 工具库: es-toolkit（唯一首选，严禁 Lodash）· 日志: 原生 Pino（stdout 单通道）· 可观测: OpenTelemetry（traces/metrics → otel-collector → OpenObserve）
 
@@ -40,27 +40,19 @@ just db-fresh     # 删表重建 + 重跑迁移 + 灌种子 (破坏性)
 just db-studio    # Drizzle Studio
 just db-reset     # 同 db-fresh (destructive)
 
-# Better Auth
-just ba-migrate   # 生成并应用 Better Auth 表结构变更
-just ba-generate  # 依据 better-auth.ts 重新生成 Drizzle Schema
-just ba-info      # 显示系统与 Better Auth 配置信息
-just ba-secret    # 生成新的 Better Auth secret
-
 # 容器编排与服务 (Docker / Centrifugo)
 just docker-up    # 启动全栈 Docker 容器集群 (API + 附属组件)
 just docker-down  # 停止全栈 Docker 容器集群
 just realtime     # 启动 Centrifugo 独立实时服务容器
 just realtime-health # 检查 Centrifugo 健康状态
 just mail-build   # 编译 MJML 邮件模板为 Handlebars (.hbs)
-just i18n-gen     # 生成 i18n TypeScript 强类型定义
-just i18n-check   # 校验多语言翻译字典键值对称性
+just i18n-check   # 校验 zh/en catalog 键、占位符与复数形式对称性
 
 # CLI (nest-commander)
 just cmd --help           # 查看所有命令 (直接跑 TS 源码)
 just cmd route:list       # 列出所有路由
 just cmd jwt:secret       # 生成 JWT 密钥
 just cmd app:init         # 幂等初始化：密钥 / 数据库迁移 / S3 桶（容器内跳过密钥写入，由部署环境注入）
-just rbac-gen             # 由 ROLE_PERMISSIONS 重新生成 Casbin policy.csv
 just cli --help           # 运行生产构建 CLI (node dist/cli.js)
 ```
 
@@ -71,24 +63,26 @@ just cli --help           # 运行生产构建 CLI (node dist/cli.js)
 ```text
 src/database/
 ├── drizzle/        # Drizzle 表定义 + 数据库服务
-│   ├── schema/     # 多文件 schema (better-auth.schema.ts, notifications.schema.ts 等, 汇总于 index.ts)
+│   ├── schema/     # 多文件 schema (auth.schema.ts / authentication.schema.ts / notifications.schema.ts 等)
 │   ├── sql/        # 原生 PostgreSQL DDL (00_init.sql, 01_auth.sql, 02_features.sql 供 DBA 审计与独立建表)
-│   ├── drizzle.module.ts  # @Global() Drizzle 模块
-│   └── drizzle.service.ts # postgres.js + drizzle 客户端
+│   ├── database.ts # Database / Transaction 类型 + createDatabase 工厂
+│   ├── pg.ts       # pg 连接池工厂（主库 / 认证池 / seeds 共用）
+│   ├── relations.ts # defineRelations 统一关系声明
+│   └── drizzle.module.ts  # 薄包装 DrizzleModule.forRootAsync 装配
 ├── search/         # Laravel Scout 风格模型全文索引定义 (index.ts, user.searchable.ts)
 └── seeds/          # 种子数据 (auth.seed.ts, notifications.seed.ts, index.ts)
 src/
 ├── common/         # 全局 Filter/Guard/Interceptor/Pipe/Decorator/DTO/utils
-│   ├── constants/  # PATHS、NETWORK、Role、Permission 等常量
-│   ├── decorators/ # @Roles() @Permissions() @CurrentUser() 等
-│   ├── mail/       # 统一邮件服务 (直连 nodemailer + 自持 Handlebars 渲染器 + MJML 模板)
+│   ├── constants/  # PATHS、NETWORK、Role 等常量
+│   ├── decorators/ # @Public() @CurrentUser() 等
+│   ├── mail/       # 官方 @nestjs/mail 邮件栈（Mailable + Handlebars 引擎 + MJML 模板）
 │   ├── media/      # 媒体处理服务 (imgproxy JIT动态实时渲染/纯JS元数据/矢量二维码/命名策略)
 │   ├── search/     # Laravel Scout 风格搜索引擎抽象 (Meilisearch / Noop / 队列异步同步)
 │   └── storage/    # 本地/S3 驱动 (drivers/local.driver.ts, s3.driver.ts)
 ├── config/         # env.validation.ts (Zod schema)
 ├── database/       # drizzle/ + bull.config.ts + redis.module.ts
 ├── commands/       # nest-commander CLI (route-list, db-seed, jwt-secret, search)
-├── i18n/           # nestjs-i18n 配置
+├── i18n/           # 官方 @nestjs/i18n 配置 + 命名空间 catalog (translations/{zh,en}/*.json)
 ├── iot/            # 统一工业物联网与设备通信中枢：MQTT 5.0 传输层 + 声明式订阅 + 遥测影子 + 同步 RPC
 │   ├── transports/     # MQTT 5.0 传输层契约与适配服务 (mqtt.service.ts, interfaces, utils)
 │   ├── decorators/     # 声明式注解 (@MqttSubscribe, @MqttPayload, @MqttParams, @MqttCtx)
@@ -113,7 +107,7 @@ src/
 │   └── index.ts    # 聚合导出 FEATURE_MODULES
 ├── jobs/           # 异步任务与队列 (对齐 Laravel app/Jobs)：jobs 契约+生产者 / processor 消费者
 │   ├── demo/           # 演示队列 (demo.jobs.ts, demo.processor.ts)
-│   ├── mail/           # 邮件队列
+│   ├── mail/           # 邮件队列生产者与消费者 (mail.jobs.ts, mail.processor.ts)
 │   ├── media/          # 媒体处理队列 (media.jobs.ts, media.processor.ts)
 │   ├── search/         # 搜索同步队列 (search.jobs.ts, search.processor.ts)
 │   ├── token-cleanup/  # Token 清理队列
@@ -153,22 +147,25 @@ tests/
 - 业务模块统一按端归入 `src/features/`：
   - 客户端特性放 `src/features/client/<feature>/`，每个模块自带 `*.module.ts`、`*.controller.ts`、`*.service.ts`、`*.dto.ts`。
   - 系统/基础设施端点（如健康检查）放 `src/features/system/<feature>/`。
-  - 管理后台领域放 `src/features/admin/<feature>/`，由 `src/features/admin/admin.module.ts` 聚合并强制 `/admin` 前缀与 `AdminPrefixGuard` 准入。
-- **Admin / 前端 API 边界**: 后台管理领域（users / notifications / dashboard / admins / auth）的 controller + service + DTO 全部自包含于 `src/features/admin/`，由 `AdminModule` 聚合成唯一管理面入口并纳入 `FEATURE_MODULES`；准入由全局 `AdminPrefixGuard` 默认拒绝式强制（仅限合法管理角色 SUPER_ADMIN / ADMIN / OPERATOR，支持显式 `@Public()` 白名单豁免如 `/admin/auth/login`）。前端自助模块 `src/features/client/users/` 自包含自有 service 与 DTO（仅 `/users/me`、`/users/:id`、头像上传），与 admin 管理面零依赖；`AuthModule` 基于 Drizzle 客户端直接原子落库，与 `AdminUsersModule` 彻底解耦零依赖。**新增管理端点必须落在 `src/features/admin/`，严禁混入前端 controller**；`crud:generate` 产物支持 `--scope=admin|client` 分流，admin 产物自动落入该边界（`src/features/admin/<feature>/`）并自动注册进 `AdminModule`。
-- **扁平数据访问**：Service 层直接使用 `@InjectDb() private readonly db: DrizzleDB` 注入数据库客户端，通过 `this.db.query...` / `this.db.insert...` 进行类型安全操作，不设多余的 Repository 样板层。
+  - 管理后台领域放 `src/features/admin/<feature>/`，由 `src/features/admin/admin.module.ts` 聚合并强制 `/admin` 前缀与 `AdminPolicy` 能力准入。
+- **Admin / 前端 API 边界**: 后台管理领域（users / notifications / dashboard / admins / auth）的 controller + service + DTO 全部自包含于 `src/features/admin/`，由 `AdminModule` 聚合成唯一管理面入口并纳入 `FEATURE_MODULES`；准入由 `AdminPolicy` 默认拒绝式强制（SUPER_ADMIN 直通，ADMIN / OPERATOR 按能力细分，`@Public()` 显式豁免）；用户创建/改角色/删除与邮箱变更均为 rank-aware（不得操作同级或更高角色，邮箱变更仅 ADMIN+ 且严格低于目标角色）。前端自助模块 `src/features/client/users/` 自包含自有 service 与 DTO（仅 `/users/me`、`/users/:id`、头像上传），与 admin 管理面零依赖；`AuthModule` 基于 Drizzle 客户端直接原子落库，与 `AdminUsersModule` 彻底解耦零依赖。**新增管理端点必须落在 `src/features/admin/`，严禁混入前端 controller**；`crud:generate` 产物支持 `--scope=admin|client` 分流，admin 产物自动落入该边界（`src/features/admin/<feature>/`）并自动注册进 `AdminModule`。
+- **扁平数据访问**：Service 层直接使用 `@InjectDrizzle() private readonly db: Database` 注入数据库客户端（`Database` 类型来自 `src/database/drizzle/database.ts`），通过 `this.db.query...` / `this.db.insert...` 进行类型安全操作，不设多余的 Repository 样板层。官方 `DrizzleModule` 全局注册，无需在各模块 import。
 - **多写原子事务 (Transaction)**：涉及多表关联写入（如创建用户并绑定 OAuth 账户）或多步更新时，使用显式原生闭包 `await this.db.transaction(async (tx) => { ... })` 保证强一致性与自动回滚。
 - **全文搜索模型解耦 (Laravel Scout 模式)**：数据表/实体如需支持全文检索，统一在 `src/database/search/` 目录下实现 `Searchable` 契约（如 `user.searchable.ts`）并注册入全局索引映射；业务数据增删改时通过 `SearchSyncService` 发布队列异步同步任务，严禁在业务 Service 中直接硬编码调用底层搜索引擎 SDK（如 Meilisearch 客户端），保障驱动可插拔性（Meilisearch / Noop 空驱动降级）。
 - **工业物联网总线解耦 (Decoupled MQTT & Telemetry)**：物联网设备指令交互与遥测采集集中收敛于顶级目录 `src/iot/`。传输层与业务服务一体化内聚，监听统一使用声明式 `@MqttSubscribe(topic, options)` 装饰器；向物理/仿真设备下发控制指令统一调用 `IotCommandService` 或 `MqttService.publish()` / RPC，禁止外部业务逻辑直连外部 MQTT Broker 客户端。
 - **上传链路 (Native Multipart Pipeline)**：文件上传统一使用平台原生能力 —— 路由级 `FileInterceptor` / `FilesInterceptor` / `FileStreamInterceptor`（`@nestjs/platform-fastify/multipart`）+ `@nestjs/common` 的 `@UploadedFile/@UploadedFiles` 参数装饰器。大小上限由拦截器 `limits.fileSize` 在流式写入过程中强制（超限即 413）；MIME / 扩展名白名单由 `createUploadFileFilter()` 注入 `fileFilter`（违规 400）。载荷类型 `UploadedFile = MemoryUpload | MultipartFileStream`（`src/common/storage/interfaces/upload.interface.ts`）交由 `MediaService.save()` 落盘。**表单字段名（如头像的 `file`）属对外契约的一部分**（原生拦截器按字段名精确匹配）；**禁止再引入自研的全局 multipart 收集拦截器或第二套解析实现**（历史自研实现因争抢同一条 busboy 流、需自管三层临时文件清理，已在 Nest 12 对齐中删除）。
 - **模块可见性 (@Global 政策)**：仅**叶基础设施**（Storage / Mail / Search / Cache / Logger / Redis / Drizzle / Idempotency / Jobs / Wechat）使用 `@Global()`；**领域模块一律显式 import**（`MediaModule` / `IotModule` / `RealtimeModule`），保证依赖关系可追溯。新增领域模块时请在使用方 `imports` 中显式声明，不要依赖全局可见性。
+- **OTP 发送窗口**：`otp_send_windows`（PK `target+purpose`）独立记录窗口内发送次数，用单条 `INSERT ... ON CONFLICT DO UPDATE ... WHERE` 原子完成「冷却/上限校验 + 自增」，被拒请求不消耗配额；验证码摘要密钥优先取 `OTP_HMAC_KEY`（生产必填），缺失时以 `JWT_SECRET` 域分离派生。
+- **DDL 基线守卫**：`src/database/drizzle/sql/` 与 schema 的一致性由 `tests/unit/database/sql-ddl.test.ts` 校验（表 / 列 / 索引名逐项比对），改 schema 后必须同步该目录，否则单测失败。
+- **幂等实现口径**：存储为 `idempotency_keys`（`response` 用 `json` 而非 `jsonb`，避免 `\u0000` 写入失败）；错误码与官方对齐（`IDEMPOTENCY_KEY_INVALID` / `IDEMPOTENCY_KEY_IN_USE` / `IDEMPOTENCY_KEY_REUSED`），409 携带 `Retry-After`；回放头 `Idempotent-Replayed` 已通过 CORS `exposedHeaders` 暴露；响应加密通过 `IDEMPOTENCY_KEYS`（逗号分隔、最新在前）开启，未配置则明文。指纹包含 `METHOD` 与路径，改动指纹格式后需先清空 `idempotency_keys`，否则旧记录会被判为 422。
 
 ### 环境变量
 
 - `src/config/env.validation.ts` 用 Zod 定义所有 env，启动时强制校验。
 - **全 URL 统一配置规范**：核心连接统一采用单一 DSN / URL 格式收敛，彻底摒弃散装 HOST/PORT/PASSWORD：
-  - **Database**: `DB_URL="postgresql://user:pass@host:5432/dbname?schema=public"`
+  - **Database**: `DB_URL="postgresql://user:pass@host:5432/dbname?schema=public"`；连接池由 `DB_POOL_MAX`（默认 10）、`DB_POOL_IDLE_TIMEOUT_MS`（30000）、`DB_POOL_CONNECT_TIMEOUT_MS`（5000）控制
   - **Redis**: `REDIS_URL="redis://:password@host:6379/0"`（或 `rediss://...`）
-  - **Mail**: `MAIL_URL="smtp://user:pass@host:587"`（发件人保持 `MAIL_FROM_ADDRESS` / `MAIL_FROM_NAME`）
+  - **Mail**: `MAIL_TRANSPORT=smtp|file|resend`（默认 smtp；测试环境自动 file），SMTP 连接 `MAIL_URL="smtp://user:pass@host:587"`，`file` 输出目录 `MAIL_DIRECTORY`，`resend` 需 `RESEND_API_KEY`；发件人保持 `MAIL_FROM_ADDRESS` / `MAIL_FROM_NAME`
   - **S3 Storage**: `STORAGE_S3_URL="s3://key:secret@endpoint:port/bucket?region=...&publicUrl=..."`
   - **Realtime (Centrifugo)**: `REALTIME_URL="centrifugo://api-key:hmac-secret@host:port/api?tls=false"`
   - **Search (Meilisearch)**: `SEARCH_URL="meilisearch://masterKey@localhost:7700"`（未配置时默认使用 `noop` 空驱动降级，配置后推导为 `SCOUT_DRIVER=meilisearch`）
@@ -176,7 +173,8 @@ tests/
   - **MQTT (Mosquitto/EMQX)**: `MQTT_URL="mqtt://admin:password@localhost:1883?clientId=nest-api"`（工业物联网通信与遥测总线）
 - **安全相关 env**：
   - `COOKIE_SECRET`（≥32 字符，可选）：配置后启用框架内置 Cookie（`setCookie(..., { signed: true })` / `@SignedCookies()`）；未配置则不启用，不预置弱默认密钥。由主进程在引导期直接读取 `process.env`（早于 ConfigModule 生效）。
-  - `TRUSTED_ORIGINS`（逗号分隔，可选）：内置 CSRF 额外信任的浏览器来源（`scheme://host[:port]`）。同源请求与 http(s) 服务端调用无需配置；独立域名前端需显式列出，`APP_URL` / `BETTER_AUTH_URL` / `PASSKEY_ORIGIN` 会自动纳入信任列表。
+  - `TRUSTED_ORIGINS`（逗号分隔，可选）：内置 CSRF 额外信任的浏览器来源（`scheme://host[:port]`）。同源请求与 http(s) 服务端调用无需配置；独立域名前端需显式列出，`APP_URL` 会自动纳入信任列表。
+  - `JWT_SECRET`（≥32 字符，生产必填）：官方认证模块 access token 的 HS256 签名密钥；`MFA_ENCRYPTION_KEYS`（逗号分隔，每段 ≥32 字符，生产必填）：TOTP secret 的 AES-256-GCM 加密密钥。
 - 新增 env 必须**同步更新** validation schema 与 `.env.example`。
 - `.env` 由 `dotenv/config` 在 `drizzle.config.ts` 与 CLI 入口加载。
 - 校验通道：`ConfigModule.forRoot({ validationSchema: envSchema })`（Nest 12 原生 Standard Schema），Zod schema 即契约，失败信息按 `字段: 文案` 逐行输出。
@@ -184,17 +182,24 @@ tests/
 ### Drizzle 多文件 Schema
 
 - schema 文件放 `src/database/drizzle/schema/*.schema.ts`，由 `drizzle.config.ts` 聚合 (`schema: './src/database/drizzle/schema/*.schema.ts'`)。
-- 表定义用 `pgTable()`，关系用 `relations()`，跨文件直接 import；`schema/index.ts` 统一 re-export 供 DrizzleService 使用。
+- 表定义用 `pgTable()`，跨文件直接 import；`schema/index.ts` 统一 re-export。关系统一在 `src/database/drizzle/relations.ts` 用 `defineRelations(schema, ...)` 声明（v1 不再使用旧版 `relations()`），并传给 `createDatabase()`，`db.query.*` 的类型由 relations 决定。
 - `src/database/drizzle/sql/` 提供与 Schema 严格对齐的纯净 PostgreSQL DDL (`00_init.sql`, `01_auth.sql` 等按 00~99 命名)，供快速建库、容器初始化与 DBA 审计。
 - 修改 schema 后：`just db-gen` (生成迁移 SQL) → 检查生成的 SQL → `just db-migrate` → 迁移文件提交到仓库。
+- **迁移基线**：历史迁移已清除，仓库只保留单一初始迁移 `drizzle/migrations/20261029050219_init`。已有库需重置（本地 `just db-fresh`；生产先备份后 DROP 全部业务表再 `just db-migrate`），否则会在已存在的表上重复建表。
 
 ### 鉴权
 
-- **Better Auth**（`src/common/auth/better-auth.ts`）：Drizzle 适配器，基础路径 `/v1/auth`，默认 `emailAndPassword`，会话 token 存库可吊销；邮件通过 `MailJobs` 队列分发。
-- 插件集（JWT + REST API 后端）：`admin` (RBAC) / `twoFactor` / `username` / `phoneNumber` / `emailOTP` / `apiKey` / `bearer` / `lastLoginMethod` / `jwt` / `oneTimeToken` / `openAPI`。`oneTap` / `anonymous` / `genericOAuth` / `multiSession` / `deviceAuthorization` / `sso` / `passkey` / `magicLink` / `organization` / `i18n`（better-auth 认证层文案本地化）已移除；**应用层多语言仍由 `nestjs-i18n` 承担**（`src/i18n/`、`just i18n-check` 不受影响）。对应 `passkey` / `organization` / `member` / `invitation` / `sso_provider` / `device_code` 表与 `user.is_anonymous`、`session.active_organization_id` 列不再生成。
-- 角色: `SUPER_ADMIN / ADMIN / OPERATOR / USER`（`src/common/constants/roles.ts`），统一用户主表 `user`（UUID `uuidv7()`），前台用户与后台管理员聚合于同一张表。
-- **权限判定 (Casbin)**: `ROLE_PERMISSIONS`（`src/common/constants/role-permissions.ts`）是唯一事实源，`just rbac-gen` 生成 `src/common/auth/casbin/policy.csv`（随 `nest-cli.json` assets 发布），`CasbinService` 加载策略供 `AccessControlGuard` 对 `@Permissions()` 做 `enforce(role, resource, action)`（`Permission` 枚举即 `resource:action`）。**改权限只改常量并重跑 `just rbac-gen`**；`just check` 内含 `rbac-check` 守卫一致性，单测再兜一层。`@Roles()` 与管理员豁免仍由守卫直接判定。`CasbinService` 仅在 `AppModule` 提供（CLI/Worker 无权限判定需求）。
-- 细粒度权限: `@Roles(Role.ADMIN)` 角色级 + `@Permissions(Permission.UserCreate)` 声明式，配合 `BetterAuthGuard` / `AccessControlGuard` 兜底。
+- **认证 (`@nestjs/authentication`)**：官方模块负责会话 Cookie（`__Host-sid`）、密码（scrypt）、JWT access + refresh、TOTP 两步验证、邮箱验证与找回密码。端点位于 `src/features/client/auth/`：`sign-up` / `sign-in` / `token` / `mfa/*` / `sessions` / `email/*` / `password/*`；`AuthenticationModule` 全局注册，守卫由 `AppModule` 以 `APP_GUARD` 显式排首位（确保 `request.user` 先于管理前缀/权限守卫）。
+- **状态存储**：`src/common/auth/authentication.store.ts` 实现官方四契约（sessions / refreshTokens / mfa / emailTokens），落 `sessions` / `refresh_tokens` / `mfa_*` / `email_tokens` 表；所有「只能成功一次」的判定均为单条条件语句，支持多副本并发。
+- **凭据提供者**：`SessionAuthProvider`（Cookie）、`JwtAuthProvider`（Bearer）与 `ApiKeyAuthProvider`（`nest_<id>_<secret>`，order 2）注册进 `AuthenticationRegistry`；`UsersRepository` 读取 `user` + `account`，密码哈希不外泄；封禁用户由 `validate()` 返回 `null` 直接 401。
+- **一次性命令与队列**：`MailJobs` 是 BullMQ 生产者，任何触发邮件的 `just cmd` 场景都需要 Redis（API 只入队、由 Worker 投递）。
+- **业务扩展**：API Key 管理（`/auth/api-keys`，仅存 SHA-256，创建时展示一次，校验由官方 `ApiKeyProvider` 承担）、会话管理（`/auth/sessions`）与验证码（`/auth/otp/email`、`/auth/otp/phone`：6 位码、5 分钟、单次使用、60s 冷却 + 每小时 5 次、失败 5 次作废，仅做邮箱/手机号归属验证，不免密登录；`otp_codes` 上有 `unique(target, purpose)`，消费为单语句 DELETE…RETURNING，保证并发下也只有一次成功）。
+- **已移除**：better-auth 兼容别名层（`sign-in/email`、`get-session`、`two-factor/*`、`api-key/*` 等）、用户名登录、一次性登录令牌、管理员冒充、`last_login_method`；magic link 与 OIDC 未启用。
+- 角色: `SUPER_ADMIN / ADMIN / OPERATOR / USER`（`src/common/constants/roles.ts`），统一用户主表 `user`（UUID），前台用户与后台管理员聚合于同一张表。
+- **授权 (`@nestjs/authorization`)**: deny-by-default —— 未声明 `@Can()` / `@Can.Anyone()` / `@Public()` 的路由一律拒绝。域级 policy 位于 `src/common/authorization/policies/`（`AdminPolicy` / `UserPolicy` / `IotPolicy`），在 `AppModule` 以 `AuthorizationModule.forRoot({ globalGuard: false, policies })` 注册，`AuthorizationGuard` 作为 `APP_GUARD` 排在 `AuthenticationGuard` 之后。
+- **策略约定**：能力方法首参必须接受 `CurrentUserPayload | null` 才能在 `@Can()` 中使用；需要路由参数时用 `param('id')` 解析器；SUPER_ADMIN 通过 `before()` 直通管理策略。
+- **路由声明**：认证端点使用 `@Can.Anyone()`（仍要求登录，除 `@Public()`）；管理端点按能力声明（如 `@Can(AdminPolicy, 'changeUserRole')`）；自助资源用 `@Can(UserPolicy, 'view', param('id'))`。
+- **`@Public()`（项目自有装饰器）**：等价于官方 `@Public()`，同时满足认证放行与授权守卫的 `Anyone` 语义。
 
 ### 安全基线 (Nest 12 内置能力)
 
@@ -208,12 +213,12 @@ tests/
 - **限流计数跨副本一致**: `ThrottlerModule` 必须以**对象形态**配置（数组形态会强制回落到进程内存储，多副本下限流额度被放大 N 倍）。`THROTTLE_STORAGE=redis`（默认）时由 `RedisThrottlerStorage`（`src/common/throttler/`）以单条 Lua 在 Redis 侧原子完成计数与封禁判定，键空间 `throttle:{throttlerName}:{key}`（`key` 为 @nestjs/throttler 默认 generateKey 的 SHA-256 摘要：class + handler + 名称 + 客户端标识，无明文个人信息；仍不在日志中输出）。本地无 Redis 时设 `THROTTLE_STORAGE=memory`（仅进程内计数）。
 - **限流降级的两层要求（缺一不可）**: ① 语义层 —— Redis 不可用时回退进程内计数并限频告警，限流基础设施抖动不得演化为 5xx；② 时间层 —— 客户端 `status` 非 `ready`（`'wait'` 除外，那是 `lazyConnect` 冷启动，必须放行否则永不建连）时立即降级，就绪时对单次调用加 `THROTTLE_REDIS_TIMEOUT_MS`（100ms）时间上界。**守卫阶段不受 `HTTP_TIMEOUT_MS` 约束**（Nest 生命周期为 middleware → guards → interceptors），故请求热路径上的依赖调用必须自带上界：ioredis 默认 `enableOfflineQueue: true`，断连期间的命令会排进离线队列等完整个重连周期（实测单次 >7s、连续请求可达 20s）。
 - **Redis Lua 脚本唯一事实源**: 全部脚本集中在 `src/database/lua-scripts.ts`，**禁止在调用处内联复制脚本文本**（历史上解锁脚本曾被复制两份）。加载策略按调用频率区分：请求热路径用 `defineCommand`（EVALSHA 优先 + NOSCRIPT 回落，避免重传脚本体），低频临界区脚本直接 `eval`。
-- **邮件栈自持**: 已移除 `@nestjs-modules/mailer`（其 `MailerOptions.defaults` 类型与 nodemailer 10 不同步，且带来 `@css-inline/css-inline` 原生二进制等传递依赖）。传输层由 `mailTransporterProvider` 以 nodemailer 原生两参形态创建（`createTransport(MAIL_URL, { from })`），模板渲染由 `MailTemplateRenderer` 以 Handlebars `strict: true` 完成并按文件名缓存，应用关闭时 `MailTransporterLifecycle` 调用 `transporter.close()` 释放连接池。仅依赖 `ConfigModule` + 文件系统，可在无 HTTP 运行期的 Worker 进程中直接导入。
+- **邮件栈 (官方 `@nestjs/mail` + BullMQ)**: `MailModule.forRoot()` 装配传输层（`MAIL_TRANSPORT` 选择 `SmtpTransport` / `FileMailTransport` / `ResendTransport`）与 Handlebars 模板引擎（strict，MJML → `.hbs`）。`MailJobs` 只负责入队（`mail` 队列，`attempts` + 指数退避），`MailProcessor` 在 Worker 进程消费并调用 `Mailer.send`；永久失败（`MailError.permanent`）调用 `job.discard()` 终止重试。
 
 ### CLI 模块 (`src/cli.module.ts`)
 
 独立于 `AppModule` 且免除 HTTP 守卫与 Worker 额外开销。所有带 Controller 的业务模块统一在 `src/features/index.ts` 中的 `FEATURE_MODULES` 集中声明，`AppModule` 与 `CliModule` 统一展开引入，彻底消除路由发现缺失与模块漂移。
-BullMQ 队列由 `AuthModule → MailJobs` 依赖，CLI 模块也需 `BullModule.forRootAsync(...)`。
+`MailJobs` 依赖 BullMQ `mail` 队列：任何引入 `AuthModule` 的进程都必须注册 `MailModule.forRoot()` 与 `JobsModule`；实际投递由 Worker 进程的 `MailProcessor` 完成。
 
 ## 编码规范
 
@@ -245,7 +250,7 @@ BullMQ 队列由 `AuthModule → MailJobs` 依赖，CLI 模块也需 `BullModule
     1. **资源补偿与回滚**: 如写盘成功但落库失败时，推荐使用 `MediaService.storeWithCompensation` 自动安全接管。
     2. **弱依赖旁路降级**: 如删除旧头像、非核心日志记录，catch 后记录 warn，不阻断主流程。
     3. **领域错误转译**: 捕获专有驱动异常并转译为语义明确的业务异常。
-  - **守卫层**: 仅「凭证无效 / 账号封禁」映射 401；认证后端自身故障（网络超时、Better Auth 内部异常）必须记 error 日志并以 **503** 上抛，严禁把系统故障伪装成「会话过期」（见 `BetterAuthGuard`）。
+  - **守卫层**: 认证由官方 `AuthenticationGuard` 负责；凭据无效或账号封禁映射 401，认证存储不可用时由官方错误映射为非 401 状态并记录日志。
   - **全局过滤器 (`HttpExceptionFilter`)**: 统一响应格式、生产环境 SQL/堆栈脱敏，自动识别 Postgres 错误码（如 `23505` 唯一键冲突 → 409 Conflict、`23503` 外键无效 → 400 Bad Request），并优先采用 `HttpExceptionOptions.errorCode` 作为机器可读错误码（其次响应体 `code`，最后状态枚举名）。
 - **Swagger / OpenAPI 规范**:
   - **中文极简命名**: 所有 Controller 的 `@ApiTags`（如 `@ApiTags('用户管理')`、`@ApiTags('认证')`）与 `@ApiOperation({ summary })`（如 `@ApiOperation({ summary: '创建用户' })`、`@ApiOperation({ summary: '登录' })`）统一采用纯粹、简明的中文表达，严禁中英混杂或冗长套话。
@@ -285,8 +290,8 @@ BullMQ 队列由 `AuthModule → MailJobs` 依赖，CLI 模块也需 `BullModule
 ## 易踩坑
 
 1. **新增业务模块只需加入 `FEATURE_MODULES`** — 在 `src/features/index.ts` 中声明即可自动挂入 `AppModule` 与 `CliModule`，保障 CLI 路由发现完整。
-2. **新增管理端点必须落 `/admin` 前缀** — 在 `src/features/admin/{users,notifications,dashboard,admins}/` 对应领域子目录内新增/扩展；`AdminPrefixGuard` 已全局强制仅合法管理角色（SUPER_ADMIN / ADMIN / OPERATOR）可访问（登录端点通过 `@Public()` 豁免），业务端点级无需重复标注。前端自助端点（`/users/me` 等）不得迁入 `/admin`，否则普通用户将被守卫拦截。
-3. **`MailJobs` 隐式依赖 BullMQ** — 任何间接 import `AuthModule` 的场景都要配 `BullModule.forRootAsync`，否则队列连接报错。
+2. **新增管理端点必须落 `/admin` 前缀** — 在 `src/features/admin/{users,notifications,dashboard,admins}/` 对应领域子目录内新增/扩展，并在 `AdminPolicy` 中声明对应能力、路由上标注 `@Can(AdminPolicy, 'ability')`；未声明的路由会被授权守卫默认拒绝。前端自助端点（`/users/me` 等）不得迁入 `/admin`。
+3. **`MailJobs` 依赖 BullMQ** — 任何间接 import `AuthModule` 的场景都要注册 `MailModule.forRoot()` 与 `JobsModule`；邮件只在 Worker 进程（`MailProcessor`）真正投递。
 4. **Fastify 5 ≠ Express** — 用 `@nestjs/platform-fastify`，第三方插件/中间件需 Fastify 5 兼容版本；`req`/`reply` 类型不同；响应耗时用 `reply.elapsedTime`（严禁使用已弃用的 `reply.getResponseTime()`）。
 5. **纯 ESM 运行时规范** — 项目已声明 `"type": "module"`，严禁直接使用 CJS 全局变量 `__dirname` / `__filename`，统一使用 `import.meta.dirname ?? path.dirname(fileURLToPath(import.meta.url))`；SWC 配置需保持 `module.resolveFully: true` 以确保相对导入携带 `.js` 扩展名。
 6. **SWC 构建与资源拷贝** — SWC 仅做转译，类型检查用 `tsc --noEmit`；构建时需通过 `tsconfig.build.json` 锁定 `"rootDir": "src"`，防止 Nest CLI 误判项目根目录导致 assets 资源拷贝偏移至 `dist/src/`。

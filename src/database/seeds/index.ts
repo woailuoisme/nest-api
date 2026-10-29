@@ -1,9 +1,9 @@
 import 'dotenv/config';
-import { drizzle, type PostgresJsDatabase } from 'drizzle-orm/postgres-js';
 import { reset } from 'drizzle-seed';
-import postgres from 'postgres';
 
 import { DEFAULT_DB_URL } from '@/common/constants/app.constants';
+import { createDatabase, type Database } from '@/database/drizzle/database';
+import { createPgPool } from '@/database/drizzle/pg';
 import * as schema from '@/database/drizzle/schema';
 
 import { description as authDesc, run as seedAuth } from './auth.seed';
@@ -29,7 +29,7 @@ import { description as notificationsDesc, run as seedNotifications } from './no
  *   bun x tsx src/database/seeds/index.ts --help
  */
 
-type SeederFn = (db: PostgresJsDatabase<typeof schema>) => Promise<void>;
+type SeederFn = (db: Database) => Promise<void>;
 
 const seeders: Record<string, { run: SeederFn; description: string }> = {
   auth: { run: seedAuth, description: authDesc },
@@ -67,7 +67,7 @@ function parseArgs(): { help: boolean; only: string[] | null; noReset: boolean }
 }
 
 export async function seedDatabase(
-  db: PostgresJsDatabase<typeof schema>,
+  db: Database,
   options?: { only?: string[] | null; noReset?: boolean; log?: (msg: string) => void },
 ): Promise<void> {
   const { only, noReset = false, log = console.log } = options ?? {};
@@ -89,14 +89,24 @@ export async function seedDatabase(
       await reset(db, {
         user: schema.user,
         account: schema.account,
-        session: schema.session,
+        sessions: schema.sessions,
+        refreshTokens: schema.refreshTokens,
+        mfaAuthenticators: schema.mfaAuthenticators,
+        mfaRecoveryCodes: schema.mfaRecoveryCodes,
+        mfaFailures: schema.mfaFailures,
+        emailTokens: schema.emailTokens,
         notifications: schema.notifications,
       });
     } else if (toRun.includes('auth')) {
       await reset(db, {
         user: schema.user,
         account: schema.account,
-        session: schema.session,
+        sessions: schema.sessions,
+        refreshTokens: schema.refreshTokens,
+        mfaAuthenticators: schema.mfaAuthenticators,
+        mfaRecoveryCodes: schema.mfaRecoveryCodes,
+        mfaFailures: schema.mfaFailures,
+        emailTokens: schema.emailTokens,
       });
     } else if (toRun.includes('notifications')) {
       await reset(db, {
@@ -124,13 +134,13 @@ async function main(): Promise<void> {
     return;
   }
 
-  const sql = postgres(process.env.DB_URL || DEFAULT_DB_URL, { max: 1, prepare: false, onnotice: () => {} });
-  const db = drizzle(sql, { schema });
+  const pool = createPgPool(process.env.DB_URL || DEFAULT_DB_URL, { max: 1 });
+  const db = createDatabase(pool);
 
   try {
     await seedDatabase(db, { only, noReset });
   } finally {
-    await sql.end();
+    await pool.end();
   }
 }
 

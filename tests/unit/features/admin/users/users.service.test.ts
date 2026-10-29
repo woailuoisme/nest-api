@@ -1,9 +1,11 @@
+import { PasswordHasher } from '@nestjs/authentication';
 /**
  * UsersService 单元测试
  *
  * 覆盖：用户 CRUD、分页搜索、头像更新
  */
 import { ConflictException, ForbiddenException, NotFoundException } from '@nestjs/common';
+import { getDrizzleToken } from '@nestjs/drizzle';
 import { Test } from '@nestjs/testing';
 import { range } from 'es-toolkit';
 import { createMockDrizzleDb } from 'tests/mocks/drizzle.mock';
@@ -12,14 +14,8 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { Role } from '@/common/constants/roles';
 import { SearchService, SearchSyncService } from '@/common/search';
 import { paginateQuery, paginateSpatieQuery } from '@/database/drizzle/drizzle-pagination';
-import { DRIZZLE_DB } from '@/database/drizzle/drizzle.service';
 import { UserEntity } from '@/features/admin/users/users.dto';
 import { UsersService } from '@/features/admin/users/users.service';
-
-/** 模拟 Better Auth 密码哈希 */
-vi.mock('better-auth/crypto', () => ({
-  hashPassword: vi.fn((plain: string) => Promise.resolve(`hashed:${plain}`)),
-}));
 
 /** 模拟分页助手 */
 vi.mock('@/database/drizzle/drizzle-pagination', () => ({
@@ -48,6 +44,8 @@ describe('UsersService (Admin)', () => {
     updatedAt: new Date('2024-01-01'),
   };
 
+  const actor = { id: 'actor-uuid-1', role: Role.SUPER_ADMIN };
+
   beforeEach(async () => {
     db = createMockDrizzleDb();
     searchService = {
@@ -62,9 +60,13 @@ describe('UsersService (Admin)', () => {
     const module = await Test.createTestingModule({
       providers: [
         UsersService,
-        { provide: DRIZZLE_DB, useValue: db },
+        { provide: getDrizzleToken(), useValue: db },
         { provide: SearchService, useValue: searchService },
         { provide: SearchSyncService, useValue: searchSyncService },
+        {
+          provide: PasswordHasher,
+          useValue: { hash: vi.fn((plain: string) => Promise.resolve(`hashed:${plain}`)) },
+        },
       ],
     }).compile();
 
@@ -82,7 +84,7 @@ describe('UsersService (Admin)', () => {
       db._stubs.findFirstUser.mockResolvedValue(null);
       db._stubs.insertReturning.mockResolvedValue([{ ...mockUser, ...createDto, emailVerifiedAt: undefined }]);
 
-      const result = await usersService.create(createDto);
+      const result = await usersService.create(actor, createDto);
 
       expect(result).toHaveProperty('name', '李四');
       expect(result).toHaveProperty('email', 'lisi@example.com');
@@ -93,7 +95,7 @@ describe('UsersService (Admin)', () => {
       db._stubs.findFirstUser.mockResolvedValue(null);
       db._stubs.insertReturning.mockResolvedValue([{ ...mockUser, ...createDto }]);
 
-      await usersService.create(createDto);
+      await usersService.create(actor, createDto);
 
       const userInsertData = db._stubs.insertValues.mock.calls[0][0];
       const accountInsertData = db._stubs.insertValues.mock.calls[1][0];
@@ -105,16 +107,29 @@ describe('UsersService (Admin)', () => {
     it('邮箱已存在时应抛出 ConflictException', async () => {
       db._stubs.findFirstUser.mockResolvedValue(mockUser);
 
-      await expect(usersService.create(createDto)).rejects.toBeInstanceOf(ConflictException);
+      await expect(usersService.create(actor, createDto)).rejects.toBeInstanceOf(ConflictException);
     });
 
     it('可选 role 参数应生效', async () => {
       db._stubs.findFirstUser.mockResolvedValue(null);
       db._stubs.insertReturning.mockResolvedValue([{ ...mockUser, role: 'ADMIN' }]);
 
-      await usersService.create({ ...createDto, role: 'ADMIN' as any });
+      await usersService.create(actor, { ...createDto, role: 'ADMIN' as any });
 
       expect(db._stubs.insertValues.mock.calls[0][0].role).toBe('ADMIN');
+    });
+  });
+
+  describe('create() — 越权防护', () => {
+    it('ADMIN 不得创建 SUPER_ADMIN', async () => {
+      db._stubs.findFirstUser.mockResolvedValue(null);
+
+      await expect(
+        usersService.create(
+          { id: 'admin-1', role: Role.ADMIN },
+          { name: '越权', email: 'escalate@example.com', password: 'Password123', role: Role.SUPER_ADMIN },
+        ),
+      ).rejects.toBeInstanceOf(ForbiddenException);
     });
   });
 
@@ -184,25 +199,47 @@ describe('UsersService (Admin)', () => {
 
   describe('update() — 更新用户', () => {
     it('应更新用户并返回 UserEntity', async () => {
+      db._stubs.findFirstUser.mockResolvedValue({ id: 'user-uuid-1', role: Role.USER });
       db._stubs.updateReturning.mockResolvedValue([{ ...mockUser, name: '张三三' }]);
 
-      const result = await usersService.update('user-uuid-1', { name: '张三三' });
+      const result = await usersService.update(actor, 'user-uuid-1', { name: '张三三' });
 
       expect(result.name).toBe('张三三');
     });
 
     it('更新邮箱时若已被他人占用应抛出 ConflictException', async () => {
-      db._stubs.findFirstUser.mockResolvedValue({ ...mockUser, id: 'user-uuid-2', email: 'other@example.com' });
+      db._stubs.findFirstUser
+        .mockResolvedValueOnce({ id: 'user-uuid-1', role: Role.USER })
+        .mockResolvedValueOnce({ ...mockUser, id: 'user-uuid-2', email: 'other@example.com' });
 
-      await expect(usersService.update('user-uuid-1', { email: 'other@example.com' })).rejects.toBeInstanceOf(
+      await expect(usersService.update(actor, 'user-uuid-1', { email: 'other@example.com' })).rejects.toBeInstanceOf(
         ConflictException,
       );
     });
 
-    it('用户不存在时应抛出 NotFoundException', async () => {
-      db._stubs.updateReturning.mockResolvedValue([]);
+    it('管理员可更新自己的资料（不得自删）', async () => {
+      db._stubs.findFirstUser.mockResolvedValue({ id: actor.id, role: actor.role });
+      db._stubs.updateReturning.mockResolvedValue([{ ...mockUser, name: '新名字' }]);
 
-      await expect(usersService.update('non-existent', { name: 'test' })).rejects.toBeInstanceOf(NotFoundException);
+      const result = await usersService.update(actor, actor.id, { name: '新名字' });
+
+      expect(result.name).toBe('新名字');
+    });
+
+    it('OPERATOR 不得修改邮箱', async () => {
+      db._stubs.findFirstUser.mockResolvedValue({ id: 'user-uuid-1', role: Role.USER });
+
+      await expect(
+        usersService.update({ id: 'op-1', role: Role.OPERATOR }, 'user-uuid-1', { email: 'x@example.com' }),
+      ).rejects.toBeInstanceOf(ForbiddenException);
+    });
+
+    it('用户不存在时应抛出 NotFoundException', async () => {
+      db._stubs.findFirstUser.mockResolvedValue(null);
+
+      await expect(usersService.update(actor, 'non-existent', { name: 'test' })).rejects.toBeInstanceOf(
+        NotFoundException,
+      );
     });
   });
 
@@ -283,18 +320,27 @@ describe('UsersService (Admin)', () => {
 
   describe('remove() — 删除用户', () => {
     it('应原子删除用户', async () => {
+      db._stubs.findFirstUser.mockResolvedValue({ id: 'user-uuid-1', role: Role.USER });
       db._stubs.deleteReturning.mockResolvedValue([mockUser]);
 
-      const result = await usersService.remove('user-uuid-1');
+      const result = await usersService.remove(actor, 'user-uuid-1');
 
       expect(result).toBeUndefined();
       expect(db.delete).toHaveBeenCalled();
     });
 
     it('用户不存在时应抛出 NotFoundException', async () => {
-      db._stubs.deleteReturning.mockResolvedValue([]);
+      db._stubs.findFirstUser.mockResolvedValue(null);
 
-      await expect(usersService.remove('non-existent')).rejects.toBeInstanceOf(NotFoundException);
+      await expect(usersService.remove(actor, 'non-existent')).rejects.toBeInstanceOf(NotFoundException);
+    });
+
+    it('ADMIN 不得删除 SUPER_ADMIN', async () => {
+      db._stubs.findFirstUser.mockResolvedValue({ id: 'super-1', role: Role.SUPER_ADMIN });
+
+      await expect(usersService.remove({ id: 'admin-1', role: Role.ADMIN }, 'super-1')).rejects.toBeInstanceOf(
+        ForbiddenException,
+      );
     });
   });
 

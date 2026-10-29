@@ -1,8 +1,9 @@
 import { Injectable, Logger, Optional } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import { InjectDrizzle } from '@nestjs/drizzle';
 
 import type { EnvConfig } from '@/config/env.validation';
-import { type DrizzleDB, InjectDb } from '@/database/drizzle/drizzle.service';
+import type { Database } from '@/database/drizzle/database';
 import { SearchJobs } from '@/jobs/search/search.jobs';
 
 import type { SearchableDefinition } from './scout/searchable.interface';
@@ -23,8 +24,8 @@ export class SearchSyncService {
   constructor(
     private readonly searchService: SearchService,
     private readonly configService: ConfigService<EnvConfig, true>,
+    @InjectDrizzle() private readonly db: Database,
     @Optional() private readonly searchJobs?: SearchJobs,
-    @Optional() @InjectDb() private readonly db?: DrizzleDB,
   ) {}
 
   /**
@@ -74,11 +75,11 @@ export class SearchSyncService {
   async syncById<TEntity, TDoc extends Record<string, unknown> = Record<string, unknown>>(
     def: SearchableDefinition<TEntity, TDoc>,
     id: string | number,
-    customDb?: DrizzleDB,
+    customDb?: Database,
   ): Promise<void> {
     const database = customDb ?? this.db;
     if (!database) {
-      throw new Error('DrizzleDB instance is required to load records by ID');
+      throw new Error('Database instance is required to load records by ID');
     }
 
     if (!def.loadRecords) {

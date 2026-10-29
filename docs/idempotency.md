@@ -15,7 +15,7 @@ flowchart LR
     Client["客户端 (Client)"]
     Network["公共互联网 / 移动基站 (Unreliable Network)"]
     Server["API 服务端"]
-    DB[("PostgreSQL / Redis")]
+    DB[("PostgreSQL")]
 
     Client -->|"1. POST /v1/orders (创建订单)"| Network
     Network -->|"2. 成功投递"| Server
@@ -44,18 +44,20 @@ flowchart LR
 1. **自适应感知与声明式强约束 (Smart Interception & Declarative Enforcing)**：
    - 全局拦截器自动感知所有变更动词（`POST`、`PUT`、`PATCH`、`DELETE`）中携带的 `Idempotency-Key` 请求头并原子接管。
    - 关键核心交易接口支持通过 `@Idempotent({ required: true })` 强制要求客户端必须提供有效凭证，否则直接拒绝执行。
-2. **分布式原子互斥锁 (Distributed Mutual Exclusion)**：
-   - 采用 Redis `SET key token PX ttl NX` 实现毫秒级原子抢锁，业务完成后通过安全 Lua 脚本（Token 校验）原子解锁，防止并发请求击穿导致重复执行。
-3. **优雅自旋等待与无感回放 (Graceful Spin-Wait & Replay)**：
-   - 当多个具有相同幂等键的请求几乎同时到达时，后到的请求不会立即被粗暴拒绝，而是在等待窗口内自动自旋轮询（默认每 50ms 轮询一次，最长 5s）。一旦先到的慢请求完成，后到请求**直接无感消费缓存响应并返回**，极大提升弱网并发体验。
-4. **双重防篡改严格校验 (Path & Canonical SHA-256 Payload Hash)**：
-   - 服务端同时绑定 `URL Path` 与基于 **Canonical JSON**（对键名进行字典序深度递归排序）的 `SHA-256` 载荷签名。相同 Key 发往不同接口或携带了修改过的 Payload，将被立即阻断并返回 `422 Unprocessable Entity`。
+2. **单语句原子租约 (Atomic Lease in PostgreSQL)**：
+   - 以 `idempotency_keys` 为载体，`INSERT ... ON CONFLICT DO UPDATE ... WHERE expires_at <= now ... RETURNING` 一条语句完成抢锁：并发下只有一个请求能写入，其余读到赢家的记录；`owner` 作为 fencing token，`complete/extend/release` 的 CAS 谓词都把 `owner` 与未过期放在同一条 `WHERE` 里。
+   - 租约截止时间由**数据库时钟**推导（`EXTRACT(EPOCH FROM NOW())`），多副本无需依赖 NTP 对齐。
+3. **两种并发语义（按接入方式）**：
+   - 声明式 `@Idempotent()`（官方 interceptor）：首次请求仍在执行时，重复请求立即得到 `409 IDEMPOTENCY_KEY_IN_USE` + `Retry-After` 头，不占用连接自旋。
+   - 编程式 `IdempotencyService`（微信支付回调等自管事务的场景）：在等待窗口内自旋轮询（默认每 50ms、最长 5s），先到请求完成后直接消费结果；超时同样返回 `409` + `Retry-After`。
+4. **指纹严格校验 (Method + Path + Canonical Payload)**：
+   - 指纹 = `METHOD path:sha256(canonical(payload))`：方法、路径、载荷任一不同即视为 key 复用，返回 `422` 且 `code = IDEMPOTENCY_KEY_REUSED`。Canonical JSON 对键名做字典序递归排序，兄弟属性复用同一对象不会被误判为循环引用。
 5. **主体作用域精准隔离 (Actor Scope Isolation)**：
-   - 幂等键在服务端自动前缀隔离：已认证用户绑定 `user:{userId}`，匿名访客绑定 `ip:{clientIp}`。不同租户或用户即使碰巧生成了相同的 UUID，也绝对不会发生数据碰撞或响应越权泄漏。
+   - 幂等键在服务端自动前缀隔离：已认证用户绑定 `user:{userId}`，匿名访客绑定 `anon:{clientIp}`（未取到 IP 时统一为 `anon:unknown`）。不同租户或用户即使碰巧生成了相同的 UUID，也绝对不会发生数据碰撞或响应越权泄漏。
 6. **确定性状态码分流与安全脱敏 (Deterministic Caching & Header Sanitization)**：
    - 默认缓存所有 `2xx` 成功响应以及确定性的业务失败响应（如 `400` 参数错误、`404` 找不到关联资源、`422` 业务规则冲突），防止恶意调用者通过重试绕过风控。
-   - **绝对不缓存**瞬态故障：`409 Conflict`、`429 Too Many Requests` 以及 `5xx` 服务端错误；发生瞬态错误时服务端立即释放排他锁，允许客户端立刻退避重试。
-   - 回放时自动剥离 `Set-Cookie`、`Authorization` 等敏感凭据以及 HTTP 逐跳头（Hop-by-hop headers），并注入标识头 `X-Idempotency-Replayed: true`。
+   - **绝对不缓存**瞬态故障：`5xx` 服务端错误；`409` 属于「仍在处理中」的拒绝（不写入记录），`422` 属于契约冲突（不运行 handler）。发生这类失败时租约被释放或自然过期，客户端可立刻退避重试。
+   - 回放时自动剥离 `Set-Cookie`、`Authorization` 等敏感凭据以及 HTTP 逐跳头（Hop-by-hop headers），并注入标识头 `Idempotent-Replayed: true`（该头已通过 CORS `exposedHeaders` 暴露给浏览器）。
 
 ---
 
@@ -68,53 +70,53 @@ sequenceDiagram
     participant Gateway as API 网关 / Fastify
     participant Interceptor as IdempotencyInterceptor
     participant Service as IdempotencyService
-    participant Redis as Redis (Cluster / Master)
+    participant DB as PostgreSQL (idempotency_keys)
     participant Handler as 业务处理器 (Controller/Service)
 
     Note over Client,Handler: 【场景 A：首次请求 (First-Time Execution)】
     Client->>Gateway: POST /v1/orders<br/>[Idempotency-Key: 019572d4-...]
     Gateway->>Interceptor: 捕获写请求并提取请求头
     Interceptor->>Service: validateIdempotencyKey() + acquire()
-    Service->>Redis: 1. 查询缓存 (GET idempotency:cache:{actor}:{key})
-    Redis-->>Service: null (未命中)
-    Service->>Redis: 2. 原子抢锁 (SET idempotency:lock:{actor}:{key} token PX 30000 NX)
-    Redis-->>Service: OK (抢锁成功)
+    Service->>DB: 1. 查询缓存 (GET idempotency:cache:{actor}:{key})
+    DB-->>Service: null (未命中)
+    Service->>DB: 2. 原子抢锁 (SET idempotency:lock:{actor}:{key} token PX 30000 NX)
+    DB-->>Service: OK (抢锁成功)
     Service-->>Interceptor: { acquired: true, lockToken }
     Interceptor->>Handler: 推进处理管道执行实际业务落库 (DB Transaction)
     Handler-->>Interceptor: 返回订单实体 { id: "ord_123", amount: 9900 }
     Interceptor->>Service: complete() 持久化缓存并释放锁
-    Service->>Redis: 1. 缓存响应体与状态码 (SET idempotency:cache... EX 86400)
-    Service->>Redis: 2. Lua 安全解锁 (DEL idempotency:lock...)
+    Service->>DB: 1. 单语句 CAS 写入响应 (UPDATE ... WHERE owner = 本次 token AND expires_at > now)
+    Service->>DB: 2. 释放租约（成功路径由 complete 一并解除 owner）
     Interceptor-->>Client: HTTP 201 Created<br/>{ id: "ord_123", amount: 9900 }
 
     Note over Client,Handler: 【场景 B：并发竞争中途到达 (Concurrent Spin-Wait)】
     Client->>Gateway: POST /v1/orders (并发重复点击)<br/>[Idempotency-Key: 019572d4-...]
     Gateway->>Interceptor: 请求到达
     Interceptor->>Service: acquire()
-    Service->>Redis: 查询缓存返回 null 且尝试抢锁失败 (锁被场景 A 占用)
+    Service->>DB: 记录存在且 owner 非空（场景 A 仍持有租约）
     loop 自旋轮询 (每 50ms 轮询一次，最多持续 5000ms)
-        Service->>Redis: 查询缓存是否已写入 或 锁是否已释放
+        Service->>DB: 轮询记录是否已变为 completed 或租约已过期
     end
-    Note over Service,Redis: 场景 A 业务完成，缓存成功写入
-    Redis-->>Service: 命中已完成缓存
+    Note over Service,DB: 场景 A 业务完成，缓存成功写入
+    DB-->>Service: 命中已完成缓存
     Service->>Service: 校验 Path 与 Payload SHA-256 一致
     Service-->>Interceptor: { acquired: false, cached }
-    Interceptor-->>Client: HTTP 201 Created (短路回放，耗时仅数毫秒)<br/>[X-Idempotency-Replayed: true]<br/>{ id: "ord_123", amount: 9900 }
+    Interceptor-->>Client: HTTP 201 Created (短路回放，耗时仅数毫秒)<br/>[Idempotent-Replayed: true]<br/>{ id: "ord_123", amount: 9900 }
 
     Note over Client,Handler: 【场景 C：网络丢包后的重试 (Replay on Retry)】
     Client->>Gateway: POST /v1/orders (客户端超时重试)<br/>[Idempotency-Key: 019572d4-...]
     Gateway->>Interceptor: 请求到达
     Interceptor->>Service: acquire()
-    Service->>Redis: 查询缓存命中！
+    Service->>DB: 查询缓存命中！
     Service->>Service: 校验 Path 与 Payload SHA-256 完全一致
     Service-->>Interceptor: { acquired: false, cached }
-    Interceptor-->>Client: HTTP 201 Created<br/>[X-Idempotency-Replayed: true]<br/>{ id: "ord_123", amount: 9900 }
+    Interceptor-->>Client: HTTP 201 Created<br/>[Idempotent-Replayed: true]<br/>{ id: "ord_123", amount: 9900 }
 
     Note over Client,Handler: 【场景 D：恶意或错误修改载荷 (Tampered Payload)】
     Client->>Gateway: POST /v1/orders (复用旧 Key 但篡改金额为 1 元)<br/>[Idempotency-Key: 019572d4-...]
     Gateway->>Interceptor: 请求到达
     Interceptor->>Service: acquire()
-    Service->>Redis: 查询缓存命中！
+    Service->>DB: 查询缓存命中！
     Service->>Service: 计算当前 Payload Hash 与缓存 Hash 不一致 (发现篡改)
     Service-->>Interceptor: 抛出 UnprocessableEntityException
     Interceptor-->>Client: HTTP 422 Unprocessable Entity<br/>{ "error": "Idempotency key payload mismatch" }
@@ -176,7 +178,7 @@ sequenceDiagram
 
 客户端收到服务端响应时，必须严格按照下表的决策矩阵进行分支处理：
 
-| HTTP 状态码 | 响应头 `X-Idempotency-Replayed` | 场景含义与服务端状态 | 客户端能否重试？ | 客户端标准处置行为 |
+| HTTP 状态码 | 响应头 `Idempotent-Replayed` | 场景含义与服务端状态 | 客户端能否重试？ | 客户端标准处置行为 |
 | :---: | :---: | :--- | :---: | :--- |
 | **`200 / 201 / 204`** | `false` / 无 | **首次执行成功**。业务已持久化，响应已存入幂等缓存。 | ❌ 无需重试 | 直接向用户展示成功状态，消费响应数据体。 |
 | **`200 / 201 / 204`** | **`true`** | **幂等回放成功**。未执行重复业务，直接自缓存复现历史响应。 | ❌ 无需重试 | 视为成功，与首次执行完全等效交付业务层处理；可打点记录回放发生。 |
@@ -185,7 +187,7 @@ sequenceDiagram
 | **`422 Unprocessable`** | 无 | **防篡改违规 (Payload/Path Mismatch)**。相同 Key 被发送到不同 URL，或请求体内容与首发不符。 | ❌ 禁止使用原 Key 重试 | **逻辑错误或 Key 污染**。排查前端状态机是否污染了旧 Key；若确需提交新载荷，必须重新生成全新 Key。 |
 | **`429 Too Many`** | 无 | **请求限流**。请求触发速率限制，服务端**未占用**幂等排他锁。 | ✅ 延迟重试 | 检查响应头中的 `Retry-After`，并在该延迟结束后使用相同 Key 重试。 |
 | **`500 / 502 / 504`** | 无 | **服务端偶发故障或网关超时**。服务端已自动触发安全解锁，**未沉淀**成功缓存。 | ✅ **必须重试** | **必须保持相同的 Idempotency-Key**，采用指数退避重试，服务端可安全防重入。 |
-| **`503 Service Unavailable`** | 无 | **容灾阻断 (Fail-Closed)**。Redis 基础设施不可用，系统为防资损拒绝执行写操作。 | ✅ 延迟重试 | 保持原 Key 不变，稍后退避重试；或根据业务场景向用户提示系统繁忙。 |
+| **`503 Service Unavailable`** | 无 | **容灾阻断 (Fail-Closed)**。幂等存储（PostgreSQL）不可用，系统为防资损拒绝执行写操作。 | ✅ 延迟重试 | 保持原 Key 不变，稍后退避重试；或根据业务场景向用户提示系统繁忙。 |
 | **网络断开 / Timeout** | 无 | **状态未知**。连接重置、Socket 超时，响应包在途中丢失。 | ✅ **必须重试** | **必须保持相同的 Idempotency-Key**，立即触发后台全抖动退避自动重试。 |
 
 ---
@@ -581,7 +583,7 @@ class IdempotencyInterceptor(
 
     companion object {
         const val HEADER_IDEMPOTENCY_KEY = "Idempotency-Key"
-        const val HEADER_REPLAYED = "X-Idempotency-Replayed"
+        const val HEADER_REPLAYED = "Idempotent-Replayed"
         private val MUTATING_METHODS = setOf("POST", "PUT", "PATCH", "DELETE")
     }
 
@@ -683,7 +685,7 @@ curl -i -X POST "http://localhost:4300/v1/orders" \
   -d '{"skuId":"SKU_1001","quantity":2}'
 ```
 
-*预期输出*：返回 `HTTP/1.1 201 Created`，无 `X-Idempotency-Replayed` 头。
+*预期输出*：返回 `HTTP/1.1 201 Created`，无 `Idempotent-Replayed` 头。
 
 #### 场景 2：相同 Key 立即重复请求（验证回放缓存）
 
@@ -764,10 +766,10 @@ export class PaymentsController {
   @Post('charge')
   @Idempotent({
     required: true,           // 强制要求客户端必须提供 Idempotency-Key 请求头（缺省返回 400）
-    ttlSeconds: 86400,        // 幂等记录在 Redis 中的留存时间（默认 24 小时）
+    ttlSeconds: 86400,        // 幂等记录留存时间（默认 24 小时）
     waitTimeoutMs: 5000,      // 并发请求在服务端自旋等待前序完成的最长窗口（默认 5000ms，超时报 409）
     lockTtlMs: 30000,         // 分布式业务锁最长租约，防止业务宕机死锁（默认 30s）
-    fallback: 'fail-closed',  // Redis 宕机时的容灾策略：'fail-closed' 抛 503 防资损（默认），或 'fail-open' 放行
+    fallback: 'fail-closed',  // 存储不可用时的容灾策略：'fail-closed' 抛 503 防资损（默认），或 'fail-open' 放行
   })
   async createCharge(@Body() dto: CreateChargeDto) {
     return this.paymentsService.charge(dto);
@@ -789,7 +791,7 @@ export class PaymentsController {
    - **正解**：一次交互动作只生成一个 Key，该动作发起的所有重试必须沿用同一个 Key。
 2. ❌ **反模式 2：在安全幂等读操作（GET/HEAD）上附加幂等键**
    - **错误现象**：在获取列表或查询详情请求中也拼接了 `Idempotency-Key`。
-   - **不良后果**：导致查询操作无谓占用 Redis 互斥排他锁与缓存存储开销，且违背 HTTP 规范。
+   - **不良后果**：导致查询操作无谓占用幂等租约与记录存储开销，且违背 HTTP 规范。
    - **正解**：仅对非幂等修改动词（`POST`、`PUT`、`PATCH`、`DELETE`）启用幂等机制。
 3. ❌ **反模式 3：在循环批处理中共享全局单例 Key**
    - **错误现象**：在异步 Job 或循环上传多个不同文件时，复用了同一个字符串作为 Key。
@@ -826,7 +828,7 @@ export class PaymentsController {
   - [ ] 遇到 `422`、`400`、`401`、`403` 时是否立即终止重试并向上抛出业务异常？
 - [ ] **全抖动算法**：重试等待时长是否包含随机浮动因子（避免集中并发碰撞）？
 - [ ] **超时适配**：客户端网络读取超时（Timeout）是否不少于 10 秒？
-- [ ] **脱敏与回放**：业务逻辑是否正确识别了 `X-Idempotency-Replayed: true` 标记？
+- [ ] **脱敏与回放**：业务逻辑是否正确识别了 `Idempotent-Replayed: true` 标记？
 
 ---
 

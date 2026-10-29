@@ -1,0 +1,36 @@
+{
+  "required": "{field} 是必填项",
+  "minLength": "{field} 长度不能少于 {length} 个字符",
+  "email": "请提供有效的邮箱地址",
+  "invalid_type": "{path} 类型无效（期望 {expected}）",
+  "too_small": {
+    "string": {
+      "other": "{path} 长度不能少于 {count} 个字符"
+    },
+    "number": "{path} 不能小于 {minimum}",
+    "array": {
+      "other": "{path} 至少需要 {count} 个元素"
+    }
+  },
+  "too_big": {
+    "string": {
+      "other": "{path} 长度不能超过 {count} 个字符"
+    },
+    "number": "{path} 不能大于 {maximum}",
+    "array": {
+      "other": "{path} 最多允许 {count} 个元素"
+    }
+  },
+  "invalid_format": {
+    "regex": "{path} 格式无效",
+    "email": "{path} 不是有效的邮箱地址",
+    "url": "{path} 不是有效的 URL"
+  },
+  "invalid_value": "{path} 的取值无效",
+  "unrecognized_keys": "{path} 包含未知字段",
+  "custom": "{path} 校验失败",
+  "mfaCodeExclusive": "code 与 recoveryCode 必须且只能提供一个",
+  "sessionId": "无效的会话标识",
+  "otp": "验证码为 6 位数字",
+  "deviceId": "设备标识仅允许字母、数字与 _ . : -"
+}

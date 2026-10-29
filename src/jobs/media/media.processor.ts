@@ -1,8 +1,9 @@
-import { Processor, WorkerHost } from '@nestjs/bullmq';
+import { Processor } from '@nestjs/bullmq';
 import { Logger } from '@nestjs/common';
 import type { Job } from 'bullmq';
 
 import { MEDIA_QUEUE } from '@/common/constants/queues';
+import { QueueProcessorHost } from '@/jobs/queue-processor.host';
 
 import { type GenerateVariantsJobData, MediaJobName } from './media.jobs';
 
@@ -13,7 +14,7 @@ import { type GenerateVariantsJobData, MediaJobName } from './media.jobs';
  * 本消费者仅作向后兼容保留，安全消费历史积压的旧任务。
  */
 @Processor(MEDIA_QUEUE, { concurrency: 5 })
-export class MediaProcessor extends WorkerHost {
+export class MediaProcessor extends QueueProcessorHost {
   private readonly logger = new Logger(MediaProcessor.name);
 
   async process(job: Job<GenerateVariantsJobData>): Promise<void> {

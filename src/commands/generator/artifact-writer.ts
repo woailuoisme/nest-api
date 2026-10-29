@@ -20,6 +20,55 @@ export interface DeleteResult {
 
 const logger = new Logger('ArtifactWriter');
 
+// ─── 文本增量编辑（注册 / 反注册共用，保证生命周期对称）───────────
+
+const IMPORTS_ARRAY_PATTERN = /imports: \[([^\]]*)\]/;
+const CLIENT_MODULES_PATTERN = /export const CLIENT_FEATURE_MODULES = \[([^\]]*)\]/;
+const FEATURE_MODULES_PATTERN = /export const FEATURE_MODULES = \[([^\]]*)\]/;
+
+/** `[A, B]` 内容 → 去空白后的条目（空项丢弃） */
+function parseListItems(list: string): string[] {
+  return compact(list.split(',').map((item) => item.trim()));
+}
+
+/** 重写首个匹配的数组字面量；`prefix` 含 `[`，条目统一以 `, ` 连接 */
+function updateArrayLiteral(
+  content: string,
+  pattern: RegExp,
+  prefix: string,
+  update: (items: string[]) => string[],
+): string {
+  return content.replace(pattern, (_matched, list: string) => `${prefix}${update(parseListItems(list)).join(', ')}]`);
+}
+
+/** 在最后一条 import 之后插入新 import（保持 import 区聚拢） */
+function insertImportLine(content: string, importLine: string): string {
+  const lines = content.split('\n');
+  const lastImportIdx = lines.reduce((last, line, idx) => (line.startsWith('import ') ? idx : last), -1);
+  lines.splice(lastImportIdx + 1, 0, importLine);
+  return lines.join('\n');
+}
+
+/** 删除整行内容匹配的行（import / export 声明的反向操作） */
+function dropLines(content: string, ...targets: string[]): string {
+  return content
+    .split('\n')
+    .filter((line) => !targets.includes(line.trim()))
+    .join('\n');
+}
+
+/** FEATURE_MODULES 中把新模块插到 AdminModule 之前（管理面聚合保持在列表末位） */
+function insertBeforeAdminModule(items: string[], moduleName: string): string[] {
+  const adminIdx = items.indexOf('AdminModule');
+  if (adminIdx === -1) return [...items, moduleName];
+
+  const next = [...items];
+  next.splice(adminIdx, 0, moduleName);
+  return next;
+}
+
+// ─── 文件系统辅助 ────────────────────────────────────────────
+
 /** Read the first line of a file */
 function readFirstLine(filePath: string): string | null {
   try {
@@ -175,13 +224,7 @@ export const ArtifactWriter = {
 
     if (action === 'register' ? present : !present) return;
 
-    const next =
-      action === 'register'
-        ? `${content.trimEnd()}\n${exportLine}\n`
-        : content
-            .split('\n')
-            .filter((line) => line.trim() !== exportLine)
-            .join('\n');
+    const next = action === 'register' ? `${content.trimEnd()}\n${exportLine}\n` : dropLines(content, exportLine);
 
     writeFileSync(indexPath, next, 'utf8');
     logger.log(`  ${action === 'register' ? 'registered' : 'removed'} schema export: ${exportLine}`);
@@ -202,32 +245,15 @@ export const ArtifactWriter = {
 
     if (action === 'register' ? present : !present) return;
 
-    let next: string;
-    if (action === 'register') {
-      const lines = content.split('\n');
-      let lastImportIdx = -1;
-      lines.forEach((line, idx) => {
-        if (line.startsWith('import ')) lastImportIdx = idx;
-      });
-      lines.splice(lastImportIdx + 1, 0, importLine);
-      next = lines.join('\n').replace(/imports: \[([^\]]*)\]/, (_m, list: string) => {
-        const items = compact(list.split(',').map((s) => s.trim()));
-        items.push(moduleName);
-        return `imports: [${items.join(', ')}]`;
-      });
-    } else {
-      next = content
-        .split('\n')
-        .filter((line) => line.trim() !== importLine)
-        .join('\n')
-        .replace(/imports: \[([^\]]*)\]/, (_m, list: string) => {
-          const items = list
-            .split(',')
-            .map((s) => s.trim())
-            .filter((s) => s && s !== moduleName);
-          return `imports: [${items.join(', ')}]`;
-        });
-    }
+    const next =
+      action === 'register'
+        ? updateArrayLiteral(insertImportLine(content, importLine), IMPORTS_ARRAY_PATTERN, 'imports: [', (items) => [
+            ...items,
+            moduleName,
+          ])
+        : updateArrayLiteral(dropLines(content, importLine), IMPORTS_ARRAY_PATTERN, 'imports: [', (items) =>
+            items.filter((item) => item !== moduleName),
+          );
 
     writeFileSync(adminModulePath, next, 'utf8');
     logger.log(`  ${action === 'register' ? 'registered' : 'removed'} AdminModule module: ${moduleName}`);
@@ -250,51 +276,23 @@ export const ArtifactWriter = {
 
     let next: string;
     if (action === 'register') {
-      const lines = content.split('\n');
-      let lastImportIdx = -1;
-      lines.forEach((line, idx) => {
-        if (line.startsWith('import ')) lastImportIdx = idx;
-      });
-      lines.splice(lastImportIdx + 1, 0, importLine);
-
-      next = lines
-        .join('\n')
-        .replace(/export const CLIENT_FEATURE_MODULES = \[([^\]]*)\]/, (_m, list: string) => {
-          const items = compact(list.split(',').map((s) => s.trim()));
-          items.push(moduleName);
-          return `export const CLIENT_FEATURE_MODULES = [${items.join(', ')}]`;
-        })
-        .replace(/export const FEATURE_MODULES = \[([^\]]*)\]/, (_m, list: string) => {
-          const items = compact(list.split(',').map((s) => s.trim()));
-          // insert before AdminModule
-          const adminIdx = items.indexOf('AdminModule');
-          if (adminIdx !== -1) {
-            items.splice(adminIdx, 0, moduleName);
-          } else {
-            items.push(moduleName);
-          }
-          return `export const FEATURE_MODULES = [${items.join(', ')}]`;
-        });
+      next = insertImportLine(content, importLine);
+      next = updateArrayLiteral(next, CLIENT_MODULES_PATTERN, 'export const CLIENT_FEATURE_MODULES = [', (items) => [
+        ...items,
+        moduleName,
+      ]);
+      next = updateArrayLiteral(next, FEATURE_MODULES_PATTERN, 'export const FEATURE_MODULES = [', (items) =>
+        insertBeforeAdminModule(items, moduleName),
+      );
       next = `${next.trimEnd()}\n${exportLine}\n`;
     } else {
-      next = content
-        .split('\n')
-        .filter((line) => line.trim() !== importLine && line.trim() !== exportLine)
-        .join('\n')
-        .replace(/export const CLIENT_FEATURE_MODULES = \[([^\]]*)\]/, (_m, list: string) => {
-          const items = list
-            .split(',')
-            .map((s) => s.trim())
-            .filter((s) => s && s !== moduleName);
-          return `export const CLIENT_FEATURE_MODULES = [${items.join(', ')}]`;
-        })
-        .replace(/export const FEATURE_MODULES = \[([^\]]*)\]/, (_m, list: string) => {
-          const items = list
-            .split(',')
-            .map((s) => s.trim())
-            .filter((s) => s && s !== moduleName);
-          return `export const FEATURE_MODULES = [${items.join(', ')}]`;
-        });
+      next = dropLines(content, importLine, exportLine);
+      next = updateArrayLiteral(next, CLIENT_MODULES_PATTERN, 'export const CLIENT_FEATURE_MODULES = [', (items) =>
+        items.filter((item) => item !== moduleName),
+      );
+      next = updateArrayLiteral(next, FEATURE_MODULES_PATTERN, 'export const FEATURE_MODULES = [', (items) =>
+        items.filter((item) => item !== moduleName),
+      );
     }
 
     writeFileSync(apiIndexPath, next, 'utf8');

@@ -1,9 +1,5 @@
-import {
-  BadRequestException,
-  ConflictException,
-  ServiceUnavailableException,
-  UnprocessableEntityException,
-} from '@nestjs/common';
+import { BadRequestException, HttpException, ServiceUnavailableException } from '@nestjs/common';
+import { IdempotencyStorage } from '@nestjs/idempotency';
 import { SQL } from 'drizzle-orm';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -21,6 +17,11 @@ import {
 import * as IdempotencyIndex from '@/common/idempotency/index';
 
 import { createMockDrizzleDb } from '../../mocks/drizzle.mock';
+
+/** 读异常响应体（含机器可读 code），避免依赖异常实例的 message 文案 */
+function responseOf(error: unknown): Record<string, unknown> {
+  return (error as HttpException).getResponse() as Record<string, unknown>;
+}
 
 describe('Idempotency Module & Exports', () => {
   it('场景 1: 验证 index.ts 是否正确导出幂等基础设施的所有核心常量、装饰器和服务', () => {
@@ -140,6 +141,13 @@ describe('Canonical JSON & Deterministic Hashing', () => {
     expect(result).toContain('"self":"[Circular]"');
   });
 
+  it('场景 10b: 兄弟属性复用同一对象（DAG）不应被误判为循环引用', () => {
+    const shared = { id: 1 };
+    const result = canonicalStringify({ left: shared, right: shared });
+
+    expect(result).toBe('{"left":{"id":1},"right":{"id":1}}');
+  });
+
   it('场景 11: 与原生 JSON.stringify 保持一致，自动丢弃对象中的 undefined、函数和 Symbol 字段', () => {
     const complex = {
       valid: 'yes',
@@ -204,17 +212,24 @@ describe('IdempotencyService', () => {
   });
 
   describe('validateIdempotencyKey', () => {
-    it('场景 14: 客户端传入空字符串幂等键，拦截并抛出 BadRequestException', () => {
-      expect(() => service.validateIdempotencyKey('')).toThrow(
-        new BadRequestException('Idempotency-Key header cannot be empty'),
-      );
+    it('场景 14: 空幂等键 → 400 + IDEMPOTENCY_KEY_INVALID', () => {
+      try {
+        service.validateIdempotencyKey('');
+        expect.unreachable('should throw');
+      } catch (error) {
+        expect(error).toBeInstanceOf(BadRequestException);
+        expect(responseOf(error)).toMatchObject({ code: 'IDEMPOTENCY_KEY_INVALID' });
+      }
     });
 
-    it('场景 15: 幂等键超过 256 字符上限，防止恶意撑爆缓存键，拒绝并抛出 BadRequestException', () => {
-      const longKey = 'a'.repeat(257);
-      expect(() => service.validateIdempotencyKey(longKey)).toThrow(
-        new BadRequestException('Idempotency-Key header must not exceed 256 characters'),
-      );
+    it('场景 15: 超过 255 字符上限 → 400 + IDEMPOTENCY_KEY_INVALID（对齐官方 1–255）', () => {
+      try {
+        service.validateIdempotencyKey('a'.repeat(256));
+        expect.unreachable('should throw');
+      } catch (error) {
+        expect(error).toBeInstanceOf(BadRequestException);
+        expect(responseOf(error)).toMatchObject({ code: 'IDEMPOTENCY_KEY_INVALID' });
+      }
     });
 
     it('场景 16: 含有空格、换行符、Tab 或 Emoji 等非可见 ASCII 字符，拒绝并抛出 BadRequestException', () => {
@@ -224,11 +239,11 @@ describe('IdempotencyService', () => {
       expect(() => service.validateIdempotencyKey('key-🔥-emoji')).toThrow(BadRequestException);
     });
 
-    it('场景 17: 符合标准格式（UUID、自定义前缀业务键、256 字符边界值）的 Key 顺利通过校验', () => {
+    it('场景 17: 符合标准格式（UUID、自定义前缀业务键、255 字符边界值）的 Key 顺利通过校验', () => {
       expect(() => service.validateIdempotencyKey('req_123456')).not.toThrow();
       expect(() => service.validateIdempotencyKey('9b1deb4d-3b7d-4bad-9bdd-2b0d7b3dcb6d')).not.toThrow();
       expect(() => service.validateIdempotencyKey('user:1:action:checkout_2026-09-11')).not.toThrow();
-      expect(() => service.validateIdempotencyKey('a'.repeat(256))).not.toThrow();
+      expect(() => service.validateIdempotencyKey('a'.repeat(255))).not.toThrow();
     });
   });
 
@@ -291,7 +306,7 @@ describe('IdempotencyService', () => {
       expect(mockStore.acquire).toHaveBeenCalledWith(
         'user:1:key-1',
         expect.any(String),
-        `${acquireParams.requestPath}:${acquireParams.payloadHash}`,
+        `POST ${acquireParams.requestPath}:${acquireParams.payloadHash}`,
         acquireParams.lockTtlMs,
       );
     });
@@ -299,7 +314,7 @@ describe('IdempotencyService', () => {
     it('场景 31: 存在已完成记录（state: completed）且 requestPath 与 payloadHash 均严格匹配，返回回放数据且不竞争锁', async () => {
       mockStore.acquire.mockResolvedValueOnce({
         state: 'completed',
-        fingerprint: `${acquireParams.requestPath}:${acquireParams.payloadHash}`,
+        fingerprint: `POST ${acquireParams.requestPath}:${acquireParams.payloadHash}`,
         response: {
           status: 200,
           headers: { 'content-type': 'application/json' },
@@ -322,13 +337,15 @@ describe('IdempotencyService', () => {
     it('场景 32: 同一幂等键被用于不同请求路径时，检测出语义冲突并直抛 422 UnprocessableEntityException', async () => {
       mockStore.acquire.mockResolvedValueOnce({
         state: 'completed',
-        fingerprint: `/v1/different-orders:${acquireParams.payloadHash}`,
+        fingerprint: `POST /v1/different-orders:${acquireParams.payloadHash}`,
         response: { status: 200, headers: {}, body: {} },
       });
 
-      await expect(service.acquire(acquireParams)).rejects.toThrow(
-        new UnprocessableEntityException('Idempotency key path mismatch'),
-      );
+      const error = await service.acquire(acquireParams).catch((reason: unknown) => reason);
+
+      expect(error).toBeInstanceOf(HttpException);
+      expect((error as HttpException).getStatus()).toBe(422);
+      expect(responseOf(error)).toMatchObject({ code: 'IDEMPOTENCY_KEY_REUSED' });
     });
 
     it('场景 33: 同一幂等键被用于不同 Payload 时，检测出载荷指纹不符并直抛 422 UnprocessableEntityException', async () => {
@@ -338,9 +355,11 @@ describe('IdempotencyService', () => {
         response: { status: 200, headers: {}, body: {} },
       });
 
-      await expect(service.acquire(acquireParams)).rejects.toThrow(
-        new UnprocessableEntityException('Idempotency key payload mismatch'),
-      );
+      const error = await service.acquire(acquireParams).catch((reason: unknown) => reason);
+
+      expect(error).toBeInstanceOf(HttpException);
+      expect((error as HttpException).getStatus()).toBe(422);
+      expect(responseOf(error)).toMatchObject({ code: 'IDEMPOTENCY_KEY_REUSED' });
     });
 
     it('场景 34: 底层 Store 异常且配置 fallback 为 fail-open 时，安全降级返回 bypass: true 保证业务不中断', async () => {
@@ -358,15 +377,15 @@ describe('IdempotencyService', () => {
       mockStore.acquire
         .mockResolvedValueOnce({
           state: 'in-flight',
-          fingerprint: `${acquireParams.requestPath}:${acquireParams.payloadHash}`,
+          fingerprint: `POST ${acquireParams.requestPath}:${acquireParams.payloadHash}`,
         })
         .mockResolvedValueOnce({
           state: 'in-flight',
-          fingerprint: `${acquireParams.requestPath}:${acquireParams.payloadHash}`,
+          fingerprint: `POST ${acquireParams.requestPath}:${acquireParams.payloadHash}`,
         })
         .mockResolvedValueOnce({
           state: 'completed',
-          fingerprint: `${acquireParams.requestPath}:${acquireParams.payloadHash}`,
+          fingerprint: `POST ${acquireParams.requestPath}:${acquireParams.payloadHash}`,
           response: {
             status: 201,
             headers: {},
@@ -391,11 +410,11 @@ describe('IdempotencyService', () => {
       mockStore.acquire
         .mockResolvedValueOnce({
           state: 'in-flight',
-          fingerprint: `${acquireParams.requestPath}:${acquireParams.payloadHash}`,
+          fingerprint: `POST ${acquireParams.requestPath}:${acquireParams.payloadHash}`,
         })
         .mockResolvedValueOnce({
           state: 'in-flight',
-          fingerprint: `${acquireParams.requestPath}:${acquireParams.payloadHash}`,
+          fingerprint: `POST ${acquireParams.requestPath}:${acquireParams.payloadHash}`,
         })
         .mockResolvedValueOnce({ state: 'acquired' });
 
@@ -408,19 +427,25 @@ describe('IdempotencyService', () => {
       expect(result.acquired).toBe(true);
     });
 
-    it('场景 37: 在指定的 waitTimeoutMs 窗口内锁一直处于 in-flight 且无缓存产出，抛出 409 ConflictException', async () => {
+    it('场景 37: in-flight 超时 → 409 IDEMPOTENCY_KEY_IN_USE 并携带 Retry-After', async () => {
       mockStore.acquire.mockResolvedValue({
         state: 'in-flight',
-        fingerprint: `${acquireParams.requestPath}:${acquireParams.payloadHash}`,
+        fingerprint: `POST ${acquireParams.requestPath}:${acquireParams.payloadHash}`,
       });
 
-      await expect(
-        service.acquire({
+      const error = await service
+        .acquire({
           ...acquireParams,
           waitTimeoutMs: 50,
           retryIntervalMs: 10,
-        }),
-      ).rejects.toThrow(ConflictException);
+          retryAfterSeconds: 2,
+        })
+        .catch((reason: unknown) => reason);
+
+      expect(error).toBeInstanceOf(HttpException);
+      expect((error as HttpException).getStatus()).toBe(409);
+      expect(responseOf(error)).toMatchObject({ code: 'IDEMPOTENCY_KEY_IN_USE' });
+      expect((error as { headers?: Record<string, string> }).headers).toEqual({ 'Retry-After': '2' });
     });
 
     it('场景 38: 底层 Store 连接失败时，默认 fail-closed 模式抛出 503 ServiceUnavailableException', async () => {
@@ -588,7 +613,7 @@ describe('DrizzleIdempotencyStore', () => {
 
   beforeEach(() => {
     mockDb = createMockDrizzleDb();
-    store = new DrizzleIdempotencyStore(mockDb);
+    store = new DrizzleIdempotencyStore(mockDb, new IdempotencyStorage());
   });
 
   it('场景 66: hashKey 产生确定性的 64 位十六进制 SHA-256 字符串', () => {

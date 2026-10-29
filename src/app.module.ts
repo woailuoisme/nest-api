@@ -1,15 +1,17 @@
+import { AuthenticationGuard, AuthenticationModule } from '@nestjs/authentication';
+import { AuthorizationGuard, AuthorizationModule } from '@nestjs/authorization';
 import { BullModule } from '@nestjs/bullmq';
 import { Module } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { APP_GUARD } from '@nestjs/core';
 import { EventEmitterModule } from '@nestjs/event-emitter';
+import { I18nModule } from '@nestjs/i18n';
 import { ThrottlerGuard, ThrottlerModule, type ThrottlerStorage } from '@nestjs/throttler';
-import { I18nModule } from 'nestjs-i18n';
 
-import { CasbinService } from '@/common/auth/casbin/casbin.service';
-import { AccessControlGuard } from '@/common/guards/access-control.guard';
-import { AdminPrefixGuard } from '@/common/guards/admin-prefix.guard';
-import { BetterAuthGuard } from '@/common/guards/better-auth.guard';
+import { createAuthenticationModuleOptions } from '@/common/auth/authentication.options';
+import { AdminPolicy } from '@/common/authorization/policies/admin.policy';
+import { IotPolicy } from '@/common/authorization/policies/iot.policy';
+import { UserPolicy } from '@/common/authorization/policies/user.policy';
 import { FEATURE_MODULES } from '@/features';
 
 import { CommandsModule } from './commands/commands.module';
@@ -34,6 +36,19 @@ import { JobsModule } from './jobs/jobs.module';
 import { RealtimeModule } from './realtime/realtime.module';
 import { LoggerModule } from './setup/logger/logger.module';
 
+/**
+ * 限流模块配置。
+ *
+ * 必须以「对象形态」提供选项：@nestjs/throttler 仅在非数组形态下才采用 options.storage，
+ * 数组形态会强制回落到进程内 ThrottlerStorageService —— 多副本部署下限流额度将被放大 N 倍。
+ */
+function createThrottlerConfig(config: ConfigService<EnvConfig, true>, storage: ThrottlerStorage) {
+  return {
+    throttlers: [{ ttl: config.get('THROTTLE_TTL') * 1000, limit: config.get('THROTTLE_LIMIT') }],
+    storage,
+  };
+}
+
 @Module({
   imports: [
     // 采用 Nest 12 原生 Standard Schema 通道校验环境变量（Zod schema 即契约，校验失败格式与旧 validate 一致）
@@ -43,29 +58,28 @@ import { LoggerModule } from './setup/logger/logger.module';
     I18nModule.forRoot(createI18nModuleConfig()),
     LoggerModule,
     ThrottlerModule.forRootAsync({
-      // 必须以「对象形态」提供选项：@nestjs/throttler 仅在非数组形态下才采用 options.storage，
-      // 数组形态会强制回落到进程内 ThrottlerStorageService —— 多副本部署下限流额度将被放大 N 倍
       imports: [ThrottlerStorageModule],
       inject: [ConfigService, THROTTLER_STORAGE],
-      useFactory: (config: ConfigService<EnvConfig, true>, storage: ThrottlerStorage) => ({
-        throttlers: [
-          {
-            ttl: config.get('THROTTLE_TTL') * 1000,
-            limit: config.get('THROTTLE_LIMIT'),
-          },
-        ],
-        storage,
-      }),
+      useFactory: createThrottlerConfig,
     }),
     BullModule.forRootAsync({
       inject: [ConfigService],
       useFactory: createBullModuleConfig,
     }),
+    AuthenticationModule.forRootAsync({
+      globalGuard: false,
+      inject: [ConfigService],
+      useFactory: createAuthenticationModuleOptions,
+    }),
+    AuthorizationModule.forRoot({
+      globalGuard: false,
+      policies: [AdminPolicy, UserPolicy, IotPolicy],
+    }),
     DatabaseModule,
     RedisModule,
     CacheModule,
     StorageModule,
-    MailModule,
+    MailModule.forRoot(),
     MediaModule,
     WepayModule,
     MiniprogramModule,
@@ -79,12 +93,9 @@ import { LoggerModule } from './setup/logger/logger.module';
     CommandsModule,
   ],
   providers: [
-    // 权限判定引擎（策略由 ROLE_PERMISSIONS 生成，守卫按需注入）
-    CasbinService,
     { provide: APP_GUARD, useClass: ThrottlerGuard },
-    { provide: APP_GUARD, useClass: BetterAuthGuard },
-    { provide: APP_GUARD, useClass: AdminPrefixGuard },
-    { provide: APP_GUARD, useClass: AccessControlGuard },
+    { provide: APP_GUARD, useClass: AuthenticationGuard },
+    { provide: APP_GUARD, useClass: AuthorizationGuard },
   ],
 })
 export class AppModule {}

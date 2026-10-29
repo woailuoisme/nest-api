@@ -9,10 +9,18 @@ import { describe, expect, it } from 'vitest';
 import { HttpExceptionFilter, resolveErrorEnvelope } from '@/common/filters/http-exception.filter';
 
 /** 共享 mock host 工厂：捕获过滤器写入的 statusCode 与响应体 */
-const createMockHost = (url = '/v1/test', i18nContext?: { lang: string; t: (key: string) => string }) => {
-  const state: { statusCode: number | null; responseBody: any } = { statusCode: null, responseBody: null };
+const createMockHost = (url = '/v1/test') => {
+  const state: { statusCode: number | null; responseBody: any; headers: Record<string, string> } = {
+    statusCode: null,
+    responseBody: null,
+    headers: {},
+  };
 
   const mockResponse = {
+    header: (name: string, value: string) => {
+      state.headers[name] = value;
+      return mockResponse;
+    },
     code: (code: number) => {
       state.statusCode = code;
       return {
@@ -27,7 +35,7 @@ const createMockHost = (url = '/v1/test', i18nContext?: { lang: string; t: (key:
     getType: () => 'http',
     switchToHttp: () => ({
       getResponse: () => mockResponse,
-      getRequest: () => ({ url, headers: {}, i18nContext }),
+      getRequest: () => ({ url, headers: {} }),
     }),
   } as unknown as ArgumentsHost;
 
@@ -294,18 +302,11 @@ describe('HttpExceptionFilter 集成', () => {
     });
   });
 
-  it('当存在 I18nContext 且客户端为英文时，PG 唯一键冲突应转译为英文提示', () => {
-    const filter = new HttpExceptionFilter(false);
-    const mockI18n = {
-      lang: 'en',
-      t: (key: string) => {
-        if (key === 'translation.db.uniqueViolation') {
-          return 'Data already exists, please do not duplicate operation';
-        }
-        return key;
-      },
-    };
-    const { host, state } = createMockHost('/v1/users', mockI18n);
+  it('英文翻译器下 PG 唯一键冲突应转译为英文提示', () => {
+    const translator = (key: string) =>
+      key === 'db.uniqueViolation' ? 'Data already exists, please do not duplicate operation' : key;
+    const filter = new HttpExceptionFilter(false, translator as never);
+    const { host, state } = createMockHost('/v1/users');
 
     const pgUniqueError = Object.assign(new Error('duplicate key'), {
       code: '23505',
@@ -323,16 +324,13 @@ describe('HttpExceptionFilter 集成', () => {
   });
 
   it('当 HttpException 携带 i18nKey 时，过滤器应自动本地化转译消息', () => {
-    const filter = new HttpExceptionFilter(false);
-    const mockI18n = {
-      lang: 'en',
-      t: (key: string) => (key === 'translation.auth.loginFailed' ? 'Invalid credentials' : key),
-    };
-    const { host, state } = createMockHost('/v1/auth/login', mockI18n);
+    const translator = (key: string) => (key === 'auth.loginFailed' ? 'Invalid credentials' : key);
+    const filter = new HttpExceptionFilter(false, translator as never);
+    const { host, state } = createMockHost('/v1/auth/login');
 
     const exception = new BadRequestException({
       message: '用户名或密码错误',
-      i18nKey: 'translation.auth.loginFailed',
+      i18nKey: 'auth.loginFailed',
     });
 
     filter.catch(exception, host);
@@ -342,16 +340,39 @@ describe('HttpExceptionFilter 集成', () => {
   });
 
   it('当 HttpException message 本身为多语言 Key 时，过滤器应自动转译', () => {
-    const filter = new HttpExceptionFilter(false);
-    const mockI18n = {
-      lang: 'en',
-      t: (key: string) => (key === 'translation.common.notFound' ? 'Requested resource not found' : key),
-    };
-    const { host, state } = createMockHost('/v1/items/999', mockI18n);
+    const translator = (key: string) => (key === 'common.notFound' ? 'Requested resource not found' : key);
+    const filter = new HttpExceptionFilter(false, translator as never);
+    const { host, state } = createMockHost('/v1/items/999');
 
-    filter.catch(new BadRequestException('translation.common.notFound'), host);
+    filter.catch(new BadRequestException('common.notFound'), host);
 
     expect(state.statusCode).toBe(400);
     expect(state.responseBody.error.message).toBe('Requested resource not found');
+  });
+
+  it('异常携带 headers 时应写回响应头（幂等 409 的 Retry-After）', () => {
+    class RetryableException extends BadRequestException {
+      readonly headers = { 'Retry-After': '2' };
+    }
+
+    const filter = new HttpExceptionFilter(false);
+    const { host, state } = createMockHost('/v1/orders');
+
+    filter.catch(new RetryableException('busy'), host);
+
+    expect(state.headers).toEqual({ 'Retry-After': '2' });
+  });
+
+  it('异常 headers 中的非字符串值应被忽略，不得写入响应头', () => {
+    class WeirdException extends BadRequestException {
+      readonly headers = { 'X-Num': 1 as unknown as string, 'Retry-After': '3' };
+    }
+
+    const filter = new HttpExceptionFilter(false);
+    const { host, state } = createMockHost('/v1/orders');
+
+    filter.catch(new WeirdException('busy'), host);
+
+    expect(state.headers).toEqual({ 'Retry-After': '3' });
   });
 });

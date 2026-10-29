@@ -1,3 +1,4 @@
+import { i18nIssueMessage } from '@nestjs/i18n';
 import { ApiProperty } from '@nestjs/swagger';
 import { z } from 'zod';
 
@@ -13,7 +14,7 @@ export const DeviceIdSchema = z
   .string()
   .min(1)
   .max(64)
-  .regex(/^[A-Za-z0-9_.:-]+$/, '设备标识仅允许字母、数字与 _ . : -')
+  .regex(/^[A-Za-z0-9_.:-]+$/, i18nIssueMessage('validation.deviceId'))
   .describe('设备唯一标识符 (UUID / 序列号)');
 
 export const DeviceStatusEnum = z.enum(['running', 'idle', 'warning', 'fault']);

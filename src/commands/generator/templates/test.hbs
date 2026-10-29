@@ -5,10 +5,10 @@
  * Coverage: CRUD operations and paginated search
  */
 import { NotFoundException } from '@nestjs/common';
+import { getDrizzleToken } from '@nestjs/drizzle';
 import { Test } from '@nestjs/testing';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { paginateQuery } from '@/database/drizzle/drizzle-pagination';
-import { DRIZZLE_DB } from '@/database/drizzle/drizzle.service';
 import { {{FeatureName}}Service } from '@/{{featureModulePath}}/{{featureName}}.service';
 import { createMockDrizzleDb } from 'tests/mocks/drizzle.mock';
 
@@ -41,7 +41,7 @@ describe('{{FeatureName}}Service', () => {
     const module = await Test.createTestingModule({
       providers: [
         {{FeatureName}}Service,
-        { provide: DRIZZLE_DB, useValue: db },
+        { provide: getDrizzleToken(), useValue: db },
       ],
     }).compile();
 

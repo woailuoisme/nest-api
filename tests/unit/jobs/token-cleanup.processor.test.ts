@@ -2,7 +2,7 @@ import type { Job } from 'bullmq';
 import { createMockDrizzleDb } from 'tests/mocks/drizzle.mock';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import type { DrizzleDB } from '@/database/drizzle/drizzle.service';
+import type { Database } from '@/database/drizzle/database';
 import * as schema from '@/database/drizzle/schema';
 import { type TokenCleanupJobData, TokenCleanupJobName } from '@/jobs/token-cleanup/token-cleanup.jobs';
 import { TokenCleanupProcessor } from '@/jobs/token-cleanup/token-cleanup.processor';
@@ -14,18 +14,24 @@ describe('TokenCleanupProcessor', () => {
   beforeEach(() => {
     mockDb = createMockDrizzleDb();
     mockDb._stubs.deleteReturning.mockResolvedValue([]);
-    processor = new TokenCleanupProcessor(mockDb as unknown as DrizzleDB);
+    processor = new TokenCleanupProcessor(mockDb as unknown as Database);
   });
 
   const makeJob = (): Job<TokenCleanupJobData> =>
     ({ name: TokenCleanupJobName.PurgeExpired, data: { batchSize: 1000 } }) as unknown as Job<TokenCleanupJobData>;
 
-  it('should purge expired sessions, verifications and idempotency keys in batches on PurgeExpired job', async () => {
+  it('should purge expired sessions, refresh tokens, email tokens and idempotency keys in batches on PurgeExpired job', async () => {
     // 每张表：第一批命中 → 第二批为空（循环结束）
     const selectQueue: { id: string }[][] = [
       [{ id: 'session-1' }, { id: 'session-2' }],
       [],
-      [{ id: 'verification-1' }],
+      [{ id: 'refresh-1' }],
+      [],
+      [{ id: 'email-1' }],
+      [],
+      [{ id: 'otp-1' }],
+      [],
+      [{ id: 'window-target' }],
       [],
       [{ id: 'idempotency-1' }],
       [],
@@ -36,16 +42,22 @@ describe('TokenCleanupProcessor', () => {
 
     mockDb._stubs.deleteReturning
       .mockResolvedValueOnce([{ id: 'session-1' }, { id: 'session-2' }])
-      .mockResolvedValueOnce([{ id: 'verification-1' }])
+      .mockResolvedValueOnce([{ id: 'refresh-1' }])
+      .mockResolvedValueOnce([{ id: 'email-1' }])
+      .mockResolvedValueOnce([{ id: 'otp-1' }])
+      .mockResolvedValueOnce([{ id: 'ott-1' }])
       .mockResolvedValueOnce([{ id: 'idempotency-1' }]);
 
     await processor.process(makeJob());
 
-    expect(mockDb.select).toHaveBeenCalledTimes(6);
-    expect(mockDb.delete).toHaveBeenCalledTimes(3);
-    expect(mockDb.delete).toHaveBeenNthCalledWith(1, schema.session);
-    expect(mockDb.delete).toHaveBeenNthCalledWith(2, schema.verification);
-    expect(mockDb.delete).toHaveBeenNthCalledWith(3, schema.idempotencyKeys);
+    expect(mockDb.select).toHaveBeenCalledTimes(12);
+    expect(mockDb.delete).toHaveBeenCalledTimes(6);
+    expect(mockDb.delete).toHaveBeenNthCalledWith(1, schema.sessions);
+    expect(mockDb.delete).toHaveBeenNthCalledWith(2, schema.refreshTokens);
+    expect(mockDb.delete).toHaveBeenNthCalledWith(3, schema.emailTokens);
+    expect(mockDb.delete).toHaveBeenNthCalledWith(4, schema.otpCodes);
+    expect(mockDb.delete).toHaveBeenNthCalledWith(5, schema.otpSendWindows);
+    expect(mockDb.delete).toHaveBeenNthCalledWith(6, schema.idempotencyKeys);
   });
 
   it('should stop scanning when no expired rows remain', async () => {

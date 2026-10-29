@@ -115,6 +115,17 @@ describe('RealtimeController', () => {
       expect(result).toEqual({ result: {} });
     });
 
+    it('生产环境未配置共享密钥时必须 fail-closed，不得进入鉴权逻辑', async () => {
+      const previous = process.env.APP_ENV;
+      process.env.APP_ENV = 'production';
+      try {
+        await expect(controller.proxySubscribe(dto)).rejects.toThrow('Centrifugo proxy secret is not configured');
+        expect(mockEventsService.handleProxySubscribe).not.toHaveBeenCalled();
+      } finally {
+        process.env.APP_ENV = previous;
+      }
+    });
+
     it('已配置共享密钥时，携带正确密钥才放行', async () => {
       proxySecret = 'proxy-secret-min-16-chars';
 

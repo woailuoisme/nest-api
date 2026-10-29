@@ -4,7 +4,8 @@ import {
   APP_ENV_VALUES,
   appName,
   DEFAULT_DB_URL,
-  DEV_ONLY_AUTH_SECRET,
+  DEV_ONLY_JWT_SECRET,
+  DEV_ONLY_MFA_KEY,
   DEV_ONLY_IOT_PEPPER,
   isTruthyEnv,
   PATHS,
@@ -49,8 +50,8 @@ function hasMiniprogramCredentials(data: { MINIPROGRAM_APPID?: string; MINIPROGR
  * 短信通道缺失的必填项（空数组表示可启动）。
  *
  * - `aliyun`：显式选择即视为已启用该通道，四项凭证必须同时就位；
- * - `smsbao`：默认通道，完全未配置视为「短信登录未启用」照常启动（否则新克隆与 CI 无法引导）；
- *   但只配置一半属误配置，必须在启动期失败，而不是等用户点「发送验证码」时才 500。
+ * - `smsbao`：默认通道，完全未配置视为「短信验证码未启用」照常启动；
+ *   但只配置一半属误配置，必须在启动期失败。
  */
 function missingSmsCredentials(data: {
   SMS_PROVIDER: 'smsbao' | 'aliyun';
@@ -77,7 +78,7 @@ function missingSmsCredentials(data: {
 }
 
 /** 生产环境必须显式配置、不允许默认值兑底的 Key */
-const PRODUCTION_REQUIRED_KEYS = ['DB_URL', 'BETTER_AUTH_SECRET'] as const;
+const PRODUCTION_REQUIRED_KEYS = ['DB_URL', 'JWT_SECRET', 'MFA_ENCRYPTION_KEYS', 'OTP_HMAC_KEY'] as const;
 
 /**
  * 空串视同未配置。
@@ -125,16 +126,28 @@ export const envSchema = z
     // Laravel 风格：DB_URL 是唯一连接事实源（config/database.php 亦读取 DB_URL）
     // 非生产环境回退本地默认值；生产环境必须显式配置（见下方 superRefine）
     DB_URL: emptyAsUndefined(z.url().optional()),
+    /** 主库连接池上限（与认证池 / seeds 的独立小池无关） */
+    DB_POOL_MAX: z.coerce.number().int().positive().max(100).default(10),
+    /** 空闲连接回收到池外的时间（毫秒） */
+    DB_POOL_IDLE_TIMEOUT_MS: z.coerce.number().int().nonnegative().default(30_000),
+    /** 建连超时（毫秒），防止数据库抖动时请求无限挂起 */
+    DB_POOL_CONNECT_TIMEOUT_MS: z.coerce.number().int().positive().default(5_000),
 
     REDIS_URL: z.string().default('redis://localhost:6379'),
 
+    /** 邮件传输驱动：smtp（默认，生产）/ file（测试与离线开发）/ resend */
+    MAIL_TRANSPORT: z.enum(['smtp', 'file', 'resend']).optional(),
     MAIL_URL: z.string().default('smtp://localhost:1025'),
+    /** file 驱动的输出目录（.eml） */
+    MAIL_DIRECTORY: z.string().default('storage/tmp/mail'),
+    /** Resend HTTP 驱动 API Key（MAIL_TRANSPORT=resend 时必填） */
+    RESEND_API_KEY: emptyAsUndefined(z.string().optional()),
     // 默认值仅为 RFC 2606 保留占位域：不得默认为任何真实域名，否则会以未授权域名发信（SPF/DKIM 不通过）
     MAIL_FROM_ADDRESS: z.string().min(1).default('no-reply@example.com'),
     /** 发件人显示名：未配置时跟随 APP_NAME（在下方 transform 中推导，不预先固化） */
     MAIL_FROM_NAME: z.string().optional(),
 
-    // ── 短信通道（手机号 OTP）──────────────────────────────────────
+    // ── 短信通道（手机验证码）──────────────────────────────────────
     /** 短信服务商：smsbao（默认）| aliyun */
     SMS_PROVIDER: z.enum(['smsbao', 'aliyun']).default('smsbao'),
     SMSBAO_USER: z.string().optional(),
@@ -148,8 +161,21 @@ export const envSchema = z
     /** 单次短信发送超时（毫秒），默认 5000，上限 30000；防止网关异常拖住登录链路 */
     SMS_TIMEOUT_MS: z.coerce.number().int().positive().max(30_000).default(5000),
 
-    // Better Auth 签名密钥：无内置默认值，生产环境必须显式配置（见下方 superRefine）
-    BETTER_AUTH_SECRET: emptyAsUndefined(z.string().min(16).optional()),
+    // 官方认证模块：JWT access token 的 HS256 签名密钥（≥32 字符），生产必须显式配置
+    JWT_SECRET: emptyAsUndefined(z.string().min(32).optional()),
+    /** 幂等响应加密密钥（逗号分隔，最新在前，每个 ≥32 字符）；未配置则不加密 */
+    IDEMPOTENCY_KEYS: emptyAsUndefined(z.string().optional()),
+    /** 验证码摘要专用密钥（≥32 字符）。缺失时以 JWT_SECRET 做域分离派生；生产必须显式配置 */
+    OTP_HMAC_KEY: emptyAsUndefined(z.string().min(32).optional()),
+    // TOTP secret 的 AES-256-GCM 加密密钥（逗号分隔，最新在前，每段 ≥32 字符）
+    MFA_ENCRYPTION_KEYS: emptyAsUndefined(
+      z
+        .string()
+        .refine((value) => value.split(',').every((key) => key.trim().length >= 32), {
+          message: '每个 MFA 加密密钥至少 32 字符，以逗号分隔',
+        })
+        .optional(),
+    ),
     /**
      * 框架内置 Cookie 支持的签名密钥（≥32 字符）。
      *
@@ -157,18 +183,13 @@ export const envSchema = z
      * `@SignedCookies()` 不可用）；配置后由主进程在引导阶段读取 `process.env` 直接注入。
      */
     COOKIE_SECRET: emptyAsUndefined(z.string().min(32).optional()),
-    BETTER_AUTH_URL: z.string().optional(),
     /**
      * 额外信任的浏览器来源（逗号分隔，`scheme://host[:port]`），供内置跨站请求防护（CSRF）放行跨域写请求。
      *
      * 同源请求与 http(s) 服务端调用无需配置；独立域名的前端（SPA）需在此列出自身来源。
-     * APP_URL / BETTER_AUTH_URL 会自动纳入信任列表。
+     * APP_URL 会自动纳入信任列表。
      */
     TRUSTED_ORIGINS: z.string().optional(),
-
-    /** @deprecated 遗留 JWT 配置，已由 BETTER_AUTH_SECRET 统一替代 */
-    JWT_ACCESS_SECRET: emptyAsUndefined(z.string().min(16).optional()),
-    JWT_REFRESH_SECRET: emptyAsUndefined(z.string().min(16).optional()),
 
     // OpenTelemetry：未配置 OTLP endpoint 时不初始化 SDK（traces/metrics 双信号经 otel-collector 转推 OpenObserve）
     OTEL_EXPORTER_OTLP_ENDPOINT: z.url().optional(),
@@ -235,7 +256,7 @@ export const envSchema = z
     IOT_DEVICE_CREDENTIALS: z.string().default(''),
     // 设备租户归属表 (格式: deviceId:tenantId，多个以英文逗号分隔)。租户由服务端注册表决定，不接受调用方自报
     IOT_DEVICE_TENANTS: z.string().default(''),
-    // 设备接入 JWT 独立签名密钥 (≥32 字符，必须与 BETTER_AUTH_SECRET 域分离)。未配置时拒绝签发设备凭据
+    // 设备接入 JWT 独立签名密钥 (≥32 字符，必须与 JWT_SECRET 域分离)。未配置时拒绝签发设备凭据
     IOT_JWT_SECRET: emptyAsUndefined(z.string().min(32).optional()),
     // 设备密钥校验用 HMAC 加固盐值 (Pepper，≥16 字符)。生产环境禁止使用公开默认值
     IOT_DEVICE_PEPPER: z.string().min(16).default(DEV_ONLY_IOT_PEPPER),
@@ -315,13 +336,46 @@ export const envSchema = z
       }
     }
 
-    // 「已填」不等于「安全」：旧模板曾把公开密钥预置到 .env.example，拷模板上线即中招
-    if (data.BETTER_AUTH_SECRET === DEV_ONLY_AUTH_SECRET) {
+    // MAIL_TRANSPORT 的默认值在 transform 阶段才应用，superRefine 里需自行回退
+    const effectiveMailTransport = data.MAIL_TRANSPORT ?? 'smtp';
+    if (effectiveMailTransport === 'file') {
       ctx.addIssue({
         code: 'custom',
-        path: ['BETTER_AUTH_SECRET'],
-        message: '生产环境禁止使用公开默认密钥，请执行 just cmd jwt:secret 重新生成',
+        path: ['MAIL_TRANSPORT'],
+        message: '生产环境禁止使用 file 邮件驱动（不会真正投递）',
       });
+    }
+    if (effectiveMailTransport === 'resend' && !data.RESEND_API_KEY) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['RESEND_API_KEY'],
+        message: 'MAIL_TRANSPORT=resend 时必须配置 RESEND_API_KEY',
+      });
+    }
+    if (effectiveMailTransport === 'smtp' && /\b(localhost|127\.0\.0\.1)\b/.test(data.MAIL_URL)) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['MAIL_URL'],
+        message: '生产环境禁止使用 localhost 作为 SMTP 地址',
+      });
+    }
+    if (data.MAIL_FROM_ADDRESS.endsWith('@example.com')) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['MAIL_FROM_ADDRESS'],
+        message: '生产环境禁止使用 example.com 占位发件地址',
+      });
+    }
+
+    // 「已填」不等于「安全」：旧模板曾把公开密钥预置到 .env.example，拷模板上线即中招
+    for (const key of ['JWT_SECRET', 'MFA_ENCRYPTION_KEYS'] as const) {
+      if (data[key] === DEV_ONLY_JWT_SECRET || data[key] === DEV_ONLY_MFA_KEY) {
+        ctx.addIssue({
+          code: 'custom',
+          path: [key],
+          message: '生产环境禁止使用公开默认密钥，请执行 just cmd jwt:secret 重新生成',
+        });
+      }
     }
 
     // 启用 realtime 却缺共享密钥时，`/realtime/proxy/subscribe` 对公网完全开放（验签 fail-open）
@@ -367,13 +421,16 @@ export const envSchema = z
   .transform((data) => ({
     ...data,
     DB_URL: data.DB_URL ?? DEFAULT_DB_URL,
+    JWT_SECRET: data.JWT_SECRET ?? DEV_ONLY_JWT_SECRET,
+    MFA_ENCRYPTION_KEYS: data.MFA_ENCRYPTION_KEYS ?? DEV_ONLY_MFA_KEY,
     MAIL_FROM_NAME: data.MAIL_FROM_NAME ?? data.APP_NAME,
+    MAIL_TRANSPORT:
+      data.MAIL_TRANSPORT ?? (data.APP_ENV === APP_ENV_VALUES.TESTING ? ('file' as const) : ('smtp' as const)),
     FILESYSTEM_DISK: data.FILESYSTEM_DISK ?? (data.STORAGE_S3_URL ? ('s3' as const) : ('local' as const)),
     SCOUT_DRIVER: data.SCOUT_DRIVER ?? (data.SEARCH_URL ? ('meilisearch' as const) : ('noop' as const)),
     WEPAY_DRIVER: data.WEPAY_DRIVER ?? (hasWepayCredentials(data) ? ('real' as const) : ('mock' as const)),
     MINIPROGRAM_DRIVER:
       data.MINIPROGRAM_DRIVER ?? (hasMiniprogramCredentials(data) ? ('real' as const) : ('mock' as const)),
-    BETTER_AUTH_URL: data.BETTER_AUTH_URL || data.APP_URL,
   }));
 
 export type EnvConfig = z.infer<typeof envSchema>;

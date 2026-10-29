@@ -2,12 +2,12 @@ import {
   HttpStatus,
   Logger,
   StandardSchemaSerializerInterceptor,
-  StandardSchemaValidationPipe,
   UnprocessableEntityException,
   VersioningType,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { Reflector } from '@nestjs/core';
+import { I18nService, I18nStandardSchemaValidationPipe, t } from '@nestjs/i18n';
 import type { NestFastifyApplication } from '@nestjs/platform-fastify';
 import type { FastifyRequest } from 'fastify';
 
@@ -15,6 +15,7 @@ import { HttpExceptionFilter } from '@/common/filters/http-exception.filter';
 import { TimeoutInterceptor } from '@/common/interceptors/timeout.interceptor';
 import { TransformInterceptor } from '@/common/interceptors/transform.interceptor';
 import type { EnvConfig } from '@/config/env.validation';
+import type { I18nPath } from '@/i18n/i18n.translations';
 import { PinoLoggerService } from '@/setup/logger/pino-logger.service';
 
 /** 微信支付服务端回调路径后缀：CSRF 豁免兜底（详见 enableCsrfProtection 处说明） */
@@ -50,15 +51,17 @@ function groupIssuesByField(issues: readonly ValidationIssue[]): Record<string, 
  * 本仓库已有 3 个自定义装饰器（@CurrentUser / @Session / @ReqSignal），当前均未带 schema，
  * 开启是为避免未来「@Foo({ schema }) 静默不校验」的隐蔽失效；对未声明 schema 的参数无任何影响。
  */
-export function createApiValidationPipe(): StandardSchemaValidationPipe {
-  return new StandardSchemaValidationPipe({
+export function createApiValidationPipe(
+  translate: (key: I18nPath) => string = (key) => t(key),
+): I18nStandardSchemaValidationPipe {
+  return new I18nStandardSchemaValidationPipe({
     errorHttpStatusCode: HttpStatus.UNPROCESSABLE_ENTITY,
     validateCustomDecorators: true,
     exceptionFactory: (issues) => {
       const fields = groupIssuesByField(issues);
       return new UnprocessableEntityException({
         code: 'VALIDATION_FAILED',
-        message: 'Validation failed',
+        message: translate('common.validationFailed'),
         fields,
         errors: fields,
       });
@@ -101,7 +104,9 @@ function resolveTrustedOrigins(values: (string | undefined)[], logger = new Logg
 /** 配置全局中间件、版本控制、安全防护、验证管道、异常过滤器与拦截器 */
 export function setupGlobalMiddleware(app: NestFastifyApplication): void {
   app.useLogger(app.get(PinoLoggerService));
-  app.enableCors();
+  // 请求头沿用默认反射（`Access-Control-Allow-Headers` 回显浏览器请求的头），因此 `Idempotency-Key` 无需显式声明；
+  // 但响应头默认不暴露，浏览器读不到「这是回放」与「该等多久重试」，必须显式 exposedHeaders。
+  app.enableCors({ exposedHeaders: ['Idempotent-Replayed', 'Retry-After'] });
   app.enableVersioning({ type: VersioningType.URI, defaultVersion: '1' });
 
   const config = app.get(ConfigService<EnvConfig, true>);
@@ -110,15 +115,13 @@ export function setupGlobalMiddleware(app: NestFastifyApplication): void {
   // 无 `Origin` / `Sec-Fetch-Site` 的服务端调用天然放行；仅浏览器发出的跨站写请求会被拒绝。
   // 微信支付回调由服务端发起（无 Origin），此处豁免仅为反向代理注入 Origin 时的兜底，属资金链路保险。
   app.enableCsrfProtection({
-    trustedOrigins: resolveTrustedOrigins([
-      config.get('TRUSTED_ORIGINS'),
-      config.get('APP_URL'),
-      config.get('BETTER_AUTH_URL'),
-    ]),
+    trustedOrigins: resolveTrustedOrigins([config.get('TRUSTED_ORIGINS'), config.get('APP_URL')]),
     exclude: (request: FastifyRequest) => (request.url.split('?')[0] ?? '').endsWith(WEPAY_NOTIFY_SUFFIX),
   });
 
-  app.useGlobalPipes(createApiValidationPipe());
+  // 注入 I18nService：管道在无请求上下文（如引导期预检）时也能按默认语言转译，而非回退为原始 key。
+  const i18n = app.get(I18nService);
+  app.useGlobalPipes(createApiValidationPipe((key) => i18n.t(key)));
 
   app.useGlobalFilters(new HttpExceptionFilter(config.get('APP_DEBUG')));
 

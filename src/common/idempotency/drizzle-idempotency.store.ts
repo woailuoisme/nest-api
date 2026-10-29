@@ -1,11 +1,12 @@
 import { createHash } from 'node:crypto';
 
-import { Injectable, Optional } from '@nestjs/common';
+import { Injectable } from '@nestjs/common';
+import { InjectDrizzle } from '@nestjs/drizzle';
 import type { IdempotencyAcquireResult, IdempotencyStore, IdempotencyStoredPayload } from '@nestjs/idempotency';
 import { IdempotencyStorage } from '@nestjs/idempotency';
 import { and, eq, gt, lte, sql } from 'drizzle-orm';
 
-import { type DrizzleDB, InjectDb } from '@/database/drizzle/drizzle.service';
+import type { Database } from '@/database/drizzle/database';
 import { idempotencyKeys } from '@/database/drizzle/schema/idempotency.schema';
 
 /** 数据库侧当前毫秒时间戳：租约可见性判定统一走 DB 时钟 */
@@ -37,10 +38,11 @@ function leaseDeadlineSql(ttlMs: number) {
 @Injectable()
 export class DrizzleIdempotencyStore implements IdempotencyStore {
   constructor(
-    @InjectDb() private readonly db: DrizzleDB,
-    @Optional() storage?: IdempotencyStorage,
+    @InjectDrizzle() private readonly db: Database,
+    storage: IdempotencyStorage,
   ) {
-    storage?.registerSource(this);
+    // 官方契约：单例 provider 的构造器内无条件注册；装配错误应在启动期失败而不是静默回落到内存 store
+    storage.registerSource(this);
   }
 
   /**
@@ -98,9 +100,10 @@ export class DrizzleIdempotencyStore implements IdempotencyStore {
     // 过期判定交给 DB 时钟（extras）：既避免用本机时钟判断他人租约，也避免把
     // 「已过期但本次 UPSERT 未命中」的行误报为 in-flight（会让上层白等 waitTimeout 后 409）。
     const existing = await this.db.query.idempotencyKeys.findFirst({
-      where: eq(idempotencyKeys.keyHash, keyHash),
+      where: { keyHash },
       extras: {
-        expired: sql<boolean>`${idempotencyKeys.expiresAt} <= ${NOW_MS_SQL}`.as('expired'),
+        // v1 关系查询会为表起别名，必须用回调拿到别名后的列引用
+        expired: (table) => sql<boolean>`${table.expiresAt} <= ${NOW_MS_SQL}`,
       },
     });
 

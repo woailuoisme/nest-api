@@ -63,6 +63,7 @@ export class PaymentsService {
     const acquired = await this.idempotency.acquire({
       key: payload.id,
       actor: WEPAY_NOTIFY_ACTOR,
+      method: 'POST',
       requestPath: WEPAY_NOTIFY_PATH,
       payloadHash,
       ttlSeconds: WEPAY_NOTIFY_IDEMPOTENCY_TTL_SECONDS,

@@ -1,4 +1,4 @@
-import type { DrizzleDB } from '@/database/drizzle/drizzle.service';
+import type { Database } from '@/database/drizzle/database';
 
 import type { IndexSettings } from '../interfaces/search.interface';
 
@@ -51,11 +51,11 @@ export interface SearchableDefinition<
    * 批量根据主键 ID 加载数据库实体
    * 用于异步队列回源同步与 SearchService.searchModel() 数据水合。
    */
-  loadRecords?: (db: DrizzleDB, ids: (string | number)[]) => Promise<TEntity[]>;
+  loadRecords?: (db: Database, ids: (string | number)[]) => Promise<TEntity[]>;
 
   /**
    * 游标分页分批读取加载器
    * 用于 search:import CLI 命令行高效全量重灌数据，防止内存溢出。
    */
-  cursorLoader?: (db: DrizzleDB, options: CursorLoaderOptions) => Promise<CursorLoaderResult<TEntity>>;
+  cursorLoader?: (db: Database, options: CursorLoaderOptions) => Promise<CursorLoaderResult<TEntity>>;
 }

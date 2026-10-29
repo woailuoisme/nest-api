@@ -10,8 +10,7 @@
     "assets": [
       { "include": "i18n/translations/**/*" },
       { "include": "common/mail/templates/*.hbs" },
-      { "include": "commands/generator/templates/*.hbs" },
-      { "include": "common/auth/casbin/*.csv" }
+      { "include": "commands/generator/templates/*.hbs" }
     ]
   }
 }

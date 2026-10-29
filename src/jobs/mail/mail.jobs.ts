@@ -1,75 +1,73 @@
 import { InjectQueue } from '@nestjs/bullmq';
 import { Injectable } from '@nestjs/common';
-import type { JobsOptions, Queue } from 'bullmq';
+import type { Queue } from 'bullmq';
 
 import { MAIL_QUEUE } from '@/common/constants/queues';
+import type { MailLocale, MailPayload, MailTemplateName } from '@/common/mail/mail.types';
+import type { EmailOtpData } from '@/common/mail/mails/email-otp.mail';
+import type { PasswordResetData } from '@/common/mail/mails/password-reset.mail';
+import type { VerifyEmailData } from '@/common/mail/mails/verify-email.mail';
+import type { WelcomeData } from '@/common/mail/mails/welcome.mail';
+
+/** 邮件任务名（与模板名同源，`satisfies` 保证编译期不会漂移） */
+export const MailJobName = {
+  VerifyEmail: 'verify-email',
+  PasswordReset: 'reset-password',
+  EmailOtp: 'email-otp',
+  Welcome: 'welcome',
+} as const satisfies Record<string, MailTemplateName>;
+
+export type MailJobName = (typeof MailJobName)[keyof typeof MailJobName];
+
+/** 单封邮件最多重试次数（指数退避，最终由 `removeOnFail` 保留窗口收敛） */
+const MAIL_JOB_ATTEMPTS = 5;
+const MAIL_JOB_BACKOFF_MS = 10_000;
 
 /**
- * 邮件任务统一重试与保留策略
+ * 邮件生产者门面 — 投递到 BullMQ `mail` 队列，由 Worker 进程消费并调用官方 `Mailer`。
  *
- * SMTP 的限流、连接抖动与上游维护均属瞬态故障；不重试会静默丢掉验证码与密码重置邮件，
- * 用户侧表现为「没收到邮件」且无法自助恢复。策略与 `SEARCH_JOB_OPTIONS` 保持一致。
+ * 重试语义由队列承担（`attempts` + 指数退避），API 进程不阻塞在 SMTP 往返上。
  */
-const MAIL_JOB_OPTIONS: JobsOptions = {
-  attempts: 3,
-  backoff: {
-    type: 'exponential',
-    delay: 2000,
-  },
-  removeOnComplete: 100,
-  removeOnFail: 500,
-};
-
-/**
- * 邮件队列契约 — 类型 + 生产者（MailJobs）二合一，生产/消费两侧共用。
- * 队列名常量统一见 src/common/constants/queues.ts。
- *
- * 生产者（业务模块，如 AuthModule）— 注入并投递任务：
- *   @Inject() private readonly mailJobs: MailJobs;
- *   await this.mailJobs.queueVerificationEmail('a@b.com', 'Tom', 'token123', 'zh');
- *
- * 消费者（Worker 进程，WorkerModule）— 由 processor 路由 + handlers 执行：
- *   // mail.processor.ts: @Processor(MAIL_QUEUE) 按 job.name 分发
- *   // mail.handlers.ts:  handleVerifyEmail / handleResetPassword 实际发信
- *
- * 新增邮件类型：在此加 MailJobName 枚举 → handlers 加处理方法 → processor 加 case。
- */
-
-/** 邮件任务名称 */
-export enum MailJobName {
-  VerifyEmail = 'verify-email',
-  ResetPassword = 'reset-password',
-  Welcome = 'welcome',
-}
-
-/** 邮件语言 */
-export type MailLocale = 'zh' | 'en';
-
-/** 邮件任务数据载荷（welcome 无 token） */
-export interface MailJobData {
-  to: string;
-  name: string;
-  token?: string;
-  locale: MailLocale;
-}
-
-/** 邮件队列生产者 — 向 BullMQ 投递邮件发送任务（对应 Laravel Job::dispatch） */
 @Injectable()
 export class MailJobs {
   constructor(@InjectQueue(MAIL_QUEUE) private readonly queue: Queue) {}
 
-  /** 投递邮箱验证邮件 */
-  queueVerificationEmail(to: string, name: string, token: string, locale: MailLocale) {
-    return this.queue.add(MailJobName.VerifyEmail, { to, name, token, locale }, MAIL_JOB_OPTIONS);
+  queueVerificationEmail(to: string, name: string, token: string, locale: MailLocale, url?: string) {
+    return this.enqueue<VerifyEmailData>(MailJobName.VerifyEmail, {
+      to: { name, address: to },
+      locale,
+      data: { name, token, url },
+    });
   }
 
-  /** 投递密码重置邮件 */
-  queuePasswordResetEmail(to: string, name: string, token: string, locale: MailLocale) {
-    return this.queue.add(MailJobName.ResetPassword, { to, name, token, locale }, MAIL_JOB_OPTIONS);
+  queuePasswordResetEmail(to: string, name: string, token: string, locale: MailLocale, url?: string) {
+    return this.enqueue<PasswordResetData>(MailJobName.PasswordReset, {
+      to: { name, address: to },
+      locale,
+      data: { name, token, url },
+    });
   }
 
-  /** 投递欢迎邮件（注册后，无 token） */
+  queueEmailOtp(to: string, name: string, code: string, locale: MailLocale) {
+    return this.enqueue<EmailOtpData>(MailJobName.EmailOtp, {
+      to: { name, address: to },
+      locale,
+      data: { name, code },
+    });
+  }
+
   queueWelcomeEmail(to: string, name: string, locale: MailLocale) {
-    return this.queue.add(MailJobName.Welcome, { to, name, locale }, MAIL_JOB_OPTIONS);
+    return this.enqueue<WelcomeData>(MailJobName.Welcome, {
+      to: { name, address: to },
+      locale,
+      data: { name },
+    });
+  }
+
+  private enqueue<T>(name: MailJobName, payload: MailPayload<T>) {
+    return this.queue.add(name, payload, {
+      attempts: MAIL_JOB_ATTEMPTS,
+      backoff: { type: 'exponential', delay: MAIL_JOB_BACKOFF_MS },
+    });
   }
 }

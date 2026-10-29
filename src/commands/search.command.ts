@@ -1,8 +1,9 @@
 import { Injectable, Logger } from '@nestjs/common';
+import { InjectDrizzle } from '@nestjs/drizzle';
 import { Command, CommandRunner, Option } from 'nest-commander';
 
 import { SearchService } from '@/common/search/search.service';
-import { type DrizzleDB, InjectDb } from '@/database/drizzle/drizzle.service';
+import type { Database } from '@/database/drizzle/database';
 import { SEARCHABLE_REGISTRY } from '@/database/search';
 
 interface SearchImportOptions {
@@ -57,7 +58,7 @@ export class SearchImportCommand extends CommandRunner {
 
   constructor(
     private readonly searchService: SearchService,
-    @InjectDb() private readonly db: DrizzleDB,
+    @InjectDrizzle() private readonly db: Database,
   ) {
     super();
   }

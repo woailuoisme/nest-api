@@ -3,10 +3,11 @@ import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 
 import { Injectable, Logger } from '@nestjs/common';
+import { InjectDrizzle } from '@nestjs/drizzle';
 import { Command, CommandRunner, Option } from 'nest-commander';
 
 import { StorageService } from '@/common/storage/storage.service';
-import { type DrizzleDB, InjectDb } from '@/database/drizzle/drizzle.service';
+import type { Database } from '@/database/drizzle/database';
 
 import { readEnvValue, upsertEnvValue } from './utils/env-file.util';
 import { applyMigrations, resolveMigrationsFolder } from './utils/migrations.util';
@@ -26,9 +27,8 @@ interface StepResult {
 
 /** Auth secrets that must exist, with their random byte sizes */
 const SECRET_KEYS = [
-  { key: 'BETTER_AUTH_SECRET', bytes: 32 },
-  { key: 'JWT_ACCESS_SECRET', bytes: 64 },
-  { key: 'JWT_REFRESH_SECRET', bytes: 64 },
+  { key: 'JWT_SECRET', bytes: 32 },
+  { key: 'MFA_ENCRYPTION_KEYS', bytes: 32 },
 ] as const;
 
 const STATUS_LABEL: Record<StepStatus, string> = {
@@ -54,7 +54,7 @@ export class AppInitCommand extends CommandRunner {
   private readonly logger = new Logger(AppInitCommand.name);
 
   constructor(
-    @InjectDb() private readonly db: DrizzleDB,
+    @InjectDrizzle() private readonly db: Database,
     private readonly storage: StorageService,
   ) {
     super();

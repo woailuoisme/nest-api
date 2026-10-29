@@ -1,7 +1,7 @@
+import { Can } from '@nestjs/authorization';
 import {
   BadRequestException,
   Controller,
-  ForbiddenException,
   Get,
   HttpCode,
   HttpStatus,
@@ -16,11 +16,10 @@ import { FileInterceptor } from '@nestjs/platform-fastify/multipart';
 import { ApiBearerAuth, ApiBody, ApiConsumes, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { Throttle } from '@nestjs/throttler';
 
+import { param } from '@/common/authorization/param.util';
+import { UserPolicy } from '@/common/authorization/policies/user.policy';
 import { UPLOAD } from '@/common/constants/app.constants';
-import { Permission } from '@/common/constants/permissions';
-import { Role } from '@/common/constants/roles';
 import { CurrentUser, type CurrentUserPayload } from '@/common/decorators/current-user.decorator';
-import { Permissions } from '@/common/decorators/permissions.decorator';
 import { ApiSuccessResponse } from '@/common/decorators/swagger-response.decorator';
 import { createUploadFileFilter, type MemoryUpload } from '@/common/storage/interfaces/upload.interface';
 
@@ -38,6 +37,7 @@ const AVATAR_FIELD_NAME = 'file';
  */
 @ApiTags('用户中心')
 @ApiBearerAuth()
+@Can.Anyone()
 @Controller('users')
 export class UsersController {
   constructor(private readonly usersService: UsersService) {}
@@ -95,26 +95,15 @@ export class UsersController {
   /**
    * 根据用户 ID 获取指定用户详情
    *
-   * `UserRead` 已授予全部角色（含普通 USER，见 `ROLE_PERMISSIONS`），因此必须在方法内
-   * 叠加归属校验：否则任意登录用户都能靠枚举 UUIDv7 读取他人邮箱与角色（水平越权）。
+   * 归属校验由 `@Can(UserPolicy, 'view', param('id'))` 在守卫阶段强制执行，
+   * 防止任意登录用户枚举 UUIDv7 读取他人邮箱与角色（水平越权）。
    */
   @Get(':id')
-  @Permissions(Permission.UserRead)
+  @Can(UserPolicy, 'view', param('id'))
   @ApiOperation({ summary: '用户详情' })
   @ApiSuccessResponse(UserResourceSchema, { description: '用户信息获取成功' })
   @SerializeOptions({ schema: UserResourceSchema })
-  findOne(@Param('id', ParseUUIDPipe) id: string, @CurrentUser() current: CurrentUserPayload): Promise<UserEntity> {
-    if (!this.canReadUser(current, id)) {
-      throw new ForbiddenException('无权查看其他用户信息');
-    }
+  findOne(@Param('id', ParseUUIDPipe) id: string): Promise<UserEntity> {
     return this.usersService.findOne(id);
-  }
-
-  /** 自助面仅允许「本人」或「管理角色」读取用户详情 */
-  private canReadUser(current: CurrentUserPayload, targetId: string): boolean {
-    if (current.id === targetId) {
-      return true;
-    }
-    return current.role === Role.OPERATOR || current.role === Role.ADMIN || current.role === Role.SUPER_ADMIN;
   }
 }

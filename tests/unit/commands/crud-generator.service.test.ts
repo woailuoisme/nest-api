@@ -37,7 +37,7 @@ describe('CrudGeneratorService', () => {
       expect(serviceArtifact).toBeDefined();
       expect(serviceArtifact!.outputPath).toBe('src/features/admin/sampleProduct/sampleProduct.service.ts');
       expect(serviceArtifact!.content).toContain('class SampleProductService');
-      expect(serviceArtifact!.content).toContain('@InjectDb() private readonly db: DrizzleDB');
+      expect(serviceArtifact!.content).toContain('@InjectDrizzle() private readonly db: Database');
 
       const controllerArtifact = artifacts.find((a) => a.outputPath.endsWith('.controller.ts'));
       expect(controllerArtifact!.content).toContain("@Controller('admin/sample_products')");
@@ -76,8 +76,8 @@ describe('CrudGeneratorService', () => {
   });
 
   describe('parseSchemaFields()', () => {
-    it('应能正确解析 better-auth.schema.ts 中的 user 表字段', () => {
-      const result = service.parseSchemaFields('better-auth', 'user');
+    it('应能正确解析 auth.schema.ts 中的 user 表字段', () => {
+      const result = service.parseSchemaFields('auth', 'user');
 
       expect(result.errors).toHaveLength(0);
       expect(result.fieldDefs).not.toBeNull();
@@ -98,7 +98,7 @@ describe('CrudGeneratorService', () => {
     });
 
     it('当 schema 存在但表名不存在时应返回错误', () => {
-      const result = service.parseSchemaFields('better-auth', 'non_existent_table');
+      const result = service.parseSchemaFields('auth', 'non_existent_table');
 
       expect(result.fieldDefs).toBeNull();
       expect(result.errors.length).toBeGreaterThan(0);

@@ -1,9 +1,9 @@
 import type { ServerResponse } from 'node:http';
 
 import { type ArgumentsHost, Catch, type ExceptionFilter, HttpException, HttpStatus, Logger } from '@nestjs/common';
+import { t as translateGlobal } from '@nestjs/i18n';
 import { isEmptyObject } from 'es-toolkit';
 import type { FastifyReply, FastifyRequest } from 'fastify';
-import { I18nContext } from 'nestjs-i18n';
 
 import type { I18nPath } from '@/i18n';
 
@@ -17,8 +17,21 @@ interface HttpResponse {
   end?: (chunk: string) => void;
 }
 
-/** 兼容 FastifyReply.code/status 与原生 ServerResponse 的 JSON 写回 */
-function sendJsonResponse(response: HttpResponse, status: number, body: unknown): void {
+/** 兼容 FastifyReply.code/status 与原生 ServerResponse 的 JSON 写回（可附带响应头） */
+function sendJsonResponse(
+  response: HttpResponse,
+  status: number,
+  body: unknown,
+  headers?: Record<string, string>,
+): void {
+  for (const [name, value] of Object.entries(headers ?? {})) {
+    if (typeof response.header === 'function') {
+      response.header(name, value);
+    } else {
+      response.setHeader?.(name, value);
+    }
+  }
+
   if (typeof response.code === 'function') {
     response.code(status).send?.(body);
   } else if (typeof response.status === 'function') {
@@ -28,6 +41,22 @@ function sendJsonResponse(response: HttpResponse, status: number, body: unknown)
     response.setHeader?.('Content-Type', 'application/json');
     response.end?.(JSON.stringify(body));
   }
+}
+
+/**
+ * 应用异常携带的响应头（如幂等 409 的 `Retry-After`）。
+ *
+ * 仅接受字符串值：异常对象来自任意层，非字符串会在适配器层触发类型错误。
+ */
+function resolveExceptionHeaders(exception: unknown): Record<string, string> | undefined {
+  const candidate = (exception as { headers?: unknown } | null)?.headers;
+  if (!candidate || typeof candidate !== 'object') return undefined;
+
+  const headers: Record<string, string> = {};
+  for (const [name, value] of Object.entries(candidate as Record<string, unknown>)) {
+    if (typeof value === 'string') headers[name] = value;
+  }
+  return Object.keys(headers).length > 0 ? headers : undefined;
 }
 
 /**
@@ -60,22 +89,22 @@ const PG_ERROR_MAP: Record<string, { status: HttpStatus; message: string; i18nKe
   '23505': {
     status: HttpStatus.CONFLICT,
     message: '数据已存在，请勿重复操作',
-    i18nKey: 'translation.db.uniqueViolation',
+    i18nKey: 'db.uniqueViolation',
   }, // unique_violation
   '23503': {
     status: HttpStatus.BAD_REQUEST,
     message: '关联引用的目标数据不存在或无法关联',
-    i18nKey: 'translation.db.foreignKeyViolation',
+    i18nKey: 'db.foreignKeyViolation',
   }, // foreign_key_violation
   '23502': {
     status: HttpStatus.BAD_REQUEST,
     message: '缺少必填的数据字段',
-    i18nKey: 'translation.db.notNullViolation',
+    i18nKey: 'db.notNullViolation',
   }, // not_null_violation
   '22P02': {
     status: HttpStatus.BAD_REQUEST,
     message: '数据格式或参数类型无效',
-    i18nKey: 'translation.db.invalidFormat',
+    i18nKey: 'db.invalidFormat',
   }, // invalid_text_representation
 };
 
@@ -224,30 +253,27 @@ function extractDatabaseError(exception: unknown): { status: HttpStatus; message
 }
 
 /** 解析多语言翻译 Key 候选值 */
-const I18N_NAMESPACE_PREFIXES = ['common.', 'auth.', 'validation.', 'db.'];
+const I18N_NAMESPACE_PREFIXES = ['app.', 'common.', 'auth.', 'validation.', 'db.'];
 
 function resolveI18nCandidateKey(i18nKey?: string, message?: unknown): I18nPath | undefined {
   if (i18nKey) return i18nKey as I18nPath;
   if (typeof message !== 'string') return undefined;
-  if (message.startsWith('translation.')) return message as I18nPath;
-  if (I18N_NAMESPACE_PREFIXES.some((prefix) => message.startsWith(prefix))) {
-    return `translation.${message}` as I18nPath;
-  }
-  return undefined;
+  return I18N_NAMESPACE_PREFIXES.some((prefix) => message.startsWith(prefix)) ? (message as I18nPath) : undefined;
 }
+
+type TranslateFn = (key: I18nPath) => string;
+
+const defaultTranslate: TranslateFn = (key) => translateGlobal(key);
 
 /**
  * 按当前请求语言翻译错误文案；无 i18n 上下文、无候选 Key 或翻译失败时原样返回。
  */
-function translateErrorMessage(host: ArgumentsHost, i18nKey: string | undefined, message: unknown): unknown {
-  const i18n = I18nContext.current(host);
-  if (!i18n) return message;
-
+function translateErrorMessage(translate: TranslateFn, i18nKey: string | undefined, message: unknown): unknown {
   const candidateKey = resolveI18nCandidateKey(i18nKey, message);
   if (!candidateKey) return message;
 
   try {
-    const translated = i18n.t(candidateKey);
+    const translated = translate(candidateKey);
     return typeof translated === 'string' && translated !== candidateKey ? translated : message;
   } catch {
     return message;
@@ -263,7 +289,10 @@ export class HttpExceptionFilter implements ExceptionFilter {
   #logger = new Logger(HttpExceptionFilter.name);
 
   /** @param debug 是否输出调试信息（exception/trace 及内部异常 message），对应 APP_DEBUG */
-  constructor(private readonly debug = false) {}
+  constructor(
+    private readonly debug = false,
+    private readonly translate: TranslateFn = defaultTranslate,
+  ) {}
 
   catch(exception: unknown, host: ArgumentsHost) {
     const ctx = host.switchToHttp();
@@ -280,7 +309,7 @@ export class HttpExceptionFilter implements ExceptionFilter {
     }
 
     const { status, body, log, i18nKey } = resolveErrorEnvelope(exception, this.debug);
-    body.error.message = translateErrorMessage(host, i18nKey, body.error.message);
+    body.error.message = translateErrorMessage(this.translate, i18nKey, body.error.message);
 
     if (log) {
       const line = `${log.message} at ${request?.url ?? ''}`;
@@ -291,6 +320,6 @@ export class HttpExceptionFilter implements ExceptionFilter {
       }
     }
 
-    sendJsonResponse(response, status, body);
+    sendJsonResponse(response, status, body, resolveExceptionHeaders(exception));
   }
 }

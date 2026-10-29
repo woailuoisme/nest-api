@@ -196,11 +196,7 @@ export class RealMiniprogramDriver implements IMiniprogramDriver {
     try {
       await this.withReadRetry(() =>
         this.authedJson('GET', MINIPROGRAM_API_PATHS.CHECK_SESSION, {
-          query: {
-            openid,
-            signature: buildSessionSignature(sessionKey),
-            sig_method: MINIPROGRAM_SIGN_METHOD,
-          },
+          query: this.sessionQuery(openid, sessionKey),
         }),
       );
       return true;
@@ -222,11 +218,7 @@ export class RealMiniprogramDriver implements IMiniprogramDriver {
     assertSessionKeyInput(openid, sessionKey);
 
     const payload = await this.authedJson<MiniprogramJsonPayload>('GET', MINIPROGRAM_API_PATHS.RESET_SESSION, {
-      query: {
-        openid,
-        signature: buildSessionSignature(sessionKey),
-        sig_method: MINIPROGRAM_SIGN_METHOD,
-      },
+      query: this.sessionQuery(openid, sessionKey),
     });
 
     return {
@@ -461,6 +453,11 @@ export class RealMiniprogramDriver implements IMiniprogramDriver {
       this.logger.error(`强制刷新 access_token 失败：${(refreshError as Error).message}`);
       throw error;
     }
+  }
+
+  /** 登录态校验与重置共用的查询参数：官方要求以 session_key 签名证明「服务端持有该密钥」 */
+  private sessionQuery(openid: string, sessionKey: string): Record<string, string> {
+    return { openid, signature: buildSessionSignature(sessionKey), sig_method: MINIPROGRAM_SIGN_METHOD };
   }
 
   /** 合并 access_token 到查询参数 */

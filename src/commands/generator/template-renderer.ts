@@ -139,27 +139,20 @@ export const TemplateRenderer = {
         ? cfg.drizzle.replace('%s', dbColumnName).replace('.notNull()', '')
         : cfg.drizzle.replace('%s', dbColumnName);
 
+      // 三种 zod 变体的 `.describe()` 文案统一拼装：转义与引号规则只维护一处
+      const describe = (schema: string, text: string) => `${schema}.describe('${escapeTsString(text)}')`;
+
       let zodValidation = CREATE_ZOD_VALIDATORS[f.type] ?? 'z.string()';
-      if (description) {
-        zodValidation += `.describe('${escapeTsString(description)}')`;
-      }
-      if (isOptional) {
-        zodValidation += '.optional()';
-      }
+      if (description) zodValidation = describe(zodValidation, description);
+      if (isOptional) zodValidation += '.optional()';
 
       let zodFilterValidation = FILTER_ZOD_VALIDATORS[f.type] ?? 'z.string().optional()';
-      if (description) {
-        zodFilterValidation += `.describe('Search ${escapeTsString(description)}')`;
-      }
+      if (description) zodFilterValidation = describe(zodFilterValidation, `Search ${description}`);
 
       // response resource schema: output type (no input constraints); optional columns are null on the entity
       let zodResponseValidation = RESPONSE_ZOD_VALIDATORS[f.type] ?? 'z.string()';
-      if (isOptional) {
-        zodResponseValidation += '.nullable()';
-      }
-      if (description) {
-        zodResponseValidation += `.describe('${escapeTsString(description)}')`;
-      }
+      if (isOptional) zodResponseValidation += '.nullable()';
+      if (description) zodResponseValidation = describe(zodResponseValidation, description);
 
       return {
         name: f.name,

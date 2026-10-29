@@ -86,7 +86,10 @@ describe('校验与序列化契约 (e2e)', () => {
 
     app = moduleFixture.createNestApplication<NestFastifyApplication>(new FastifyAdapter());
     // 与生产一致的三件套：统一校验管道 + 统一异常过滤器 + schema 序列化拦截器
-    app.useGlobalPipes(createApiValidationPipe());
+    // 隔离装配无 I18nModule：注入与生产同形的翻译器，锁定信封文案契约
+    app.useGlobalPipes(
+      createApiValidationPipe((key) => (key === 'common.validationFailed' ? 'Validation failed' : key)),
+    );
     app.useGlobalFilters(new HttpExceptionFilter(false));
     app.useGlobalInterceptors(new StandardSchemaSerializerInterceptor(app.get(Reflector)));
 

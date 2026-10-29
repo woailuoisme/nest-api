@@ -1,7 +1,9 @@
+import { Can } from '@nestjs/authorization';
 import { Body, Controller, Post, SerializeOptions } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { omit } from 'es-toolkit';
 
+import { AdminPolicy } from '@/common/authorization/policies/admin.policy';
 import { ApiSuccessResponse } from '@/common/decorators/swagger-response.decorator';
 
 import {
@@ -15,10 +17,11 @@ import { NotificationsService } from './notifications.service';
 /**
  * 管理后台 — 实时通知推送控制器
  *
- * 挂载于 /admin 前缀，准入由全局 AdminPrefixGuard 默认拒绝式强制（仅 ADMIN）。
+ * 挂载于 /admin 前缀，准入由 AdminPolicy 的能力判定（ADMIN / OPERATOR，SUPER_ADMIN 直通）。
  */
 @ApiTags('消息通知')
 @ApiBearerAuth()
+@Can(AdminPolicy, 'sendNotification')
 @Controller('admin/notifications')
 export class AdminNotificationsController {
   constructor(private readonly notificationsService: NotificationsService) {}

@@ -8,9 +8,8 @@ import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import { renderApiReference } from '@scalar/client-side-rendering';
 
 import { APP_VERSION, OPENAPI_VERSION, PATHS, ROUTES } from '@/common/constants/app.constants';
-import { ADMIN_FEATURE_MODULES, CLIENT_FEATURE_MODULES } from '@/features';
+import { ADMIN_FEATURE_MODULES, AuthModule, CLIENT_FEATURE_MODULES } from '@/features';
 
-import { BETTER_AUTH_SECURITY_SCHEMES, getProcessedBetterAuthOpenAPI } from './swagger/better-auth-openapi';
 import { zodStandardSchemaConverter } from './swagger/standard-schema-converter';
 
 function createCleanDocument(
@@ -22,16 +21,6 @@ function createCleanDocument(
     include: [...include],
     standardSchemaConverter: zodStandardSchemaConverter,
   });
-  delete doc.paths['/auth/{path}'];
-  delete doc.paths['/v1/auth/{path}'];
-  delete doc.paths['/v1/auth/*'];
-  doc.components = {
-    ...doc.components,
-    securitySchemes: {
-      ...doc.components?.securitySchemes,
-      ...BETTER_AUTH_SECURITY_SCHEMES,
-    },
-  };
   return doc;
 }
 
@@ -48,8 +37,8 @@ function createBaseDocConfig(appUrl: string, title: string, description: string)
     .setOpenAPIVersion(OPENAPI_VERSION)
     .addServer(appUrl, CURRENT_SERVER_DESCRIPTION)
     .addServer(PRODUCTION_SERVER.url, PRODUCTION_SERVER.description)
-    .addBearerAuth()
-    .addCookieAuth('better-auth.session_token');
+    .addBearerAuth({ type: 'http', scheme: 'bearer', bearerFormat: 'JWT' }, 'bearerAuth')
+    .addCookieAuth('__Host-sid', undefined, 'cookieAuth');
 }
 
 export interface ApiDocUrls {
@@ -63,7 +52,7 @@ export async function setupApiDocumentation(app: NestFastifyApplication, appUrl:
   const apiMdPath = join(process.cwd(), PATHS.API_MD_FILE);
   const clientDocHeader = `
 > [!NOTE]
-> 认证与多因素鉴权端点已独立收敛至 [Better Auth API Reference](/${ROUTES.AUTH_DOCS})。
+> 认证与多因素鉴权端点已独立收敛至 [认证 API Reference](/${ROUTES.AUTH_DOCS})。
 `.trim();
   const clientDescription = existsSync(apiMdPath)
     ? `${clientDocHeader}\n\n${readFileSync(apiMdPath, 'utf-8')}`
@@ -73,28 +62,30 @@ export async function setupApiDocumentation(app: NestFastifyApplication, appUrl:
 # 管理后台 API 设计规范与接入指南
 
 > [!NOTE]
-> 管理员登录与治理相关端点已独立收敛至 [Better Auth API Reference](/${ROUTES.AUTH_DOCS})。
+> 管理员登录与治理相关端点已独立收敛至 [认证 API Reference](/${ROUTES.AUTH_DOCS})。
 
 本文档汇集管理后台自包含领域端点（C 端用户管理、系统监控指标、全局广播通知等）。
-所有端点统一归入 \`/v1/admin\` 前缀并由全局 \`AdminPrefixGuard\` 与 \`AdminRole\` 实施准入保护。
+所有端点统一归入 \`/v1/admin\` 前缀，并由域级授权策略（\`AdminPolicy\`）实施准入保护。
   `.trim();
 
   const authDescription = `
-# Better Auth 认证体系 API 参考
+# 认证 API 参考
 
-本文档汇总 11 个已启用插件的认证与权限管控端点（核心凭据、用户名、手机号、邮箱动态验证码、双因素 2FA、API Key、Bearer、一次性令牌、JWT/JWKS、最后登录方式、管理员治理）。
-面向 JWT + REST API 后端：未启用浏览器端 ceremony（Passkey / 魔术链接）、多租户组织、设备码授权、企业 SSO 与认证层文案本地化。
-所有端点基于 \`/v1/auth\` 路径直接挂载，支持 \`Bearer Token\` 与 \`Cookie\` 复合双模态在线调试。
+本文档汇总 \`@nestjs/authentication\` 驱动的认证端点：注册、登录、JWT 签发/刷新/吊销、
+两步验证（TOTP）、邮箱验证、找回密码与登录设备管理。
+会话凭据为 \`__Host-sid\` Cookie，移动端使用 Bearer JWT。
   `.trim();
-
-  const betterAuthOpenAPI = await getProcessedBetterAuthOpenAPI();
 
   // ─── 1. 客户端 API 文档 (Client API) ──────────────────────────────────
   const clientDocConfig = createBaseDocConfig(appUrl, 'Client API', clientDescription)
     .addTag('用户中心', '用户个人资料、头像上传与信息查询')
     .build();
 
-  const clientDocument = createCleanDocument(app, clientDocConfig, CLIENT_FEATURE_MODULES);
+  const clientDocument = createCleanDocument(
+    app,
+    clientDocConfig,
+    CLIENT_FEATURE_MODULES.filter((module) => module !== AuthModule),
+  );
 
   // ─── 2. 管理后台 API 文档 (Admin API) ──────────────────────────────────
   const adminDocConfig = createBaseDocConfig(appUrl, 'Admin API', adminDescription)
@@ -105,22 +96,12 @@ export async function setupApiDocumentation(app: NestFastifyApplication, appUrl:
 
   const adminDocument = createCleanDocument(app, adminDocConfig, ADMIN_FEATURE_MODULES);
 
-  // ─── 3. Better Auth 全量认证 API 文档 (Auth API) ───────────────────────
-  const authDocument = {
-    openapi: OPENAPI_VERSION,
-    info: {
-      title: 'Better Auth API Reference',
-      description: authDescription,
-      version: APP_VERSION,
-    },
-    servers: [{ url: appUrl, description: CURRENT_SERVER_DESCRIPTION }, PRODUCTION_SERVER],
-    tags: betterAuthOpenAPI.allTags,
-    paths: betterAuthOpenAPI.allPaths,
-    components: {
-      schemas: betterAuthOpenAPI.schemas,
-      securitySchemes: BETTER_AUTH_SECURITY_SCHEMES,
-    },
-  };
+  // ─── 3. 认证 API 文档 (Auth API) ───────────────────────────────────────
+  const authDocConfig = createBaseDocConfig(appUrl, '认证 API', authDescription)
+    .addTag('认证', '注册、登录、令牌、两步验证与登录设备管理')
+    .build();
+
+  const authDocument = createCleanDocument(app, authDocConfig, [AuthModule]);
 
   /**
    * ─── 4. Scalar 统一企业级交互配置 ───────────────────────────────────────
@@ -199,12 +180,8 @@ export async function setupApiDocumentation(app: NestFastifyApplication, appUrl:
   } as const;
 
   // ─── 5. 预渲染 Scalar HTML (零延迟、零前缀污染) ──────────────────────────
-  const renderScalarPage = (doc: OpenAPIObject | typeof authDocument, pageTitle: string) =>
+  const renderScalarPage = (doc: OpenAPIObject, pageTitle: string) =>
     renderApiReference({ config: { ...SCALAR_UNIFIED_CONFIG, spec: { content: doc } }, pageTitle });
-
-  const clientScalarHtml = renderScalarPage(clientDocument, 'Client API Reference');
-  const adminScalarHtml = renderScalarPage(adminDocument, 'Admin API Reference');
-  const authScalarHtml = renderScalarPage(authDocument, 'Better Auth API Reference');
 
   const httpAdapter = app.getHttpAdapter();
   const fastifyInstance = httpAdapter.getInstance();
@@ -226,9 +203,26 @@ export async function setupApiDocumentation(app: NestFastifyApplication, appUrl:
     );
   };
 
-  registerDocRoutePair(ROUTES.DOCS_JSON, clientDocument, ROUTES.DOCS, clientScalarHtml);
-  registerDocRoutePair(ROUTES.ADMIN_DOCS_JSON, adminDocument, ROUTES.ADMIN_DOCS, adminScalarHtml);
-  registerDocRoutePair(ROUTES.AUTH_DOCS_JSON, authDocument, ROUTES.AUTH_DOCS, authScalarHtml);
+  // 三份文档结构一致：JSON 端点 + 预渲染 Scalar 页面成对注册
+  const documents = [
+    { jsonRoute: ROUTES.DOCS_JSON, htmlRoute: ROUTES.DOCS, document: clientDocument, title: 'Client API Reference' },
+    {
+      jsonRoute: ROUTES.ADMIN_DOCS_JSON,
+      htmlRoute: ROUTES.ADMIN_DOCS,
+      document: adminDocument,
+      title: 'Admin API Reference',
+    },
+    {
+      jsonRoute: ROUTES.AUTH_DOCS_JSON,
+      htmlRoute: ROUTES.AUTH_DOCS,
+      document: authDocument,
+      title: '认证 API Reference',
+    },
+  ];
+
+  for (const { jsonRoute, htmlRoute, document, title } of documents) {
+    registerDocRoutePair(jsonRoute, document, htmlRoute, renderScalarPage(document, title));
+  }
 
   return {
     clientDocsUrl: `${appUrl}/${ROUTES.DOCS}`,

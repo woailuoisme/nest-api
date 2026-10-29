@@ -42,14 +42,13 @@ export class PinoLoggerService implements LoggerService {
     if (!this.pino) return;
     const { method, url, statusCode, duration, ip } = payload;
     const message = `${method} ${url} ${statusCode} (${duration}ms) - ${ip}`;
-    const data = { ...payload };
 
     if (statusCode >= 500) {
-      this.pino.error(data, message);
+      this.pino.error(payload, message);
     } else if (statusCode >= 400) {
-      this.pino.warn(data, message);
+      this.pino.warn(payload, message);
     } else {
-      this.pino.info(data, message);
+      this.pino.info(payload, message);
     }
   }
 

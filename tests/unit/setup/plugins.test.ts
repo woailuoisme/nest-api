@@ -1,19 +1,13 @@
 import fastifyMultipart from '@fastify/multipart';
 import fastifyStatic from '@fastify/static';
+import { SessionService } from '@nestjs/authentication';
 import { ConfigService } from '@nestjs/config';
 import type { NestFastifyApplication } from '@nestjs/platform-fastify';
 import { describe, expect, it, vi } from 'vitest';
 
+import { UsersRepository } from '@/common/auth/users.repository';
 import { PinoLoggerService } from '@/setup/logger/pino-logger.service';
 import { registerFastifyPlugins } from '@/setup/plugins';
-
-vi.mock('@/common/auth/better-auth', () => ({
-  auth: {
-    api: {
-      getSession: vi.fn(),
-    },
-  },
-}));
 
 describe('registerFastifyPlugins', () => {
   it('应正确注册 onRequest 与 onResponse hook，并在请求完成时记录访问日志', async () => {
@@ -42,6 +36,9 @@ describe('registerFastifyPlugins', () => {
     const mockConfigService = {
       get: vi.fn((key: string) => {
         if (key === 'UPLOAD_MAX_FILE_SIZE_BYTES') return 10 * 1024 * 1024;
+        if (key === 'JWT_SECRET') return 'test-jwt-secret-at-least-32-characters';
+        if (key === 'APP_URL') return 'http://localhost:4300';
+        if (key === 'APP_NAME') return 'nest-api';
         return undefined;
       }),
     };
@@ -51,6 +48,8 @@ describe('registerFastifyPlugins', () => {
       get: vi.fn((token: unknown) => {
         if (token === ConfigService) return mockConfigService;
         if (token === PinoLoggerService) return mockLoggerService;
+        if (token === SessionService) return { tokenFrom: vi.fn(), validate: vi.fn() };
+        if (token === UsersRepository) return { findById: vi.fn() };
         return undefined;
       }),
       getHttpAdapter: () => ({

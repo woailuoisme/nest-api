@@ -1,17 +1,17 @@
 import { HealthIndicatorService } from '@nestjs/terminus';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import type { DrizzleDB } from '@/database/drizzle/drizzle.service';
+import type { Database } from '@/database/drizzle/database';
 import { DatabaseHealthIndicator } from '@/features/system/health/indicators/database-health.indicator';
 
 describe('DatabaseHealthIndicator', () => {
   let indicator: DatabaseHealthIndicator;
-  let mockDb: DrizzleDB;
+  let mockDb: Database;
 
   beforeEach(() => {
     mockDb = {
       execute: vi.fn().mockResolvedValue(undefined),
-    } as unknown as DrizzleDB;
+    } as unknown as Database;
     const healthIndicatorService = new HealthIndicatorService();
     indicator = new DatabaseHealthIndicator(mockDb, healthIndicatorService);
   });

@@ -5,7 +5,7 @@ import type { SearchableDefinition } from '@/common/search/scout/searchable.inte
 import { SearchSyncService } from '@/common/search/search-sync.service';
 import type { SearchService } from '@/common/search/search.service';
 import type { EnvConfig } from '@/config/env.validation';
-import type { DrizzleDB } from '@/database/drizzle/drizzle.service';
+import type { Database } from '@/database/drizzle/database';
 import type { SearchJobs } from '@/jobs/search/search.jobs';
 
 describe('SearchSyncService', () => {
@@ -33,7 +33,7 @@ describe('SearchSyncService', () => {
   let mockConfigService: {
     get: ReturnType<typeof vi.fn>;
   };
-  let mockDb: DrizzleDB;
+  let mockDb: Database;
 
   beforeEach(() => {
     mockSearchService = {
@@ -47,15 +47,15 @@ describe('SearchSyncService', () => {
     mockConfigService = {
       get: vi.fn().mockReturnValue(false), // 默认同步模式
     };
-    mockDb = {} as DrizzleDB;
+    mockDb = {} as Database;
   });
 
   it('未开启队列时，sync 应直接调用 SearchService.addDocuments', async () => {
     const service = new SearchSyncService(
       mockSearchService as unknown as SearchService,
       mockConfigService as unknown as ConfigService<EnvConfig, true>,
-      mockSearchJobs as unknown as SearchJobs,
       mockDb,
+      mockSearchJobs as unknown as SearchJobs,
     );
 
     const user: DummyUser = { id: 'u1', name: 'Alice', email: 'alice@example.com' };
@@ -71,8 +71,8 @@ describe('SearchSyncService', () => {
     const service = new SearchSyncService(
       mockSearchService as unknown as SearchService,
       mockConfigService as unknown as ConfigService<EnvConfig, true>,
-      mockSearchJobs as unknown as SearchJobs,
       mockDb,
+      mockSearchJobs as unknown as SearchJobs,
     );
 
     const user: DummyUser = { id: 'u1', name: 'Alice', email: 'alice@example.com' };
@@ -86,8 +86,8 @@ describe('SearchSyncService', () => {
     const service = new SearchSyncService(
       mockSearchService as unknown as SearchService,
       mockConfigService as unknown as ConfigService<EnvConfig, true>,
-      mockSearchJobs as unknown as SearchJobs,
       mockDb,
+      mockSearchJobs as unknown as SearchJobs,
     );
 
     await service.sync(dummySearchable, []);
@@ -101,8 +101,8 @@ describe('SearchSyncService', () => {
     const service = new SearchSyncService(
       mockSearchService as unknown as SearchService,
       mockConfigService as unknown as ConfigService<EnvConfig, true>,
-      mockSearchJobs as unknown as SearchJobs,
       mockDb,
+      mockSearchJobs as unknown as SearchJobs,
     );
 
     await service.remove(dummySearchable, 'u1');
@@ -115,8 +115,8 @@ describe('SearchSyncService', () => {
     const service = new SearchSyncService(
       mockSearchService as unknown as SearchService,
       mockConfigService as unknown as ConfigService<EnvConfig, true>,
-      mockSearchJobs as unknown as SearchJobs,
       mockDb,
+      mockSearchJobs as unknown as SearchJobs,
     );
 
     await service.remove(dummySearchable, ['u1', 'u2']);
@@ -127,8 +127,8 @@ describe('SearchSyncService', () => {
     const service = new SearchSyncService(
       mockSearchService as unknown as SearchService,
       mockConfigService as unknown as ConfigService<EnvConfig, true>,
-      mockSearchJobs as unknown as SearchJobs,
       mockDb,
+      mockSearchJobs as unknown as SearchJobs,
     );
 
     const foundUser: DummyUser = { id: 'u10', name: 'Bob', email: 'bob@example.com' };
@@ -149,8 +149,8 @@ describe('SearchSyncService', () => {
     const service = new SearchSyncService(
       mockSearchService as unknown as SearchService,
       mockConfigService as unknown as ConfigService<EnvConfig, true>,
-      mockSearchJobs as unknown as SearchJobs,
       mockDb,
+      mockSearchJobs as unknown as SearchJobs,
     );
 
     const user: DummyUser = { id: 'u1', name: 'Alice', email: 'alice@example.com' };
@@ -164,8 +164,8 @@ describe('SearchSyncService', () => {
     const service = new SearchSyncService(
       mockSearchService as unknown as SearchService,
       mockConfigService as unknown as ConfigService<EnvConfig, true>,
-      mockSearchJobs as unknown as SearchJobs,
       mockDb,
+      mockSearchJobs as unknown as SearchJobs,
     );
 
     await expect(service.remove(dummySearchable, 'u1')).resolves.toBeUndefined();

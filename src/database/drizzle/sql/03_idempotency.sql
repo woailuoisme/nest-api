@@ -9,7 +9,7 @@ CREATE TABLE IF NOT EXISTS "idempotency_keys" (
     "key" text NOT NULL,
     "fingerprint" text NOT NULL,
     "owner" text,
-    "response" jsonb,
+    "response" json,
     "expires_at" bigint NOT NULL,
     "created_at" timestamp with time zone NOT NULL DEFAULT now(),
     "updated_at" timestamp with time zone NOT NULL DEFAULT now()
