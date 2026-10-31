@@ -1,5 +1,5 @@
 import { PasswordHasher } from '@nestjs/authentication';
-import { ConflictException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
+import { ConflictException, ForbiddenException, Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { InjectDrizzle } from '@nestjs/drizzle';
 import { desc, eq } from 'drizzle-orm';
 import { pick } from 'es-toolkit';
@@ -7,6 +7,7 @@ import { v7 as uuidv7 } from 'uuid';
 
 import { Role } from '@/common/constants/roles';
 import { PageMetaResource, PaginatedResultResource } from '@/common/dto/pagination.dto';
+import { MediaService } from '@/common/media/media.service';
 import { parseSpatieQuery } from '@/common/query/spatie-query';
 import { SearchSyncService } from '@/common/search/search-sync.service';
 import { SearchService } from '@/common/search/search.service';
@@ -42,11 +43,14 @@ function rankOf(role: string | null): number {
 
 @Injectable()
 export class UsersService {
+  private readonly logger = new Logger(UsersService.name);
+
   constructor(
     @InjectDrizzle() private readonly db: Database,
     private readonly searchService: SearchService,
     private readonly searchSyncService: SearchSyncService,
     private readonly passwordHasher: PasswordHasher,
+    private readonly mediaService: MediaService,
   ) {}
 
   async create(actor: { id: string; role: Role }, dto: CreateUserRequest) {
@@ -94,7 +98,7 @@ export class UsersService {
 
     await this.searchSyncService.sync(userSearchable, newUser);
 
-    return new UserEntity(newUser);
+    return this.toEntity(newUser);
   }
 
   async findAll(query: FindUsersRequest) {
@@ -123,7 +127,7 @@ export class UsersService {
     });
 
     return this.toPage(
-      rows.map((row) => new UserEntity(row)),
+      rows.map((row) => this.toEntity(row)),
       parsed.page,
       parsed.pageSize,
       total,
@@ -137,7 +141,7 @@ export class UsersService {
     if (!foundUser) {
       throw new NotFoundException('User not found');
     }
-    return new UserEntity(foundUser);
+    return this.toEntity(foundUser);
   }
 
   /** 原子更新用户 — 邮箱变更额外要求管理级别与严格低于目标角色（防账号接管） */
@@ -194,7 +198,7 @@ export class UsersService {
     }
 
     await this.searchSyncService.sync(userSearchable, updatedUser);
-    return new UserEntity(updatedUser);
+    return this.toEntity(updatedUser);
   }
 
   /** 原子删除 — 禁止自删，且不得删除同级/更高角色（SUPER_ADMIN 之间除外） */
@@ -208,6 +212,11 @@ export class UsersService {
     const [deletedUser] = await this.db.delete(user).where(eq(user.id, id)).returning();
     if (!deletedUser) {
       throw new NotFoundException('User not found');
+    }
+    if (deletedUser.avatarPath) {
+      await this.mediaService.deleteStored(deletedUser.avatarPath).catch((err: unknown) => {
+        this.logger.warn(`清理已删除用户头像文件失败 [${deletedUser.avatarPath}]: ${String(err)}`);
+      });
     }
     await this.searchSyncService.remove(userSearchable, id);
   }
@@ -255,11 +264,22 @@ export class UsersService {
     });
 
     return this.toPage(
-      result.items.map((u) => new UserEntity(u as typeof user.$inferSelect)),
+      result.items.map((u) => this.toEntity(u as typeof user.$inferSelect)),
       result.page,
       result.limit,
       result.total,
     );
+  }
+
+  /** 将数据库 user 行显式组装为附带 imgproxy 优化 URL 的领域实体 */
+  private toEntity(row: typeof user.$inferSelect): UserEntity {
+    const avatarUrl = row.avatarPath ? this.mediaService.url(row.avatarPath).preset('avatar').build() : null;
+
+    return new UserEntity({
+      ...row,
+      avatarPath: row.avatarPath,
+      avatarUrl,
+    });
   }
 
   /** 取目标用户的最小投影（id + 当前角色）；不存在统一 404 */

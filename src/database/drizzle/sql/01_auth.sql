@@ -16,7 +16,7 @@ CREATE TABLE IF NOT EXISTS "user" (
     "name" text NOT NULL,
     "email" text NOT NULL UNIQUE,
     "email_verified" boolean NOT NULL DEFAULT false,
-    "image" text,
+    "avatar_path" text,
     "created_at" timestamp NOT NULL,
     "updated_at" timestamp NOT NULL,
     "role" text,

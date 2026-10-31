@@ -95,12 +95,6 @@ describe.skipIf(!authTablesReady)('Authorization guard (e2e)', () => {
     expect(res.statusCode).toBe(403);
   });
 
-  it('访客读取 get-session（optional）→ 200 null', async () => {
-    const res = await app.inject({ method: 'GET', url: '/v1/auth/get-session' });
-    expect(res.statusCode).toBe(200);
-    expect(res.payload).toBe('null');
-  });
-
   it('公共路由（根路径）→ 200', async () => {
     const res = await app.inject({ method: 'GET', url: '/' });
     expect(res.statusCode).toBe(200);

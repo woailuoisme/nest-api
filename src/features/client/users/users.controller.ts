@@ -13,14 +13,14 @@ import {
   UseInterceptors,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-fastify/multipart';
-import { ApiBearerAuth, ApiBody, ApiConsumes, ApiOperation, ApiTags } from '@nestjs/swagger';
+import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { Throttle } from '@nestjs/throttler';
 
 import { param } from '@/common/authorization/param.util';
 import { UserPolicy } from '@/common/authorization/policies/user.policy';
 import { UPLOAD } from '@/common/constants/app.constants';
 import { CurrentUser, type CurrentUserPayload } from '@/common/decorators/current-user.decorator';
-import { ApiSuccessResponse } from '@/common/decorators/swagger-response.decorator';
+import { ApiImageUpload, ApiSuccessResponse } from '@/common/decorators/swagger-response.decorator';
 import { createUploadFileFilter, type MemoryUpload } from '@/common/storage/interfaces/upload.interface';
 
 import { UserEntity, UserResourceSchema } from './users.dto';
@@ -46,20 +46,10 @@ export class UsersController {
   @Throttle({ default: { limit: 10, ttl: 60000 } })
   @Post('me/avatar')
   @HttpCode(HttpStatus.OK)
-  @ApiOperation({ summary: '上传头像' })
-  @ApiConsumes('multipart/form-data')
-  @ApiBody({
-    schema: {
-      type: 'object',
-      properties: {
-        file: {
-          type: 'string',
-          format: 'binary',
-          description: '头像图片文件 (PNG/JPEG/WebP, 最大 2MB)',
-        },
-      },
-      required: ['file'],
-    },
+  @ApiImageUpload({
+    summary: '上传头像',
+    fieldName: AVATAR_FIELD_NAME,
+    description: '头像图片文件 (PNG/JPEG/WebP, 最大 2MB)',
   })
   @ApiSuccessResponse(UserResourceSchema, { description: '头像上传成功' })
   @SerializeOptions({ schema: UserResourceSchema })

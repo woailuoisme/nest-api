@@ -12,6 +12,7 @@ import { createMockDrizzleDb } from 'tests/mocks/drizzle.mock';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { Role } from '@/common/constants/roles';
+import { MediaService } from '@/common/media/media.service';
 import { SearchService, SearchSyncService } from '@/common/search';
 import { paginateQuery, paginateSpatieQuery } from '@/database/drizzle/drizzle-pagination';
 import { UserEntity } from '@/features/admin/users/users.dto';
@@ -32,12 +33,17 @@ describe('UsersService (Admin)', () => {
     syncById: ReturnType<typeof vi.fn>;
     remove: ReturnType<typeof vi.fn>;
   };
+  let mediaService: {
+    url: ReturnType<typeof vi.fn>;
+    deleteStored: ReturnType<typeof vi.fn>;
+  };
 
   const mockUser = {
     id: 'user-uuid-1',
     name: '张三',
     email: 'zhangsan@example.com',
     role: 'USER',
+    avatarPath: null,
     avatarUrl: null,
     emailVerified: true,
     createdAt: new Date('2024-01-01'),
@@ -56,6 +62,14 @@ describe('UsersService (Admin)', () => {
       syncById: vi.fn().mockResolvedValue(undefined),
       remove: vi.fn().mockResolvedValue(undefined),
     };
+    mediaService = {
+      url: vi.fn().mockImplementation((path: string) => ({
+        preset: vi.fn().mockReturnValue({
+          build: vi.fn().mockReturnValue(`http://localhost:8080/sig/${path}`),
+        }),
+      })),
+      deleteStored: vi.fn().mockResolvedValue(undefined),
+    };
 
     const module = await Test.createTestingModule({
       providers: [
@@ -63,6 +77,7 @@ describe('UsersService (Admin)', () => {
         { provide: getDrizzleToken(), useValue: db },
         { provide: SearchService, useValue: searchService },
         { provide: SearchSyncService, useValue: searchSyncService },
+        { provide: MediaService, useValue: mediaService },
         {
           provide: PasswordHasher,
           useValue: { hash: vi.fn((plain: string) => Promise.resolve(`hashed:${plain}`)) },
@@ -327,6 +342,15 @@ describe('UsersService (Admin)', () => {
 
       expect(result).toBeUndefined();
       expect(db.delete).toHaveBeenCalled();
+    });
+
+    it('当被删除用户拥有头像时应同时清理物理文件', async () => {
+      db._stubs.findFirstUser.mockResolvedValue({ id: 'user-uuid-1', role: Role.USER });
+      db._stubs.deleteReturning.mockResolvedValue([{ ...mockUser, avatarPath: 'avatars/test.png' }]);
+
+      await usersService.remove(actor, 'user-uuid-1');
+
+      expect(mediaService.deleteStored).toHaveBeenCalledWith('avatars/test.png');
     });
 
     it('用户不存在时应抛出 NotFoundException', async () => {

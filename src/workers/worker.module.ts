@@ -12,7 +12,6 @@ import { createBullModuleConfig, QUEUE_DEFAULT_JOB_OPTIONS } from '@/database/bu
 import { DatabaseModule } from '@/database/drizzle/drizzle.module';
 import { DemoProcessor } from '@/jobs/demo/demo.processor';
 import { MailProcessor } from '@/jobs/mail/mail.processor';
-import { MediaProcessor } from '@/jobs/media/media.processor';
 import { SearchProcessor } from '@/jobs/search/search.processor';
 import { TokenCleanupProcessor } from '@/jobs/token-cleanup/token-cleanup.processor';
 import { SchedulesModule } from '@/schedules/schedules.module';
@@ -40,6 +39,6 @@ import { LoggerModule } from '@/setup/logger/logger.module';
     SearchModule,
     SchedulesModule,
   ],
-  providers: [TokenCleanupProcessor, DemoProcessor, MediaProcessor, SearchProcessor, MailProcessor],
+  providers: [TokenCleanupProcessor, DemoProcessor, SearchProcessor, MailProcessor],
 })
 export class WorkerModule {}

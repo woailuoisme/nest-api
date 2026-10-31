@@ -22,41 +22,32 @@ just type         # tsc --noEmit 类型检查
 just lint         # oxlint 静态检查 (src tests)
 just fix          # oxlint --fix + oxfmt (src tests)
 just fmt          # oxfmt 格式化
-just outline <path> # 查看文件或目录的紧凑 AST 结构大纲
-just check-deprecated # 一键全库扫描已废弃 (@deprecated) 的第三方/原生函数
-just secret-check     # gitleaks 密钥与敏感凭据泄漏静态扫描
-just check        # fix + fmt + type + secret-check + i18n-check (提交前完整检查)
+just secret       # gitleaks 密钥与敏感凭据泄漏扫描
+just check        # 提交前完整检查 (fix + type + secret + i18n)
 just test         # 单元测试
-just test-e2e     # E2E 测试
-just test-cov     # 单测 + 覆盖率
-just test-watch   # 单测 watch 模式
+just watch        # 单测 watch 模式
+just cov          # 单测覆盖率
+just e2e          # E2E 测试
 
 # Drizzle
-just db-gen       # 生成迁移 SQL (drizzle-kit generate)
-just db-migrate   # 应用迁移 (dev)
-just db-deploy    # 应用迁移 (prod)
-just db-seed      # 清空所有表数据 + 灌种子 (保留表结构)
-just db-fresh     # 删表重建 + 重跑迁移 + 灌种子 (破坏性)
-just db-studio    # Drizzle Studio
-just db-reset     # 同 db-fresh (destructive)
+just gen          # 生成迁移 SQL (drizzle-kit generate)
+just migrate      # 应用数据库迁移
+just seed         # 清空所有表数据 + 灌种子 (保留表结构)
+just fresh        # 删表重建 + 重跑迁移 + 灌种子 (破坏性)
+just studio       # Drizzle Studio 可视化管理
 
-# 容器编排与服务 (Docker / Centrifugo)
-just docker-up    # 启动全栈 Docker 容器集群 (API + 附属组件)
-just docker-down  # 停止全栈 Docker 容器集群
-just realtime     # 启动 Centrifugo 独立实时服务容器
-just realtime-health # 检查 Centrifugo 健康状态
-just mail-build   # 编译 MJML 邮件模板为 Handlebars (.hbs)
-just i18n-check   # 校验 zh/en catalog 键、占位符与复数形式对称性
+# 工具与多语言
+just mail         # 编译 MJML 邮件模板为 Handlebars (.hbs)
+just i18n         # 校验 zh/en catalog 键、占位符与复数形式对称性
 
 # CLI (nest-commander)
 just cmd --help           # 查看所有命令 (直接跑 TS 源码)
 just cmd route:list       # 列出所有路由
 just cmd jwt:secret       # 生成 JWT 密钥
 just cmd app:init         # 幂等初始化：密钥 / 数据库迁移 / S3 桶（容器内跳过密钥写入，由部署环境注入）
-just cli --help           # 运行生产构建 CLI (node dist/cli.js)
 ```
 
-运行 TS CLI：`just cmd <command>`，或生产构建 CLI：`just cli <command>`。
+运行 TS CLI：`just cmd <command>`。
 
 ## 目录结构
 
@@ -108,7 +99,6 @@ src/
 ├── jobs/           # 异步任务与队列 (对齐 Laravel app/Jobs)：jobs 契约+生产者 / processor 消费者
 │   ├── demo/           # 演示队列 (demo.jobs.ts, demo.processor.ts)
 │   ├── mail/           # 邮件队列生产者与消费者 (mail.jobs.ts, mail.processor.ts)
-│   ├── media/          # 媒体处理队列 (media.jobs.ts, media.processor.ts)
 │   ├── search/         # 搜索同步队列 (search.jobs.ts, search.processor.ts)
 │   ├── token-cleanup/  # Token 清理队列
 │   └── jobs.module.ts  # @Global 生产者侧（registerQueue + Jobs）

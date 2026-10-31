@@ -1,5 +1,5 @@
 import { applyDecorators, Type } from '@nestjs/common';
-import { ApiExtraModels, ApiResponse, getSchemaPath } from '@nestjs/swagger';
+import { ApiBody, ApiConsumes, ApiExtraModels, ApiOperation, ApiResponse, getSchemaPath } from '@nestjs/swagger';
 import type { z } from 'zod';
 
 import {
@@ -226,6 +226,44 @@ export function ApiErrorResponse(status = 422, description = 'Request failed or 
       status,
       description,
       type: ApiErrorResponseResource,
+    }),
+  );
+}
+
+export interface ApiImageUploadOptions {
+  /** 接口摘要信息（如 '上传头像'） */
+  summary?: string;
+  /** 上传表单字段名称（默认 'file'） */
+  fieldName?: string;
+  /** 上传文件描述文案 */
+  description?: string;
+}
+
+/**
+ * Swagger 图片/文件上传复合装饰器
+ *
+ * 统一声明 multipart/form-data 传输协议、表单 binary 结构与端点摘要。
+ */
+export function ApiImageUpload(options: ApiImageUploadOptions = {}) {
+  const fieldName = options.fieldName ?? 'file';
+  const summary = options.summary ?? '上传文件';
+  const description = options.description ?? '图片文件 (PNG/JPEG/WebP, 最大 2MB)';
+
+  return applyDecorators(
+    ApiOperation({ summary }),
+    ApiConsumes('multipart/form-data'),
+    ApiBody({
+      schema: {
+        type: 'object',
+        properties: {
+          [fieldName]: {
+            type: 'string',
+            format: 'binary',
+            description,
+          },
+        },
+        required: [fieldName],
+      },
     }),
   );
 }

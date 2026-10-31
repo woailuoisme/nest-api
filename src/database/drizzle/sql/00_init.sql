@@ -52,13 +52,6 @@ CREATE TRIGGER trigger_idempotency_keys_updated_at
     FOR EACH ROW
     EXECUTE FUNCTION set_updated_at();
 
--- 多态媒体表 updated_at 自动更新触发器
-DROP TRIGGER IF EXISTS trigger_media_updated_at ON "media";
-CREATE TRIGGER trigger_media_updated_at
-    BEFORE UPDATE ON "media"
-    FOR EACH ROW
-    EXECUTE FUNCTION set_updated_at();
-
 -- 数据库通知表 updated_at 自动更新触发器
 DROP TRIGGER IF EXISTS trigger_notifications_updated_at ON "notifications";
 CREATE TRIGGER trigger_notifications_updated_at

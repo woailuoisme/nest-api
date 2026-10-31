@@ -13,7 +13,7 @@ CREATE TABLE "user" (
 	"name" text NOT NULL,
 	"email" text NOT NULL UNIQUE,
 	"email_verified" boolean DEFAULT false NOT NULL,
-	"image" text,
+	"avatar_path" text,
 	"role" text,
 	"phone_number" text UNIQUE,
 	"phone_number_verified" boolean DEFAULT false,
@@ -77,6 +77,15 @@ CREATE TABLE "otp_codes" (
 	"expires_at" timestamp with time zone NOT NULL
 );
 --> statement-breakpoint
+CREATE TABLE "otp_send_windows" (
+	"target" text,
+	"purpose" text,
+	"window_started_at" timestamp with time zone NOT NULL,
+	"send_count" integer DEFAULT 0 NOT NULL,
+	"last_sent_at" timestamp with time zone NOT NULL,
+	CONSTRAINT "otp_send_windows_pkey" PRIMARY KEY("target","purpose")
+);
+--> statement-breakpoint
 CREATE TABLE "refresh_tokens" (
 	"id" text PRIMARY KEY,
 	"family_id" text NOT NULL,
@@ -104,29 +113,8 @@ CREATE TABLE "idempotency_keys" (
 	"key" text NOT NULL,
 	"fingerprint" text NOT NULL,
 	"owner" text,
-	"response" jsonb,
+	"response" json,
 	"expires_at" bigint NOT NULL,
-	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
-	"updated_at" timestamp with time zone DEFAULT now() NOT NULL
-);
---> statement-breakpoint
-CREATE TABLE "media" (
-	"id" bigint PRIMARY KEY GENERATED ALWAYS AS IDENTITY (sequence name "media_id_seq" INCREMENT BY 1 MINVALUE 1 MAXVALUE 9223372036854775807 START WITH 1 CACHE 1),
-	"uuid" uuid DEFAULT uuidv7() NOT NULL,
-	"model_type" varchar(255) NOT NULL,
-	"model_id" uuid NOT NULL,
-	"collection_name" varchar(255) DEFAULT 'default' NOT NULL,
-	"name" varchar(255) NOT NULL,
-	"file_name" varchar(255) NOT NULL,
-	"mime_type" varchar(255),
-	"disk" varchar(50) DEFAULT 'local' NOT NULL,
-	"conversions_disk" varchar(50),
-	"size" bigint NOT NULL,
-	"manipulations" jsonb DEFAULT '{}' NOT NULL,
-	"custom_properties" jsonb DEFAULT '{}' NOT NULL,
-	"generated_conversions" jsonb DEFAULT '{}' NOT NULL,
-	"responsive_images" jsonb DEFAULT '{}' NOT NULL,
-	"order_column" integer,
 	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
 	"updated_at" timestamp with time zone DEFAULT now() NOT NULL
 );
@@ -151,15 +139,13 @@ CREATE INDEX "mfa_failures_user_id_failed_at_idx" ON "mfa_failures" ("user_id","
 CREATE INDEX "mfa_failures_failed_at_idx" ON "mfa_failures" ("failed_at");--> statement-breakpoint
 CREATE UNIQUE INDEX "otp_codes_target_purpose_uidx" ON "otp_codes" ("target","purpose");--> statement-breakpoint
 CREATE INDEX "otp_codes_expires_at_idx" ON "otp_codes" ("expires_at");--> statement-breakpoint
+CREATE INDEX "otp_send_windows_window_started_at_idx" ON "otp_send_windows" ("window_started_at");--> statement-breakpoint
 CREATE INDEX "refresh_tokens_family_id_idx" ON "refresh_tokens" ("family_id");--> statement-breakpoint
 CREATE INDEX "refresh_tokens_user_id_idx" ON "refresh_tokens" ("user_id");--> statement-breakpoint
 CREATE INDEX "refresh_tokens_family_expires_at_idx" ON "refresh_tokens" ("family_expires_at");--> statement-breakpoint
 CREATE INDEX "sessions_user_id_idx" ON "sessions" ("user_id");--> statement-breakpoint
 CREATE INDEX "sessions_expires_at_idx" ON "sessions" ("expires_at");--> statement-breakpoint
 CREATE INDEX "idempotency_keys_expires_at_idx" ON "idempotency_keys" ("expires_at");--> statement-breakpoint
-CREATE UNIQUE INDEX "media_uuid_unique_idx" ON "media" ("uuid");--> statement-breakpoint
-CREATE INDEX "media_model_collection_idx" ON "media" ("model_type","model_id","collection_name");--> statement-breakpoint
-CREATE INDEX "media_model_order_idx" ON "media" ("model_type","model_id","order_column");--> statement-breakpoint
 CREATE INDEX "notifications_notifiable_created_at_idx" ON "notifications" ("notifiable_type","notifiable_id","created_at" DESC NULLS LAST);--> statement-breakpoint
 CREATE INDEX "notifications_unread_idx" ON "notifications" ("notifiable_type","notifiable_id") WHERE ("read_at" is null);--> statement-breakpoint
 ALTER TABLE "account" ADD CONSTRAINT "account_user_id_user_id_fkey" FOREIGN KEY ("user_id") REFERENCES "user"("id") ON DELETE CASCADE;

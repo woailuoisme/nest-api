@@ -75,44 +75,22 @@ export interface MediaSaveOptions {
   naming?: NamingStrategyType | NamingStrategyFn;
   /** 指定存储磁盘 (如 'local', 's3') */
   disk?: string;
-  /** 是否自动依据 EXIF 旋转校正并优化图片，默认 true */
-  optimize?: boolean;
-  /** 是否将主图自动转换为 WebP 格式，默认 false */
-  convertToWebp?: boolean;
-  /** WebP 转换质量 (1-100)，默认 80 */
-  webpQuality?: number;
-  /** 缩略图与衍生规格定义字典 (如 { thumb: { width: 150, height: 150 }, medium: { width: 600 } }) */
-  variants?: Record<string, ImageResizeOptions>;
-  /** 是否启用 BullMQ 队列异步处理多规格变体。未传时遵从环境变量 MEDIA_QUEUE_ENABLED (默认 true) */
-  asyncQueue?: boolean;
-}
-
-/** 媒体单项存储结果（含是否新生成标记与就绪状态，保障去重安全回滚与异步响应） */
-export interface MediaVariantResult extends UploadResult {
-  /** 是否为本次操作新建的物理文件（若 hash 命中已有文件则为 false） */
-  isNew?: boolean;
-  /** 变体就绪状态：'ready' (同步生成完毕) | 'pending' (已进入 BullMQ 队列后台生成中) */
-  status?: 'ready' | 'pending';
-  /** 后台任务 ID (若进入异步队列处理) */
-  jobId?: string;
 }
 
 /** 媒体上传最终返回结果 */
 export interface MediaUploadResult extends UploadResult {
   /** 是否为本次操作新建的物理文件（若 hash 命中已有文件则为 false，防止补偿回滚误删） */
   isNew?: boolean;
-  /** 多规格缩略图与衍生文件字典映射 (如 { thumb: { path, url, isNew }, medium: { path, url, isNew } }) */
-  variants?: Record<string, MediaVariantResult>;
   /** 图像元数据 (若上传文件为图像) */
   metadata?: ImageMetadata;
 }
 
-/** 事务补偿清理选项 */
+/** 事务补偿清理选项（纯相对路径，无脆弱 URL 反解） */
 export interface MediaCleanupOptions {
-  /** 单个旧文件 URL（快捷传参） */
-  oldUrl?: string | null;
-  /** 多个旧文件 URL 列表 */
-  oldUrls?: (string | null | undefined)[];
+  /** 单个旧文件相对存储路径（快捷传参） */
+  oldPath?: string | null;
+  /** 多个旧文件相对存储路径列表 */
+  oldPaths?: (string | null | undefined)[];
 }
 
 /** 二维码持久化存储选项 */

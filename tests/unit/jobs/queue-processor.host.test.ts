@@ -5,7 +5,6 @@ import { describe, expect, it, vi } from 'vitest';
 
 import { QUEUE_DEFAULT_JOB_OPTIONS } from '@/database/bull.config';
 import { DemoProcessor } from '@/jobs/demo/demo.processor';
-import { MediaProcessor } from '@/jobs/media/media.processor';
 import { QueueProcessorHost } from '@/jobs/queue-processor.host';
 import { SearchProcessor } from '@/jobs/search/search.processor';
 import { TokenCleanupProcessor } from '@/jobs/token-cleanup/token-cleanup.processor';
@@ -20,7 +19,7 @@ class ProbeProcessor extends QueueProcessorHost {
 
 describe('QueueProcessorHost — BullMQ 事件兜底', () => {
   it('全部 processor 都应继承统一基类（保证 error 事件始终有监听）', () => {
-    for (const processor of [DemoProcessor, MediaProcessor, SearchProcessor, TokenCleanupProcessor]) {
+    for (const processor of [DemoProcessor, SearchProcessor, TokenCleanupProcessor]) {
       expect(Object.getPrototypeOf(processor.prototype)).toBe(QueueProcessorHost.prototype);
     }
   });

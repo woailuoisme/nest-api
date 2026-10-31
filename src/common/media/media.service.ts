@@ -3,7 +3,6 @@ import { extname } from 'node:path';
 import { BadRequestException, Injectable, Logger, Optional } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import type { StorageDisk } from '@nestjs/storage';
-import { isEmptyObject } from 'es-toolkit';
 
 import {
   getUploadContent,
@@ -12,7 +11,6 @@ import {
   type UploadedFile,
 } from '@/common/storage/interfaces/upload.interface';
 import { StorageService } from '@/common/storage/storage.service';
-import { MediaJobs } from '@/jobs/media/media.jobs';
 
 import { ImgproxyBuilder } from './imgproxy/imgproxy-builder';
 import { ImgproxyService } from './imgproxy/imgproxy.service';
@@ -21,7 +19,6 @@ import type {
   MediaCleanupOptions,
   MediaSaveOptions,
   MediaUploadResult,
-  MediaVariantResult,
   QrCodeOptions,
   QrCodeSaveOptions,
   UploadResult,
@@ -34,11 +31,11 @@ import { buildMediaPath } from './strategies/naming.strategy';
 /**
  * 统一通用媒体处理与存储门面 (MediaService Facade)
  *
- * 在底层基础设施之上提供聚合门面：
- * 1. 存储与多格式自适应（流式与内存、本地与 S3）；
- * 2. imgproxy JIT 动态图像生成与签名安全构建器 (mediaService.url)；
+ * 遵循极简无冗余设计：
+ * 1. 物理存储原图（Master Asset），不耗费 API Node 进程算力预切图或同步转码；
+ * 2. imgproxy JIT 动态图像处理与签名构建 (mediaService.url)；
  * 3. 图像快速元数据解析（委托纯 JS ImageProcessor）；
- * 4. 事务性自动补偿与防孤儿屏障（委托 MediaCompensationManager）；
+ * 4. 纯相对路径两阶段事务补偿（委托 MediaCompensationManager）；
  * 5. 二维码生成、SVG 渲染与矢量合成（委托 QrCodeProcessor）。
  */
 @Injectable()
@@ -56,7 +53,6 @@ export class MediaService {
     @Optional() compensationManager?: MediaCompensationManager,
     @Optional() imgproxyService?: ImgproxyService,
     @Optional() configService?: ConfigService,
-    @Optional() private readonly mediaJobs?: MediaJobs,
   ) {
     this.img = imageProcessor ?? new ImageProcessor();
     this.qr = qrCodeProcessor ?? new QrCodeProcessor(storage);
@@ -70,8 +66,8 @@ export class MediaService {
    * @param sourcePath 存储文件相对路径（如 avatars/20260820/uuid.png）
    * @example
    * ```ts
-   * const avatarUrl = mediaService.url(path).preset('avatar').webp().build();
-   * const thumbUrl = mediaService.url(path).resize({ width: 300, height: 300 }).webp().build();
+   * const avatarUrl = mediaService.url(user.avatarPath).preset('avatar').build();
+   * const thumbUrl = mediaService.url(filePath).resize({ width: 300, height: 300 }).webp().build();
    * ```
    */
   url(sourcePath: string): ImgproxyBuilder {
@@ -80,7 +76,7 @@ export class MediaService {
 
   /**
    * 存储单个上传文件，自适应流式与内存模式。
-   * 保存原始主图（Master Asset），元数据同步解析。若指定了 variants，即时返回 imgproxy 签名 JIT URL。
+   * 保存原始主图（Master Asset），元数据同步解析。图片转码与尺寸缩放交由 imgproxy JIT 动态按需处理。
    */
   async save(file: UploadedFile, opts?: MediaSaveOptions): Promise<MediaUploadResult> {
     const disk = this.storage.disk(opts?.disk);
@@ -101,8 +97,7 @@ export class MediaService {
         try {
           return await this.persistToDisk(disk, path, content, file.mimetype, newlyCreatedPaths);
         } catch (error) {
-          // 流式载荷边写边传，中途失败（如超出 limits.fileSize 的 413）可能已留下部分写入的目标文件 → 幂等清理。
-          // 仅流式载荷需要：内存载荷在传入前已完整持有内容，写入失败不会产生半成品。
+          // 流式载荷边写边传，中途失败（如超出 limits.fileSize 的 413）可能已留下部分写入的目标文件 → 幂等清理
           if (isStreamUpload(file)) {
             await disk.delete(path).catch(() => undefined);
           }
@@ -110,7 +105,7 @@ export class MediaService {
         }
       }
 
-      // 3. 图片文件：提取 Buffer 并快速解析元数据
+      // 2. 图片文件：提取 Buffer 并快速解析元数据
       const rawBuffer = await this.getFileBuffer(file);
       let metadata: ImageMetadata | undefined;
       try {
@@ -120,25 +115,21 @@ export class MediaService {
         return await this.persistToDisk(disk, path, rawBuffer, file.mimetype, newlyCreatedPaths);
       }
 
-      // 4. 生成主图存储路径并写入原图（Master Asset）
+      // 3. 生成主图存储路径并写入原图（Master Asset）
       const mainPath = await buildMediaPath(file, opts, rawBuffer);
       const mainResult = await this.persistToDisk(disk, mainPath, rawBuffer, file.mimetype, newlyCreatedPaths);
-
-      // 5. 生成多规格变体 URL（通过 imgproxy JIT 动态签名生成，零物理磁盘占用）
-      const variants = this.generateVariants(mainPath, opts);
 
       return {
         path: mainPath,
         url: mainResult.url,
         isNew: mainResult.isNew,
-        variants,
         metadata: {
           ...metadata,
           size: rawBuffer.byteLength,
         },
       };
     } catch (error) {
-      // 失败安全回滚：仅删除本次操作新创建的物理文件（不误删已有 deduplicated 共享物理文件）
+      // 失败安全回滚：仅删除本次操作新创建的物理文件
       if (newlyCreatedPaths.length > 0) {
         await this.comp.deletePaths(disk, newlyCreatedPaths);
       }
@@ -175,7 +166,7 @@ export class MediaService {
 
   /**
    * 事务性安全媒体存储 — 在业务写入与物理文件间建立自动补偿防孤儿屏障：
-   * 委托 MediaCompensationManager 执行两阶段事务补偿。
+   * 委托 MediaCompensationManager 执行基于纯相对路径的两阶段事务补偿。
    */
   async storeWithCompensation<T>(
     file: UploadedFile,
@@ -183,32 +174,13 @@ export class MediaService {
     onStored: (result: MediaUploadResult) => Promise<T>,
     cleanup?: MediaCleanupOptions,
   ): Promise<T> {
-    return this.comp.executeWithCompensation(
-      this.storage,
-      opts?.disk,
-      () => this.save(file, opts),
-      onStored,
-      cleanup,
-      this.mediaJobs,
-    );
+    return this.comp.executeWithCompensation(this.storage, opts?.disk, () => this.save(file, opts), onStored, cleanup);
   }
 
-  /** 按存储相对路径删除物理文件（幂等 — driver 内部捕获 ENOENT） */
-  async deleteStored(path: string, diskName?: string): Promise<void> {
+  /** 按存储相对路径删除物理文件（支持单路径或多路径，幂等 — driver 内部捕获 ENOENT） */
+  async deleteStored(path: string | readonly string[], diskName?: string): Promise<void> {
     const disk = this.storage.disk(diskName);
     await disk.delete(path);
-  }
-
-  /**
-   * 按公开 URL 删除物理文件 — 支持 Local 与 S3 驱动双向 URL 反解。
-   * 自动将 Local /uploads/... 或 S3 绝对 URL 转换为存储相对路径后幂等删除。
-   */
-  async deleteByUrl(url: string, diskName?: string): Promise<void> {
-    if (!url) return;
-    const path = this.storage.urlToPath(url, diskName);
-    if (path) {
-      await this.deleteStored(path, diskName);
-    }
   }
 
   // ── 图像基础方法（委托 ImageProcessor） ─────────────────────────────────
@@ -262,27 +234,6 @@ export class MediaService {
     if (!exists) newlyCreatedPaths.push(path);
     await disk.put(path, content, { contentType });
     return { path, url: disk.url(path), isNew: !exists };
-  }
-
-  private generateVariants(
-    mainPath: string,
-    opts: MediaSaveOptions | undefined,
-  ): Record<string, MediaVariantResult> | undefined {
-    const variantsConfig = opts?.variants;
-    if (!variantsConfig || isEmptyObject(variantsConfig)) {
-      return undefined;
-    }
-
-    const variants: Record<string, MediaVariantResult> = {};
-    for (const [variantName, variantOpts] of Object.entries(variantsConfig)) {
-      variants[variantName] = {
-        path: mainPath,
-        url: this.imgproxy.url(mainPath).resize(variantOpts).build(),
-        isNew: false,
-        status: 'ready',
-      };
-    }
-    return variants;
   }
 
   /** 读取全量内容：内存载荷直接返回 buffer，流式载荷边读边聚合 */

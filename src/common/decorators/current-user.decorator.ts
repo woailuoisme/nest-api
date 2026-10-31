@@ -7,7 +7,7 @@ export interface CurrentUserPayload {
   email: string;
   name?: string;
   role: Role;
-  image?: string | null;
+  avatarPath?: string | null;
   emailVerified?: boolean;
   banned?: boolean;
 }

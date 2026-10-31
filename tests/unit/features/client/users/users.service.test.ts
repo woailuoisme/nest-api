@@ -21,7 +21,7 @@ describe('UsersService (前端自助面)', () => {
   let mediaService: {
     save: ReturnType<typeof vi.fn>;
     deleteStored: ReturnType<typeof vi.fn>;
-    deleteByUrl: ReturnType<typeof vi.fn>;
+    url: ReturnType<typeof vi.fn>;
     storeWithCompensation: ReturnType<typeof vi.fn>;
   };
 
@@ -30,8 +30,7 @@ describe('UsersService (前端自助面)', () => {
     name: '张三',
     email: 'zhangsan@example.com',
     role: 'USER',
-    image: null,
-    avatarUrl: null,
+    avatarPath: null,
     emailVerified: true,
     createdAt: new Date('2024-01-01'),
     updatedAt: new Date('2024-01-01'),
@@ -43,9 +42,14 @@ describe('UsersService (前端自助面)', () => {
     const saveMock = vi.fn().mockResolvedValue({
       path: 'avatars/20260813/abc.png',
       url: '/uploads/avatars/20260813/abc.png',
+      isNew: true,
     });
     const deleteStoredMock = vi.fn().mockResolvedValue(undefined);
-    const deleteByUrlMock = vi.fn().mockResolvedValue(undefined);
+    const urlMock = vi.fn().mockImplementation((path: string) => ({
+      preset: vi.fn().mockReturnValue({
+        build: vi.fn().mockReturnValue(`http://localhost:8080/sig/${path}`),
+      }),
+    }));
     const storeWithCompensationMock = vi.fn().mockImplementation(async (file, opts, callback, cleanup) => {
       const saved = await saveMock(file, opts);
       let res: unknown;
@@ -55,8 +59,8 @@ describe('UsersService (前端自助面)', () => {
         await deleteStoredMock(saved.path).catch(() => undefined);
         throw err;
       }
-      if (cleanup?.oldUrl) {
-        await deleteByUrlMock(cleanup.oldUrl).catch(() => undefined);
+      if (cleanup?.oldPath) {
+        await deleteStoredMock(cleanup.oldPath).catch(() => undefined);
       }
       return res;
     });
@@ -64,7 +68,7 @@ describe('UsersService (前端自助面)', () => {
     mediaService = {
       save: saveMock,
       deleteStored: deleteStoredMock,
-      deleteByUrl: deleteByUrlMock,
+      url: urlMock,
       storeWithCompensation: storeWithCompensationMock,
     };
 
@@ -89,6 +93,20 @@ describe('UsersService (前端自助面)', () => {
       expect(result.id).toBe('user-uuid-1');
       expect(result).toHaveProperty('name', '张三');
       expect(result).not.toHaveProperty('passwordHash');
+      expect(result.avatarUrl).toBeNull();
+      expect(result.avatarPath).toBeNull();
+    });
+
+    it('存在头像时应使用 imgproxy 生成 avatarUrl', async () => {
+      db._stubs.findFirstUser.mockResolvedValue({
+        ...mockUser,
+        avatarPath: 'avatars/20260813/abc.png',
+      });
+
+      const result = await usersService.findOne('user-uuid-1');
+
+      expect(result.avatarPath).toBe('avatars/20260813/abc.png');
+      expect(result.avatarUrl).toBe('http://localhost:8080/sig/avatars/20260813/abc.png');
     });
 
     it('用户不存在时应抛出 NotFoundException', async () => {
@@ -107,21 +125,20 @@ describe('UsersService (前端自助面)', () => {
       buffer: Buffer.from('png-data'),
       size: 8,
     };
-    const userWithOldAvatar = { ...mockUser, image: '/uploads/avatars/old.png' };
+    const userWithOldAvatar = { ...mockUser, avatarPath: 'avatars/old.png' };
 
-    it('应先预检用户，再存盘更新头像 URL', async () => {
+    it('应先预检用户，再存盘更新 avatarPath 并返回带 imgproxy URL 的实体', async () => {
       db._stubs.findFirstUser.mockResolvedValue(mockUser);
-      db._stubs.updateReturning.mockResolvedValue([{ ...mockUser, image: '/uploads/avatars/20260813/abc.png' }]);
+      db._stubs.updateReturning.mockResolvedValue([{ ...mockUser, avatarPath: 'avatars/20260813/abc.png' }]);
 
       const result = await usersService.updateAvatar('user-uuid-1', avatarFile);
 
       expect(db._stubs.findFirstUser).toHaveBeenCalled();
       expect(mediaService.save).toHaveBeenCalledWith(avatarFile, {
         prefix: 'avatars',
-        convertToWebp: true,
-        webpQuality: 85,
       });
-      expect(result.image).toBe('/uploads/avatars/20260813/abc.png');
+      expect(result.avatarPath).toBe('avatars/20260813/abc.png');
+      expect(result.avatarUrl).toBe('http://localhost:8080/sig/avatars/20260813/abc.png');
     });
 
     it('预检用户不存在时应抛 NotFoundException，不触盘', async () => {
@@ -139,24 +156,22 @@ describe('UsersService (前端自助面)', () => {
       expect(mediaService.deleteStored).toHaveBeenCalledWith('avatars/20260813/abc.png');
     });
 
-    it('更新成功后应删除旧头像', async () => {
+    it('更新成功后应使用相对路径删除旧头像', async () => {
       db._stubs.findFirstUser.mockResolvedValue(userWithOldAvatar);
-      db._stubs.updateReturning.mockResolvedValue([
-        { ...userWithOldAvatar, image: '/uploads/avatars/20260813/abc.png' },
-      ]);
+      db._stubs.updateReturning.mockResolvedValue([{ ...userWithOldAvatar, avatarPath: 'avatars/20260813/abc.png' }]);
 
       await usersService.updateAvatar('user-uuid-1', avatarFile);
 
-      expect(mediaService.deleteByUrl).toHaveBeenCalledWith('/uploads/avatars/old.png');
+      expect(mediaService.deleteStored).toHaveBeenCalledWith('avatars/old.png');
     });
 
     it('无旧头像时不触发删除', async () => {
       db._stubs.findFirstUser.mockResolvedValue(mockUser);
-      db._stubs.updateReturning.mockResolvedValue([{ ...mockUser, image: '/uploads/avatars/20260813/abc.png' }]);
+      db._stubs.updateReturning.mockResolvedValue([{ ...mockUser, avatarPath: 'avatars/20260813/abc.png' }]);
 
       await usersService.updateAvatar('user-uuid-1', avatarFile);
 
-      expect(mediaService.deleteByUrl).not.toHaveBeenCalled();
+      expect(mediaService.deleteStored).not.toHaveBeenCalledWith('avatars/old.png');
     });
   });
 });

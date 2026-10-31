@@ -17,8 +17,8 @@ export const UserResourceSchema = z.object({
   name: z.string().describe('用户名'),
   email: z.string().describe('邮箱'),
   role: z.enum(Role).describe('角色'),
-  image: z.string().nullable().describe('头像URL'),
-  avatarUrl: z.string().nullable().describe('头像URL (别名)'),
+  avatarPath: z.string().nullable().describe('头像相对存储路径'),
+  avatarUrl: z.string().nullable().describe('头像优化访问URL (imgproxy 动态生成)'),
   emailVerified: z.boolean().describe('邮箱是否已验证'),
   createdAt: z.date().describe('创建时间'),
   updatedAt: z.date().describe('更新时间'),
@@ -43,10 +43,10 @@ export class UserEntity {
   @ApiProperty({ enum: Role, example: Role.USER, description: '角色' })
   role: Role;
 
-  @ApiProperty({ example: 'http://example.com/avatar.jpg', nullable: true, description: '头像URL' })
-  image: string | null;
+  @ApiProperty({ example: 'avatars/20261031/uuid.png', nullable: true, description: '头像相对存储路径' })
+  avatarPath: string | null;
 
-  @ApiProperty({ example: 'http://example.com/avatar.jpg', nullable: true, description: '头像URL (别名)' })
+  @ApiProperty({ example: 'http://localhost:8080/signature/plain/...', nullable: true, description: '头像优化访问URL' })
   avatarUrl: string | null;
 
   @ApiProperty({ example: true, description: '邮箱是否已验证' })
@@ -61,7 +61,7 @@ export class UserEntity {
   constructor(
     partial: Omit<Partial<UserEntity>, 'role' | 'createdAt' | 'updatedAt'> & {
       role?: Role | string | null;
-      image?: string | null;
+      avatarPath?: string | null;
       avatarUrl?: string | null;
       emailVerifiedAt?: Date | null;
       createdAt?: Date | number | string | null;
@@ -76,8 +76,8 @@ export class UserEntity {
     if (partial.updatedAt) {
       this.updatedAt = toDate(partial.updatedAt);
     }
-    this.avatarUrl = partial.avatarUrl ?? partial.image ?? null;
-    this.image = partial.image ?? partial.avatarUrl ?? null;
+    this.avatarPath = partial.avatarPath ?? null;
+    this.avatarUrl = partial.avatarUrl ?? null;
     this.emailVerified = partial.emailVerified ?? Boolean(partial.emailVerifiedAt);
   }
 }

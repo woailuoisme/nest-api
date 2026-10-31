@@ -75,8 +75,8 @@ Meilisearch 检索、imgproxy 媒体处理、幂等与弹性治理，以及 Vite
 cp .env.example .env
 bun install
 
-just db-migrate          # 应用迁移
-just db-seed             # 灌入种子数据（全新库可用 just db-fresh 一步重建）
+just migrate          # 应用迁移
+just seed             # 灌入种子数据（全新库可用 just fresh 一步重建）
 
 just dev                 # API + Worker 双进程，SWC 热更新
 ```
@@ -110,7 +110,7 @@ docker compose up -d     # 仅 api + worker；依赖组件见 deploy/ 各自编�
 
 ## 认证与权限
 
-执行 `just db-seed` 后装配初始账号：
+执行 `just seed` 后装配初始账号：
 
 | 角色          | 邮箱                   | 密码             | 说明                              |
 | :------------ | :--------------------- | :--------------- | :-------------------------------- |
@@ -138,26 +138,23 @@ just dev                  # API + Worker 双进程热更新
 just build                # 生产构建（SWC → dist/）
 just serve                # 运行已构建的 HTTP API
 just worker               # 运行已构建的队列 Worker
-just cli <命令>           # 运行已构建 CLI（node dist/cli.js）
 
 # 质量门禁
-just check                # fix + fmt + type + secret-check + i18n-check
+just check                # 提交前完整检查 (fix + type + secret + i18n)
 just type / lint / fix / fmt
-just secret-check         # gitleaks 凭据扫描
-just check-deprecated     # 扫描 @deprecated 依赖与符号
-just outline <path>       # 紧凑 AST 结构大纲
+just secret               # gitleaks 凭据扫描
 
 # 测试
-just test / test-watch / test-cov / test-e2e
+just test / watch / cov / e2e
 
-# 数据库与认证
-just db-gen / db-migrate / db-seed / db-fresh / db-studio
+# 数据库
+just gen / migrate / seed / fresh / studio
 
-# 代码与资产生成
-just i18n-check              # catalog 键 / 占位符 / 复数形式对称性
-just mail-build              # MJML → Handlebars 邮件模板
-just cmd <命令>              # 直接运行 TS CLI（如 just cmd route:list）
-just cmd app:init            # 幂等初始化：密钥 / 迁移 / S3 桶
+# 工具与多语言
+just i18n                 # catalog 键 / 占位符 / 复数形式对称性
+just mail                 # MJML → Handlebars 邮件模板
+just cmd <命令>           # 直接运行 TS CLI（如 just cmd route:list）
+just cmd app:init         # 幂等初始化：密钥 / 迁移 / S3 桶
 ```
 
 ---

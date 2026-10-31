@@ -2,7 +2,7 @@
   "type": "base",
   "version": "9",
   "dialect": "postgres",
-  "id": "578f1541-edef-4967-bf5f-f86750203553",
+  "id": "b8874054-c83d-4059-8182-9ea40c51c1fe",
   "prevIds": [
     "00000000-0000-0000-0000-000000000000"
   ],
@@ -166,6 +166,25 @@
       "statementTarget": [
         "table",
         "public",
+        "otp_send_windows"
+      ],
+      "writes": [
+        "s|tbl|public.otp_send_windows",
+        "n|tbl|public.otp_send_windows",
+        "e|tbl|public.otp_send_windows",
+        "n|rel|public.otp_send_windows",
+        "n|type|public.otp_send_windows",
+        "n|rel|public.otp_send_windows_pkey"
+      ],
+      "reads": [
+        "n|sch|public"
+      ]
+    },
+    {
+      "statementType": "create_table",
+      "statementTarget": [
+        "table",
+        "public",
         "refresh_tokens"
       ],
       "writes": [
@@ -213,25 +232,6 @@
         "n|rel|public.idempotency_keys",
         "n|type|public.idempotency_keys",
         "n|rel|public.idempotency_keys_pkey"
-      ],
-      "reads": [
-        "n|sch|public"
-      ]
-    },
-    {
-      "statementType": "create_table",
-      "statementTarget": [
-        "table",
-        "public",
-        "media"
-      ],
-      "writes": [
-        "s|tbl|public.media",
-        "n|tbl|public.media",
-        "e|tbl|public.media",
-        "n|rel|public.media",
-        "n|type|public.media",
-        "n|rel|public.media_pkey"
       ],
       "reads": [
         "n|sch|public"
@@ -444,6 +444,26 @@
       "statementTarget": [
         "index",
         "public",
+        "otp_send_windows",
+        "otp_send_windows_window_started_at_idx"
+      ],
+      "writes": [
+        "s|idx|public.otp_send_windows_window_started_at_idx",
+        "n|idx|public.otp_send_windows_window_started_at_idx",
+        "e|idx|public.otp_send_windows_window_started_at_idx",
+        "n|rel|public.otp_send_windows_window_started_at_idx"
+      ],
+      "reads": [
+        "n|tbl|public.otp_send_windows",
+        "n|sch|public",
+        "n|col|public.otp_send_windows.window_started_at"
+      ]
+    },
+    {
+      "statementType": "create_index",
+      "statementTarget": [
+        "index",
+        "public",
         "refresh_tokens",
         "refresh_tokens_family_id_idx"
       ],
@@ -564,70 +584,6 @@
       "statementTarget": [
         "index",
         "public",
-        "media",
-        "media_uuid_unique_idx"
-      ],
-      "writes": [
-        "s|idx|public.media_uuid_unique_idx",
-        "n|idx|public.media_uuid_unique_idx",
-        "e|idx|public.media_uuid_unique_idx",
-        "n|rel|public.media_uuid_unique_idx"
-      ],
-      "reads": [
-        "n|tbl|public.media",
-        "n|sch|public",
-        "n|col|public.media.uuid"
-      ]
-    },
-    {
-      "statementType": "create_index",
-      "statementTarget": [
-        "index",
-        "public",
-        "media",
-        "media_model_collection_idx"
-      ],
-      "writes": [
-        "s|idx|public.media_model_collection_idx",
-        "n|idx|public.media_model_collection_idx",
-        "e|idx|public.media_model_collection_idx",
-        "n|rel|public.media_model_collection_idx"
-      ],
-      "reads": [
-        "n|tbl|public.media",
-        "n|sch|public",
-        "n|col|public.media.model_type",
-        "n|col|public.media.model_id",
-        "n|col|public.media.collection_name"
-      ]
-    },
-    {
-      "statementType": "create_index",
-      "statementTarget": [
-        "index",
-        "public",
-        "media",
-        "media_model_order_idx"
-      ],
-      "writes": [
-        "s|idx|public.media_model_order_idx",
-        "n|idx|public.media_model_order_idx",
-        "e|idx|public.media_model_order_idx",
-        "n|rel|public.media_model_order_idx"
-      ],
-      "reads": [
-        "n|tbl|public.media",
-        "n|sch|public",
-        "n|col|public.media.model_type",
-        "n|col|public.media.model_id",
-        "n|col|public.media.order_column"
-      ]
-    },
-    {
-      "statementType": "create_index",
-      "statementTarget": [
-        "index",
-        "public",
         "notifications",
         "notifications_notifiable_created_at_idx"
       ],
@@ -741,6 +697,12 @@
     },
     {
       "schema": "public",
+      "name": "otp_send_windows",
+      "isRlsEnabled": false,
+      "entityType": "tables"
+    },
+    {
+      "schema": "public",
       "name": "refresh_tokens",
       "isRlsEnabled": false,
       "entityType": "tables"
@@ -754,12 +716,6 @@
     {
       "schema": "public",
       "name": "idempotency_keys",
-      "isRlsEnabled": false,
-      "entityType": "tables"
-    },
-    {
-      "schema": "public",
-      "name": "media",
       "isRlsEnabled": false,
       "entityType": "tables"
     },
@@ -915,7 +871,7 @@
     {
       "schema": "public",
       "table": "user",
-      "name": "image",
+      "name": "avatar_path",
       "type": "text",
       "typeSchema": null,
       "notNull": false,
@@ -1482,6 +1438,71 @@
     },
     {
       "schema": "public",
+      "table": "otp_send_windows",
+      "name": "target",
+      "type": "text",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "entityType": "columns"
+    },
+    {
+      "schema": "public",
+      "table": "otp_send_windows",
+      "name": "purpose",
+      "type": "text",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "entityType": "columns"
+    },
+    {
+      "schema": "public",
+      "table": "otp_send_windows",
+      "name": "window_started_at",
+      "type": "timestamp with time zone",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "entityType": "columns"
+    },
+    {
+      "schema": "public",
+      "table": "otp_send_windows",
+      "name": "send_count",
+      "type": "integer",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": "0",
+      "generated": null,
+      "identity": null,
+      "entityType": "columns"
+    },
+    {
+      "schema": "public",
+      "table": "otp_send_windows",
+      "name": "last_sent_at",
+      "type": "timestamp with time zone",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "entityType": "columns"
+    },
+    {
+      "schema": "public",
       "table": "refresh_tokens",
       "name": "id",
       "type": "text",
@@ -1744,7 +1765,7 @@
       "schema": "public",
       "table": "idempotency_keys",
       "name": "response",
-      "type": "jsonb",
+      "type": "json",
       "typeSchema": null,
       "notNull": false,
       "dimensions": 0,
@@ -1782,249 +1803,6 @@
     {
       "schema": "public",
       "table": "idempotency_keys",
-      "name": "updated_at",
-      "type": "timestamp with time zone",
-      "typeSchema": null,
-      "notNull": true,
-      "dimensions": 0,
-      "default": "now()",
-      "generated": null,
-      "identity": null,
-      "entityType": "columns"
-    },
-    {
-      "schema": "public",
-      "table": "media",
-      "name": "id",
-      "type": "bigint",
-      "typeSchema": null,
-      "notNull": true,
-      "dimensions": 0,
-      "default": null,
-      "generated": null,
-      "identity": {
-        "type": "always",
-        "name": "media_id_seq",
-        "increment": "1",
-        "startWith": "1",
-        "minValue": "1",
-        "maxValue": "9223372036854775807",
-        "cache": 1,
-        "cycle": false
-      },
-      "entityType": "columns"
-    },
-    {
-      "schema": "public",
-      "table": "media",
-      "name": "uuid",
-      "type": "uuid",
-      "typeSchema": null,
-      "notNull": true,
-      "dimensions": 0,
-      "default": "uuidv7()",
-      "generated": null,
-      "identity": null,
-      "entityType": "columns"
-    },
-    {
-      "schema": "public",
-      "table": "media",
-      "name": "model_type",
-      "type": "varchar(255)",
-      "typeSchema": null,
-      "notNull": true,
-      "dimensions": 0,
-      "default": null,
-      "generated": null,
-      "identity": null,
-      "entityType": "columns"
-    },
-    {
-      "schema": "public",
-      "table": "media",
-      "name": "model_id",
-      "type": "uuid",
-      "typeSchema": null,
-      "notNull": true,
-      "dimensions": 0,
-      "default": null,
-      "generated": null,
-      "identity": null,
-      "entityType": "columns"
-    },
-    {
-      "schema": "public",
-      "table": "media",
-      "name": "collection_name",
-      "type": "varchar(255)",
-      "typeSchema": null,
-      "notNull": true,
-      "dimensions": 0,
-      "default": "'default'",
-      "generated": null,
-      "identity": null,
-      "entityType": "columns"
-    },
-    {
-      "schema": "public",
-      "table": "media",
-      "name": "name",
-      "type": "varchar(255)",
-      "typeSchema": null,
-      "notNull": true,
-      "dimensions": 0,
-      "default": null,
-      "generated": null,
-      "identity": null,
-      "entityType": "columns"
-    },
-    {
-      "schema": "public",
-      "table": "media",
-      "name": "file_name",
-      "type": "varchar(255)",
-      "typeSchema": null,
-      "notNull": true,
-      "dimensions": 0,
-      "default": null,
-      "generated": null,
-      "identity": null,
-      "entityType": "columns"
-    },
-    {
-      "schema": "public",
-      "table": "media",
-      "name": "mime_type",
-      "type": "varchar(255)",
-      "typeSchema": null,
-      "notNull": false,
-      "dimensions": 0,
-      "default": null,
-      "generated": null,
-      "identity": null,
-      "entityType": "columns"
-    },
-    {
-      "schema": "public",
-      "table": "media",
-      "name": "disk",
-      "type": "varchar(50)",
-      "typeSchema": null,
-      "notNull": true,
-      "dimensions": 0,
-      "default": "'local'",
-      "generated": null,
-      "identity": null,
-      "entityType": "columns"
-    },
-    {
-      "schema": "public",
-      "table": "media",
-      "name": "conversions_disk",
-      "type": "varchar(50)",
-      "typeSchema": null,
-      "notNull": false,
-      "dimensions": 0,
-      "default": null,
-      "generated": null,
-      "identity": null,
-      "entityType": "columns"
-    },
-    {
-      "schema": "public",
-      "table": "media",
-      "name": "size",
-      "type": "bigint",
-      "typeSchema": null,
-      "notNull": true,
-      "dimensions": 0,
-      "default": null,
-      "generated": null,
-      "identity": null,
-      "entityType": "columns"
-    },
-    {
-      "schema": "public",
-      "table": "media",
-      "name": "manipulations",
-      "type": "jsonb",
-      "typeSchema": null,
-      "notNull": true,
-      "dimensions": 0,
-      "default": "'{}'",
-      "generated": null,
-      "identity": null,
-      "entityType": "columns"
-    },
-    {
-      "schema": "public",
-      "table": "media",
-      "name": "custom_properties",
-      "type": "jsonb",
-      "typeSchema": null,
-      "notNull": true,
-      "dimensions": 0,
-      "default": "'{}'",
-      "generated": null,
-      "identity": null,
-      "entityType": "columns"
-    },
-    {
-      "schema": "public",
-      "table": "media",
-      "name": "generated_conversions",
-      "type": "jsonb",
-      "typeSchema": null,
-      "notNull": true,
-      "dimensions": 0,
-      "default": "'{}'",
-      "generated": null,
-      "identity": null,
-      "entityType": "columns"
-    },
-    {
-      "schema": "public",
-      "table": "media",
-      "name": "responsive_images",
-      "type": "jsonb",
-      "typeSchema": null,
-      "notNull": true,
-      "dimensions": 0,
-      "default": "'{}'",
-      "generated": null,
-      "identity": null,
-      "entityType": "columns"
-    },
-    {
-      "schema": "public",
-      "table": "media",
-      "name": "order_column",
-      "type": "integer",
-      "typeSchema": null,
-      "notNull": false,
-      "dimensions": 0,
-      "default": null,
-      "generated": null,
-      "identity": null,
-      "entityType": "columns"
-    },
-    {
-      "schema": "public",
-      "table": "media",
-      "name": "created_at",
-      "type": "timestamp with time zone",
-      "typeSchema": null,
-      "notNull": true,
-      "dimensions": 0,
-      "default": "now()",
-      "generated": null,
-      "identity": null,
-      "entityType": "columns"
-    },
-    {
-      "schema": "public",
-      "table": "media",
       "name": "updated_at",
       "type": "timestamp with time zone",
       "typeSchema": null,
@@ -2351,6 +2129,27 @@
     },
     {
       "schema": "public",
+      "table": "otp_send_windows",
+      "name": "otp_send_windows_window_started_at_idx",
+      "nameExplicit": true,
+      "columns": [
+        {
+          "value": "window_started_at",
+          "isExpression": false,
+          "asc": true,
+          "nullsFirst": false,
+          "opclass": null
+        }
+      ],
+      "isUnique": false,
+      "where": null,
+      "with": "",
+      "method": "btree",
+      "concurrently": false,
+      "entityType": "indexes"
+    },
+    {
+      "schema": "public",
       "table": "refresh_tokens",
       "name": "refresh_tokens_family_id_idx",
       "nameExplicit": true,
@@ -2477,97 +2276,6 @@
     },
     {
       "schema": "public",
-      "table": "media",
-      "name": "media_uuid_unique_idx",
-      "nameExplicit": true,
-      "columns": [
-        {
-          "value": "uuid",
-          "isExpression": false,
-          "asc": true,
-          "nullsFirst": false,
-          "opclass": null
-        }
-      ],
-      "isUnique": true,
-      "where": null,
-      "with": "",
-      "method": "btree",
-      "concurrently": false,
-      "entityType": "indexes"
-    },
-    {
-      "schema": "public",
-      "table": "media",
-      "name": "media_model_collection_idx",
-      "nameExplicit": true,
-      "columns": [
-        {
-          "value": "model_type",
-          "isExpression": false,
-          "asc": true,
-          "nullsFirst": false,
-          "opclass": null
-        },
-        {
-          "value": "model_id",
-          "isExpression": false,
-          "asc": true,
-          "nullsFirst": false,
-          "opclass": null
-        },
-        {
-          "value": "collection_name",
-          "isExpression": false,
-          "asc": true,
-          "nullsFirst": false,
-          "opclass": null
-        }
-      ],
-      "isUnique": false,
-      "where": null,
-      "with": "",
-      "method": "btree",
-      "concurrently": false,
-      "entityType": "indexes"
-    },
-    {
-      "schema": "public",
-      "table": "media",
-      "name": "media_model_order_idx",
-      "nameExplicit": true,
-      "columns": [
-        {
-          "value": "model_type",
-          "isExpression": false,
-          "asc": true,
-          "nullsFirst": false,
-          "opclass": null
-        },
-        {
-          "value": "model_id",
-          "isExpression": false,
-          "asc": true,
-          "nullsFirst": false,
-          "opclass": null
-        },
-        {
-          "value": "order_column",
-          "isExpression": false,
-          "asc": true,
-          "nullsFirst": false,
-          "opclass": null
-        }
-      ],
-      "isUnique": false,
-      "where": null,
-      "with": "",
-      "method": "btree",
-      "concurrently": false,
-      "entityType": "indexes"
-    },
-    {
-      "schema": "public",
       "table": "notifications",
       "name": "notifications_notifiable_created_at_idx",
       "nameExplicit": true,
@@ -2653,6 +2361,17 @@
       "columns": [
         "user_id",
         "code_hash"
+      ],
+      "nameExplicit": false,
+      "entityType": "pks"
+    },
+    {
+      "schema": "public",
+      "table": "otp_send_windows",
+      "name": "otp_send_windows_pkey",
+      "columns": [
+        "target",
+        "purpose"
       ],
       "nameExplicit": false,
       "entityType": "pks"
@@ -2753,16 +2472,6 @@
       "name": "idempotency_keys_pkey",
       "columns": [
         "key_hash"
-      ],
-      "nameExplicit": false,
-      "entityType": "pks"
-    },
-    {
-      "schema": "public",
-      "table": "media",
-      "name": "media_pkey",
-      "columns": [
-        "id"
       ],
       "nameExplicit": false,
       "entityType": "pks"

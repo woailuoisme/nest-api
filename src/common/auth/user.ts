@@ -11,7 +11,7 @@ export function toAuthUser(row: UserRow): CurrentUserPayload {
     email: row.email,
     name: row.name,
     role: (row.role as Role | null) ?? Role.USER,
-    image: row.image,
+    avatarPath: row.avatarPath,
     emailVerified: row.emailVerified,
     banned: row.banned ?? false,
   };

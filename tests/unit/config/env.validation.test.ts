@@ -158,7 +158,6 @@ describe('Smart Defaults & Derivations', () => {
     expect(config.FILESYSTEM_DISK).toBe('local');
     expect(config.SCOUT_DRIVER).toBe('noop');
     expect(config.HTTP_TIMEOUT_MS).toBe(15_000);
-    expect(config.MEDIA_QUEUE_ENABLED).toBe(true);
     expect(config.SWAGGER_ENABLED).toBe(true);
   });
 });

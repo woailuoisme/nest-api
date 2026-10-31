@@ -150,7 +150,7 @@ describe('上传链路 (e2e)', () => {
         ConfigModule.forRoot({
           isGlobal: true,
           ignoreEnvFile: true,
-          load: [() => ({ FILESYSTEM_DISK: 'local', STORAGE_LOCAL_ROOT: uploadRoot, MEDIA_QUEUE_ENABLED: false })],
+          load: [() => ({ FILESYSTEM_DISK: 'local', STORAGE_LOCAL_ROOT: uploadRoot })],
         }),
       ],
       controllers: [UploadTestController],

@@ -22,33 +22,33 @@ export class UsersService {
     private readonly mediaService: MediaService,
   ) {}
 
-  async findOne(id: string) {
+  async findOne(id: string): Promise<UserEntity> {
     const foundUser = await this.db.query.user.findFirst({
       where: { id },
     });
     if (!foundUser) {
       throw new NotFoundException('User not found');
     }
-    return new UserEntity(foundUser);
+    return this.toEntity(foundUser);
   }
 
   /**
-   * 原子更新头像 — 委托 MediaService.storeWithCompensation 自动接管存储、WebP 优化与事务补偿：
+   * 原子更新头像 — 委托 MediaService.storeWithCompensation 自动接管存储与事务补偿：
    * 1. 预检用户存在；
-   * 2. WebP 优化转码存盘 + 数据库更新；
-   * 3. 失败自动回滚新写入文件，成功自动回收旧头像（支持 Local 与 S3）。
+   * 2. 流式直存原始主图到 avatars 目录 + 数据库更新 avatar_path 相对路径；
+   * 3. 失败自动回滚新写入文件，成功自动回收旧头像相对路径文件；
+   * 4. 返回组装好 imgproxy JIT 签名 URL 的 UserEntity。
    */
-  async updateAvatar(id: string, file: UploadedFile) {
-    // 复用自助详情查询完成存在性预检（不存在即 404），并取得当前头像用于成功后回收
+  async updateAvatar(id: string, file: UploadedFile): Promise<UserEntity> {
     const current = await this.findOne(id);
 
     return this.mediaService.storeWithCompensation(
       file,
-      { prefix: 'avatars', convertToWebp: true, webpQuality: 85 },
+      { prefix: 'avatars' },
       async (saved) => {
         const [updatedUser] = await this.db
           .update(user)
-          .set({ image: saved.url, updatedAt: new Date() })
+          .set({ avatarPath: saved.path, updatedAt: new Date() })
           .where(eq(user.id, id))
           .returning();
 
@@ -56,9 +56,20 @@ export class UsersService {
           throw new NotFoundException('User not found');
         }
 
-        return new UserEntity(updatedUser);
+        return this.toEntity(updatedUser);
       },
-      { oldUrl: current.image },
+      current.avatarPath ? { oldPath: current.avatarPath } : undefined,
     );
+  }
+
+  /** 将数据库 user 行显式组装为附带 imgproxy 优化 URL 的领域实体 */
+  private toEntity(row: typeof user.$inferSelect): UserEntity {
+    const avatarUrl = row.avatarPath ? this.mediaService.url(row.avatarPath).preset('avatar').build() : null;
+
+    return new UserEntity({
+      ...row,
+      avatarPath: row.avatarPath,
+      avatarUrl,
+    });
   }
 }

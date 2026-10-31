@@ -8,11 +8,9 @@ import { createTestPng } from 'tests/factories/image.factory';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { PATHS } from '@/common/constants/app.constants';
-import { THUMBNAIL_PRESETS } from '@/common/media/interfaces/media.interface';
 import { MediaService } from '@/common/media/media.service';
 import type { UploadedFile } from '@/common/storage/interfaces/upload.interface';
 import { StorageService } from '@/common/storage/storage.service';
-import type { MediaJobs } from '@/jobs/media/media.jobs';
 
 /** 内存模式上传文件工厂（平台原生 UploadedMultipartFile 形状） */
 function memoryImage(buffer: Buffer, originalname = 'test.png', mimetype = 'image/png'): UploadedFile {
@@ -46,7 +44,6 @@ describe('MediaService', () => {
     put: vi.fn().mockResolvedValue({ key: 'stored-path', size: 100 }),
     url: vi.fn((path: string) => `/uploads/${path}`),
     getUrl: vi.fn((path: string) => `/uploads/${path}`),
-    urlToPath: vi.fn((url: string) => (url.startsWith('/uploads/') ? url.slice('/uploads/'.length) : null)),
     exists: vi.fn().mockResolvedValue(false),
     delete: vi.fn().mockResolvedValue(undefined),
   };
@@ -54,14 +51,8 @@ describe('MediaService', () => {
   const configServiceMock = {
     get: vi.fn((key: string, defaultVal?: unknown) => {
       if (key === 'IMGPROXY_URL') return 'imgproxy://a1b2c3d4e5f6:0123456789abcdef@localhost:8080';
-      if (key === 'MEDIA_QUEUE_ENABLED') return false;
       return defaultVal;
     }),
-  };
-
-  const mediaJobsMock = {
-    dispatchGenerateVariants: vi.fn().mockResolvedValue({ id: 'media-job-999' }),
-    removeJob: vi.fn().mockResolvedValue(true),
   };
 
   beforeEach(async () => {
@@ -75,7 +66,6 @@ describe('MediaService', () => {
       undefined,
       undefined,
       configServiceMock as unknown as ConfigService,
-      mediaJobsMock as unknown as MediaJobs,
     );
   });
 
@@ -103,34 +93,6 @@ describe('MediaService', () => {
       expect(storageMock.put).not.toHaveBeenCalled();
     });
 
-    it('生成缩略图与多规格变体 (imgproxy JIT 动态签名模式，零额外磁盘写入)', async () => {
-      const file = memoryImage(testImageBuffer, 'cover.png');
-      const result = await mediaService.save(file, {
-        prefix: 'covers',
-        variants: {
-          thumb: THUMBNAIL_PRESETS.thumb,
-          medium: { width: 200, format: 'webp' },
-        },
-      });
-
-      // 仅主图 1 次 put，变体全为即时签名 URL，零磁盘开销
-      expect(storageMock.put).toHaveBeenCalledTimes(1);
-      expect(result.variants).toBeDefined();
-      expect(result.variants?.thumb).toBeDefined();
-      expect(result.variants?.medium).toBeDefined();
-
-      expect(result.variants?.thumb.status).toBe('ready');
-      expect(result.variants?.thumb.isNew).toBe(false);
-      expect(result.variants?.thumb.path).toBe(result.path);
-      expect(result.variants?.thumb.url).toMatch(/^http:\/\/localhost:8080\//);
-      expect(result.variants?.thumb.url).toContain('rs:fill:150:150');
-
-      expect(result.variants?.medium.status).toBe('ready');
-      expect(result.variants?.medium.url).toMatch(/^http:\/\/localhost:8080\//);
-      expect(result.variants?.medium.url).toContain('rs:fit:200');
-      expect(result.variants?.medium.url).toMatch(/@webp$/);
-    });
-
     it('非图片文件：直接存储，不调用图像处理', async () => {
       const textBuffer = Buffer.from('hello world');
       const file = memoryImage(textBuffer, 'document.pdf', 'application/pdf');
@@ -139,7 +101,6 @@ describe('MediaService', () => {
       expect(storageMock.put).toHaveBeenCalledTimes(1);
       expect(result.path).toMatch(/^docs\/\d{8}\/[0-9a-f-]{36}\.pdf$/);
       expect(result.metadata).toBeUndefined();
-      expect(result.variants).toBeUndefined();
     });
 
     it('流式文件上传：内容被完整消费且不产生中间临时文件', async () => {
@@ -152,7 +113,6 @@ describe('MediaService', () => {
 
       expect(storageMock.put).toHaveBeenCalledTimes(1);
       expect(result.path).toMatch(/^uploads\/\d{8}\/[0-9a-f-]{36}\.png$/);
-      // 平台原生流式载荷由消费方直接读取，不落中间临时文件
       expect((file as { stream: Readable }).stream.readableEnded).toBe(true);
 
       await fs.rm(srcPath, { force: true });
@@ -184,7 +144,7 @@ describe('MediaService', () => {
     });
 
     it('hash 去重模式下若文件已存在，回滚时不删除已有共享文件', async () => {
-      storageMock.exists.mockResolvedValue(true); // 文件已存在
+      storageMock.exists.mockResolvedValue(true);
       storageMock.put.mockRejectedValueOnce(new Error('Transaction Abort'));
 
       const file = memoryImage(testImageBuffer, 'dup.png');
@@ -194,13 +154,12 @@ describe('MediaService', () => {
         }),
       ).rejects.toThrow('Transaction Abort');
 
-      // 已存在的文件不进入 newlyCreatedPaths，不被 delete 删除
       expect(storageMock.delete).not.toHaveBeenCalled();
     });
   });
 
   describe('url() — imgproxy Fluent 构建器门面', () => {
-    it('为存储路径生成合法的 imgproxy 签名 URL', () => {
+    it('为存储相对路径生成合法的 imgproxy 签名 URL', () => {
       const url = mediaService.url('photos/avatar.png').preset('avatar').webp().build();
 
       expect(url).toMatch(/^http:\/\/localhost:8080\/[A-Za-z0-9_-]+\//);
@@ -248,21 +207,19 @@ describe('MediaService', () => {
   });
 
   describe('storeWithCompensation() — 事务性安全存储与自动补偿', () => {
-    it('业务成功时执行单旧文件与多旧文件列表清理', async () => {
+    it('业务成功时执行旧相对路径文件清理', async () => {
       const file = memoryImage(testImageBuffer, 'avatar.png');
-      const onStored = vi.fn().mockResolvedValue({ id: 123, avatarUrl: '/uploads/avatars/new.png' });
+      const onStored = vi.fn().mockResolvedValue({ id: 123, avatarPath: 'avatars/new.png' });
 
-      const result = await mediaService.storeWithCompensation(
-        file,
-        { prefix: 'avatars', variants: { thumb: THUMBNAIL_PRESETS.thumb } },
-        onStored,
-        { oldUrl: '/uploads/avatars/old1.png', oldUrls: ['/uploads/avatars/old2.png', null] },
-      );
+      const result = await mediaService.storeWithCompensation(file, { prefix: 'avatars' }, onStored, {
+        oldPath: 'avatars/old1.png',
+        oldPaths: ['avatars/old2.png', null],
+      });
 
       expect(onStored).toHaveBeenCalledTimes(1);
       expect(storageMock.delete).toHaveBeenCalledWith('avatars/old1.png');
       expect(storageMock.delete).toHaveBeenCalledWith('avatars/old2.png');
-      expect(result).toEqual({ id: 123, avatarUrl: '/uploads/avatars/new.png' });
+      expect(result).toEqual({ id: 123, avatarPath: 'avatars/new.png' });
     });
 
     it('业务异常时自动回滚新写入的主文件', async () => {
@@ -270,12 +227,7 @@ describe('MediaService', () => {
       const onStored = vi.fn().mockRejectedValue(new Error('Database Update Failed'));
 
       await expect(
-        mediaService.storeWithCompensation(
-          file,
-          { prefix: 'avatars', variants: { thumb: THUMBNAIL_PRESETS.thumb } },
-          onStored,
-          { oldUrl: '/uploads/avatars/old.png' },
-        ),
+        mediaService.storeWithCompensation(file, { prefix: 'avatars' }, onStored, { oldPath: 'avatars/old.png' }),
       ).rejects.toThrow('Database Update Failed');
 
       expect(storageMock.delete).toHaveBeenCalled();
@@ -283,7 +235,7 @@ describe('MediaService', () => {
     });
 
     it('去重命中已有文件 (isNew: false) 发生业务异常时不删除共享物理文件', async () => {
-      storageMock.exists.mockResolvedValue(true); // 命中已有去重文件
+      storageMock.exists.mockResolvedValue(true);
       const file = memoryImage(testImageBuffer, 'shared.png');
       const onStored = vi.fn().mockRejectedValue(new Error('Transaction Abort'));
 
@@ -312,26 +264,10 @@ describe('MediaService', () => {
     });
   });
 
-  describe('deleteStored() / deleteByUrl() — 物理文件删除', () => {
+  describe('deleteStored() — 物理文件删除', () => {
     it('deleteStored 按存储路径删除', async () => {
       await mediaService.deleteStored('media/x.png');
       expect(storageMock.delete).toHaveBeenCalledWith('media/x.png');
-    });
-
-    it('deleteByUrl 反解 local URL 删除', async () => {
-      await mediaService.deleteByUrl('/uploads/media/x.png');
-      expect(storageMock.delete).toHaveBeenCalledWith('media/x.png');
-    });
-
-    it('deleteByUrl 对非 local URL 跳过', async () => {
-      storageMock.urlToPath.mockReturnValueOnce(null);
-      await mediaService.deleteByUrl('https://s3.example.com/media/x.png');
-      expect(storageMock.delete).not.toHaveBeenCalled();
-    });
-
-    it('deleteByUrl 对空串跳过', async () => {
-      await mediaService.deleteByUrl('');
-      expect(storageMock.delete).not.toHaveBeenCalled();
     });
   });
 

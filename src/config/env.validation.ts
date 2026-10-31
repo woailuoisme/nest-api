@@ -222,8 +222,6 @@ export const envSchema = z
       .default(10 * 1024 * 1024),
     UPLOAD_ALLOWED_MIME_TYPES: z.string().default('image/png,image/jpeg,image/webp'),
     UPLOAD_ALLOWED_EXTENSIONS: z.string().default('.png,.jpg,.jpeg,.webp'),
-    // 是否启用 BullMQ 队列异步处理媒体转码与缩略图衍生。默认 true
-    MEDIA_QUEUE_ENABLED: envBoolean(true),
     // 是否挂载 OpenAPI Spec 与 Scalar 接口文档。默认 true（生产环境若需屏蔽文档暴露可显式设为 false）
     SWAGGER_ENABLED: envBoolean(true),
     // 实时长连接统一 DSN (例如: centrifugo://api-key:token-secret@127.0.0.1:8000/api)

@@ -3,18 +3,17 @@ import type { StorageDisk } from '@nestjs/storage';
 import { compact } from 'es-toolkit';
 
 import type { StorageService } from '@/common/storage/storage.service';
-import type { MediaJobs } from '@/jobs/media/media.jobs';
 
 import type { MediaCleanupOptions, MediaUploadResult } from '../interfaces/media.interface';
 
 /**
- * 媒体存储事务补偿与生命周期管理器 (MediaCompensationManager)
+ * 媒体存储事务补偿管理器 (MediaCompensationManager)
  *
- * 专注于两阶段事务补偿屏障：
- * 1. 物理写入主文件与缩略图；
+ * 专注于两阶段事务补偿屏障（纯相对路径，无脆弱 URL 反解）：
+ * 1. 物理写入主文件；
  * 2. 执行领域持久化回调；
- * 3. 失败时自动撤销 BullMQ 任务并回滚删除新建物理文件；
- * 4. 成功时自动幂等回收旧媒体文件（支持 Local 与 S3 反解）。
+ * 3. 失败时自动回滚删除新建物理文件；
+ * 4. 成功时自动幂等回收旧媒体文件（直接基于 relative path，支持 Local 与 S3）。
  */
 @Injectable()
 export class MediaCompensationManager {
@@ -29,7 +28,6 @@ export class MediaCompensationManager {
     saveOperation: () => Promise<MediaUploadResult>,
     onStored: (result: MediaUploadResult) => Promise<T>,
     cleanup?: MediaCleanupOptions,
-    mediaJobs?: MediaJobs,
   ): Promise<T> {
     const result = await saveOperation();
     const disk = storage.disk(diskName);
@@ -38,19 +36,15 @@ export class MediaCompensationManager {
     try {
       data = await onStored(result);
     } catch (error) {
-      // 业务执行异常 → 若投递了异步任务，优先从 BullMQ 队列撤销该任务
-      await this.cancelVariantJobs(result, mediaJobs);
-
-      // 仅回滚本次操作新创建的物理主文件和已就绪变体
-      const pathsToDelete = this.collectRollbackPaths(result);
-      if (pathsToDelete.length > 0) {
-        await this.deletePaths(disk, pathsToDelete);
+      // 业务执行异常 → 仅回滚本次操作新创建的物理文件（不误删已有 deduplicated 共享物理文件）
+      if (result.isNew !== false) {
+        await this.deletePaths(disk, [result.path]);
       }
       throw error;
     }
 
-    // 业务执行成功 → 清理旧文件
-    await this.cleanupOldUrls(storage, disk, cleanup, diskName);
+    // 业务执行成功 → 清理旧相对路径文件
+    await this.cleanupOldPaths(disk, cleanup);
 
     return data;
   }
@@ -76,55 +70,24 @@ export class MediaCompensationManager {
   }
 
   /**
-   * 取消/撤销媒体结果中已向 BullMQ 投递的异步任务（用于补偿回滚）
+   * 清理旧文件（直接基于相对存储路径，安全且高效）
    */
-  async cancelVariantJobs(results: MediaUploadResult | MediaUploadResult[], mediaJobs?: MediaJobs): Promise<void> {
-    if (!mediaJobs) return;
-    const list = Array.isArray(results) ? results : [results];
-    const jobIds = list.flatMap((item) =>
-      item.variants ? compact(Object.values(item.variants).map((v) => v.jobId)) : [],
+  async cleanupOldPaths(disk: StorageDisk, cleanup?: MediaCleanupOptions): Promise<void> {
+    const oldPaths = this.extractOldPaths(cleanup);
+    if (oldPaths.length === 0) return;
+
+    await Promise.all(
+      oldPaths.map((path) =>
+        disk.delete(path).catch((err: unknown) => {
+          this.logger.warn(`清理旧文件失败 [${path}]: ${String(err)}`);
+        }),
+      ),
     );
-    if (jobIds.length > 0) {
-      await Promise.all(jobIds.map((id) => mediaJobs.removeJob(id).catch(() => false)));
-    }
   }
 
-  /**
-   * 清理旧媒体文件
-   */
-  async cleanupOldUrls(
-    storage: StorageService,
-    disk: StorageDisk,
-    cleanup?: MediaCleanupOptions,
-    diskName?: string,
-  ): Promise<void> {
-    const oldUrls = this.extractOldUrls(cleanup);
-    if (oldUrls.length === 0) return;
-
-    for (const url of oldUrls) {
-      const path = storage.urlToPath(url, diskName);
-      if (path) {
-        await disk.delete(path).catch((err: unknown) => {
-          this.logger.warn(`清理旧媒体文件失败: ${String(err)}`);
-        });
-      }
-    }
-  }
-
-  /** 收集需回滚的物理路径：仅本次新建的主图与已就绪变体（避免误删去重共享的已存在文件） */
-  private collectRollbackPaths(result: MediaUploadResult): string[] {
-    const variantPaths = result.variants
-      ? Object.values(result.variants)
-          .filter((v) => v.isNew !== false && v.status === 'ready')
-          .map((v) => v.path)
-      : [];
-
-    return compact([result.isNew !== false ? result.path : null, ...variantPaths]);
-  }
-
-  /** 提取并扁平化旧文件 URL 清单 */
-  extractOldUrls(cleanup?: MediaCleanupOptions): string[] {
+  /** 提取并扁平化旧文件相对路径清单 */
+  extractOldPaths(cleanup?: MediaCleanupOptions): string[] {
     if (!cleanup) return [];
-    return compact([cleanup.oldUrl, ...(cleanup.oldUrls ?? [])]);
+    return compact([cleanup.oldPath, ...(cleanup.oldPaths ?? [])]);
   }
 }

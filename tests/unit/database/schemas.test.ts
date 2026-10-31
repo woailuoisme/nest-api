@@ -1,7 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
 import * as schema from '@/database/drizzle/schema';
-import { media } from '@/database/drizzle/schema/media.schema';
 import { notifications } from '@/database/drizzle/schema/notifications.schema';
 
 describe('Drizzle Schemas Integrity', () => {
@@ -16,32 +15,13 @@ describe('Drizzle Schemas Integrity', () => {
       expect(schema.mfaFailures).toBeDefined();
       expect(schema.emailTokens).toBeDefined();
       expect(schema.apiKeys).toBeDefined();
-      expect(schema.media).toBeDefined();
       expect(schema.notifications).toBeDefined();
     });
   });
 
-  describe('media Schema', () => {
-    it('应包含符合 Laravel Spatie MediaLibrary 规范的多态媒体字段', () => {
-      const cols = media;
-      expect(cols.id).toBeDefined();
-      expect(cols.uuid).toBeDefined();
-      expect(cols.modelType).toBeDefined();
-      expect(cols.modelId).toBeDefined();
-      expect(cols.collectionName).toBeDefined();
-      expect(cols.name).toBeDefined();
-      expect(cols.fileName).toBeDefined();
-      expect(cols.mimeType).toBeDefined();
-      expect(cols.disk).toBeDefined();
-      expect(cols.conversionsDisk).toBeDefined();
-      expect(cols.size).toBeDefined();
-      expect(cols.manipulations).toBeDefined();
-      expect(cols.customProperties).toBeDefined();
-      expect(cols.generatedConversions).toBeDefined();
-      expect(cols.responsiveImages).toBeDefined();
-      expect(cols.orderColumn).toBeDefined();
-      expect(cols.createdAt).toBeDefined();
-      expect(cols.updatedAt).toBeDefined();
+  describe('user Schema', () => {
+    it('应包含 avatarPath 相对存储路径字段', () => {
+      expect(schema.user.avatarPath).toBeDefined();
     });
   });
 
