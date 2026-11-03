@@ -1,34 +1,7 @@
-# ── push main：自动构建并推送镜像 ────────────────────────────────────
-main:
-  push: &docker_build_amd64
-    # 合并进 main 即构建并推送 amd64 镜像 -> latest, alpine
-    # 单架构（linux/amd64）不经 QEMU，构建更快；如需 arm64，请走 v* 标签发布（tag_push）
-    # 或 .github/workflows/build.yml 的多架构流水线（推送 GHCR / Docker Hub）。
-    # alpine 为变体标签（镜像基于 oven/bun:*-alpine），与 latest 指向同一构建产物。
-    - services:
-        - docker
-      stages:
-        - name: Docker build and push (amd64)
-          script: |
-            set -euo pipefail
-            REGISTRY="${CNB_DOCKER_REGISTRY}/${CNB_REPO_SLUG_LOWERCASE}"
-            CACHE="type=registry,ref=${REGISTRY}:cache"
-
-            docker buildx build \
-              --platform linux/amd64 \
-              --cache-from "${CACHE}" \
-              --cache-to "${CACHE},mode=max,image-manifest=true,oci-mediatypes=true" \
-              -f Dockerfile \
-              -t "${REGISTRY}:latest" \
-              --push .
-
-# ── 全局：手动触发 & 标签发布 ────────────────────────────────────────
+# ── 全局：标签发布 & 手动触发 ────────────────────────────────────────
 $:
-  # 手动触发：按 main 同一套标签快建一次镜像 -> latest, alpine
-  web_trigger_amd64: *docker_build_amd64
-
-  # 推送 v* 标签：构建版本化镜像（保留版本号标签供 tag_deploy.yml 固定部署）
-  tag_push:
+  # 推送标签发布：优先构建版本化多架构镜像（同时推送 :${VERSION} 与 :latest）
+  tag_push: &docker_build_release
     - services:
         - docker
       stages:
@@ -47,3 +20,6 @@ $:
               -t "${REGISTRY}:${VERSION}" \
               -t "${REGISTRY}:latest" \
               --push .
+
+  # 手动触发：支持控制台手动触发构建
+  web_trigger: *docker_build_release
