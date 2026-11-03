@@ -1,0 +1,46 @@
+version: 2
+
+updates:
+  # ── GitHub Actions：workflow 内 uses 的动作版本 ─────────────────────
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+      time: "06:00"
+      timezone: Asia/Shanghai
+    open-pull-requests-limit: 5
+    # actions 彼此独立、互不耦合，合并成单个 PR 便于整体回滚
+    groups:
+      actions:
+        patterns: ["*"]
+    commit-message:
+      prefix: ci
+
+  # ── JS 依赖：由 Bun 管理（bun.lock），npm 生态无法解析 Bun 锁文件 ───
+  - package-ecosystem: bun
+    directory: /
+    schedule:
+      interval: monthly
+      day: monday
+      time: "06:00"
+      timezone: Asia/Shanghai
+    open-pull-requests-limit: 5
+    groups:
+      # Nest 全家桶按同版本线发布：拆散升级极易出现 peer 版本错配，必须成组
+      nestjs:
+        patterns: ["@nestjs/*"]
+      # 其余 minor / patch 合并成组降噪；major 不入组，单独成 PR 逐个验证
+      minor-and-patch:
+        update-types: ["minor", "patch"]
+        exclude-patterns: ["@nestjs/*"]
+    ignore:
+      # engines 钉在 Node ^24：@types/node 的大版本跳跃随显式的 Node 升级一起做
+      - dependency-name: "@types/node"
+        versions: [">=25"]
+    commit-message:
+      prefix: chore
+
+  # 说明：刻意不接入 docker 生态 —— Dockerfile 的 `FROM oven/bun:${BUN_VERSION}`
+  # 经构建参数注入镜像标签，Dependabot 无法解析变量化的 FROM 引用；
+  # 升级 Bun 基础镜像请直接修改 Dockerfile 顶部的 BUN_VERSION 默认值。
