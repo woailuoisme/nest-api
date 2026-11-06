@@ -1,7 +1,50 @@
-# ── 全局：标签发布 & 手动触发 ────────────────────────────────────────
-$:
-  # 推送标签发布：优先构建版本化多架构镜像（同时推送 :${VERSION} 与 :latest）
-  tag_push: &docker_build_release
+# ── 全局：手动触发 & 标签发布 ────────────────────────────────────────
+# 项目: nest-api (NestJS 12 Enterprise Backend)
+# Dockerfile 位于仓库根，基于 Alpine 极简镜像构建与运行
+
+# ── main 分支：网页手动触发（常规 push 不触发构建）──────────────────
+main:
+  # 网页按钮 1：手动构建并推送 Docker 镜像（对齐 .cnb/web_trigger.yml 中的 web_trigger_amd64）
+  web_trigger_amd64: &docker_build
+    - services:
+        - docker
+      stages:
+        - name: Manual Docker build and push
+          script: |
+            set -euo pipefail
+            REGISTRY="${CNB_DOCKER_REGISTRY}/${CNB_REPO_SLUG_LOWERCASE}"
+            CACHE="type=registry,ref=${REGISTRY}:cache"
+            docker buildx build \
+              --platform linux/amd64 \
+              --cache-from "${CACHE}" \
+              --cache-to "${CACHE},mode=max,image-manifest=true,oci-mediatypes=true" \
+              -f Dockerfile \
+              -t "${REGISTRY}:latest" \
+              --push .
+
+  # 兼容默认网页触发
+  web_trigger: *docker_build
+
+  # 网页按钮 2：一键独立发布 Helm Chart（对齐 .cnb/web_trigger.yml 中的 web_trigger_helm）
+  web_trigger_helm:
+    - docker:
+        image: alpine/helm:4
+      stages:
+        - name: Package and push Helm chart to CNB
+          script: |
+            set -euo pipefail
+            CHART_VERSION=$(grep '^version:' deployment/helm/nest-api/Chart.yaml | awk '{print $2}')
+            APP_VERSION=$(grep '^appVersion:' deployment/helm/nest-api/Chart.yaml | awk '{print $2}' | tr -d '"')
+            HELM_REGISTRY="${CNB_HELM_REGISTRY:-helm.cnb.cool}"
+            TARGET_NAMESPACE="${CNB_GROUP_SLUG_LOWERCASE:-${CNB_REPO_SLUG_LOWERCASE}}"
+
+            echo "${CNB_TOKEN}" | helm registry login "${HELM_REGISTRY}" -u "${CNB_TOKEN_USER_NAME:-cnb}" --password-stdin
+            helm package deployment/helm/nest-api --version "${CHART_VERSION}" --app-version "${APP_VERSION}" -d .
+            helm push "nest-api-${CHART_VERSION}.tgz" "oci://${HELM_REGISTRY}/${TARGET_NAMESPACE}"
+
+# ── 正式全量发版 (v*)：仅自动构建并推送 Release 镜像 ───────────────
+v*:
+  tag_push:
     - services:
         - docker
       stages:
@@ -11,7 +54,6 @@ $:
             REGISTRY="${CNB_DOCKER_REGISTRY}/${CNB_REPO_SLUG_LOWERCASE}"
             VERSION="${CNB_BRANCH##*/}"
             CACHE="type=registry,ref=${REGISTRY}:cache"
-
             docker buildx build \
               --platform linux/amd64,linux/arm64 \
               --cache-from "${CACHE}" \
@@ -20,6 +62,3 @@ $:
               -t "${REGISTRY}:${VERSION}" \
               -t "${REGISTRY}:latest" \
               --push .
-
-  # 手动触发：支持控制台手动触发构建
-  web_trigger: *docker_build_release
