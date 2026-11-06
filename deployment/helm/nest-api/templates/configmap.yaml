@@ -1,0 +1,45 @@
+{{- if not .Values.config.existingConfigMap -}}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "nest-api.configMapName" . }}
+  labels:
+    {{- include "nest-api.labels" . | nindent 4 }}
+data:
+  APP_NAME: {{ .Values.config.appName | default .Release.Name | quote }}
+  APP_ENV: {{ .Values.config.appEnv | default "production" | quote }}
+  NODE_ENV: {{ .Values.config.nodeEnv | default "production" | quote }}
+  PORT: {{ .Values.service.targetPort | default 4400 | quote }}
+  LOG_LEVEL: {{ .Values.config.logLevel | default "info" | quote }}
+  TZ: {{ .Values.config.tz | default "Asia/Shanghai" | quote }}
+  DB_POOL_MAX: {{ .Values.config.dbPoolMax | default 10 | quote }}
+  DB_POOL_IDLE_TIMEOUT_MS: {{ .Values.config.dbPoolIdleTimeoutMs | default 30000 | quote }}
+  DB_POOL_CONNECT_TIMEOUT_MS: {{ .Values.config.dbPoolConnectTimeoutMs | default 5000 | quote }}
+  HTTP_TIMEOUT_MS: {{ .Values.config.httpTimeoutMs | default 15000 | quote }}
+  THROTTLE_STORAGE: {{ .Values.config.throttleStorage | default "redis" | quote }}
+  {{- if .Values.config.appUrl }}
+  APP_URL: {{ .Values.config.appUrl | quote }}
+  {{- end }}
+  {{- if .Values.config.trustedOrigins }}
+  TRUSTED_ORIGINS: {{ .Values.config.trustedOrigins | quote }}
+  {{- end }}
+  {{- if .Values.config.scoutDriver }}
+  SCOUT_DRIVER: {{ .Values.config.scoutDriver | quote }}
+  {{- end }}
+  {{- if .Values.config.mailTransport }}
+  MAIL_TRANSPORT: {{ .Values.config.mailTransport | quote }}
+  {{- end }}
+  {{- if .Values.config.mailFromAddress }}
+  MAIL_FROM_ADDRESS: {{ .Values.config.mailFromAddress | quote }}
+  {{- end }}
+  {{- if .Values.config.mailFromName }}
+  MAIL_FROM_NAME: {{ .Values.config.mailFromName | quote }}
+  {{- end }}
+  {{- if .Values.config.filesystemDisk }}
+  FILESYSTEM_DISK: {{ .Values.config.filesystemDisk | quote }}
+  {{- end }}
+  {{- with .Values.config.extraData }}
+  {{- toYaml . | nindent 2 }}
+  {{- end }}
+{{- end }}
+

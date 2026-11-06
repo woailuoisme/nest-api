@@ -135,9 +135,8 @@ docker compose up -d     # 仅 api + worker；依赖组件见 deploy/ 各自编�
 ```bash
 # 运行与构建
 just dev                  # API + Worker 双进程热更新
+just start                # 生产全栈预览（先构建，再以 process-compose 双进程运行）
 just build                # 生产构建（SWC → dist/）
-just serve                # 运行已构建的 HTTP API
-just worker               # 运行已构建的队列 Worker
 
 # 质量门禁
 just check                # 提交前完整检查 (fix + type + secret + i18n)

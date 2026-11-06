@@ -4,21 +4,21 @@ set dotenv-load
 default:
     @just --list
 
-# 启动开发服务器（API + Worker 双进程，watch 模式）
-dev:
-    kill -9 $(lsof -ti:${PORT:-4300} 2>/dev/null) 2>/dev/null || true; concurrently -k -n app,worker -c bgBlue.bold,bgMagenta.bold -p "[{name}]" -t "HH:mm:ss" "nest start --watch --entryFile cli -- serve" "nest start --watch --entryFile cli -- worker"
+# 释放端口占用（默认 PORT=4300，亦可指定：`just kill-port 8080`）
+kill-port port=env("PORT", "4300"):
+    kill -9 $(lsof -ti:{{ port }} 2>/dev/null) 2>/dev/null || true
+
+# 启动开发服务器（API + Worker 双进程，process-compose 驱动）
+dev *args='': kill-port
+    process-compose up {{ args }}
+
+# 启动生产全栈预览服务（构建产物 + API/Worker 双进程，process-compose 驱动）
+start *args='': kill-port build
+    process-compose -f process-compose.prod.yaml up {{ args }}
 
 # 构建生产产物（SWC）
 build:
-    rm -rf dist && nest build
-
-# 启动生产 HTTP API 进程
-serve:
-    node dist/cli.js serve
-
-# 启动生产队列 Worker 进程
-worker:
-    node dist/cli.js worker
+    rm -rf dist && bun x nest build
 
 # 提交前完整检查（格式化修复 + 类型 + 敏感凭据 + 多语言）
 check: fix type secret i18n
@@ -93,4 +93,4 @@ i18n:
 
 # 构建并运行 CLI 命令（如 `just cmd route:list`）
 cmd *args='--help':
-    nest build && node dist/cli.js {{ args }}
+    bun x nest build && node dist/cli.js {{ args }}

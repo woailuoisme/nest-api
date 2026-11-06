@@ -1,0 +1,8 @@
+version: "0.5"
+
+processes:
+  api:
+    command: "bun x nest start --watch --entryFile cli -- serve"
+
+  worker:
+    command: "bun x nest start --watch --entryFile cli -- worker"

@@ -1,0 +1,9 @@
+version: "0.5"
+
+processes:
+  api:
+    command: "node dist/cli.js serve"
+
+  worker:
+    command: "node dist/cli.js worker"
+

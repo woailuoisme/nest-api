@@ -1,0 +1,19 @@
+apiVersion: v2
+name: nest-api
+description: Production-ready Helm Chart for NestJS 12 Enterprise Backend (API & BullMQ Worker)
+type: application
+version: 0.1.0
+appVersion: "1.0.0"
+keywords:
+  - nestjs
+  - fastify
+  - drizzle
+  - bullmq
+  - redis
+  - postgresql
+home: https://github.com/seaside/nest-api
+sources:
+  - https://github.com/seaside/nest-api
+icon: https://d33wubrfki0l68.cloudfront.net/e937e774cbbe236359996043ad717a9ead826551/d3078/logos/nest-logo.svg
+maintainers:
+  - name: Nest API Team

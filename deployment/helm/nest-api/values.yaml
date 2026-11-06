@@ -1,0 +1,274 @@
+# Default values for nest-api.
+# This is a YAML-formatted file.
+# Declare variables to be passed into your templates.
+
+# -- Number of replica sets or global deployment settings
+nameOverride: ""
+fullnameOverride: ""
+
+# ── 容器镜像配置 ───────────────────────────────────────────────────────────
+image:
+  # -- 容器镜像仓库地址（支持 CNB OCI 或 GHCR）
+  repository: docker.cnb.cool/seaside/nest-api
+  # -- 镜像拉取策略
+  pullPolicy: IfNotPresent
+  # -- 镜像标签（留空时默认采用 Chart.yaml 的 appVersion）
+  tag: ""
+
+# -- 私有镜像仓库凭据 Secret 清单
+imagePullSecrets: []
+
+# ── 服务账号权限 ───────────────────────────────────────────────────────────
+serviceAccount:
+  # -- 是否自动创建 Kubernetes ServiceAccount
+  create: true
+  # -- 自动挂载 API Token 凭据（遵循最小权限原则默认禁用）
+  automountServiceAccountToken: false
+  # -- 自定义 ServiceAccount 注解
+  annotations: {}
+  # -- 指定已存在的 ServiceAccount 名称（为空时自动生成）
+  name: ""
+
+# ── Pod 安全基线 (CIS Non-Root) ─────────────────────────────────────────────
+podSecurityContext:
+  # 运行用户与属组均绑定 bun:bun (uid: 1000, gid: 1000)
+  runAsNonRoot: true
+  runAsUser: 1000
+  runAsGroup: 1000
+  fsGroup: 1000
+
+securityContext:
+  allowPrivilegeEscalation: false
+  capabilities:
+    drop:
+      - ALL
+  readOnlyRootFilesystem: false
+
+# ── API 服务工作负载 (Fastify HTTP) ─────────────────────────────────────────
+api:
+  # -- API 容器副本数（若启用 autoscaling 则以 autoscaling 为准）
+  replicaCount: 2
+
+  # -- 覆盖镜像默认启动参数（默认启动 HTTP API 服务: ["serve"]）
+  args:
+    - "serve"
+
+  # -- API Pod 附加注解
+  podAnnotations: {}
+
+  # -- API Pod 附加标签
+  podLabels: {}
+
+  # -- 容器计算资源配额
+  resources:
+    limits:
+      cpu: 1000m
+      memory: 1Gi
+    requests:
+      cpu: 100m
+      memory: 256Mi
+
+  # -- 云原生存活探针 (极速无 I/O 检测)
+  livenessProbe:
+    httpGet:
+      path: /livez
+      port: http
+    initialDelaySeconds: 5
+    periodSeconds: 10
+    timeoutSeconds: 3
+    failureThreshold: 3
+
+  # -- 云原生就绪探针 (全量基础设施依赖联动检查)
+  readinessProbe:
+    httpGet:
+      path: /readyz
+      port: http
+    initialDelaySeconds: 10
+    periodSeconds: 10
+    timeoutSeconds: 5
+    failureThreshold: 3
+
+  # -- 冷启动探测缓冲（可选配置，用于防止初始化依赖慢导致就绪检查提前失败）
+  startupProbe: {}
+    # httpGet:
+    #   path: /livez
+    #   port: http
+    # failureThreshold: 30
+    # periodSeconds: 5
+
+  # -- API 弹性自动伸缩 (HPA)
+  autoscaling:
+    enabled: false
+    minReplicas: 2
+    maxReplicas: 10
+    targetCPUUtilizationPercentage: 80
+    targetMemoryUtilizationPercentage: 80
+    behavior: {}
+
+  # -- 初始化容器（可用于执行数据库迁移 db:migrate 等）
+  initContainers: []
+
+  # -- 注入特定环境变量
+  extraEnv: []
+
+  # -- 挂载附加存储卷
+  extraVolumeMounts: []
+  extraVolumes: []
+
+  # -- 节点调度约束
+  nodeSelector: {}
+  tolerations: []
+  affinity: {}
+  topologySpreadConstraints: []
+
+# ── Worker 队列后台处理进程 (BullMQ) ────────────────────────────────────────
+worker:
+  # -- 是否启用后台队列 Worker 进程
+  enabled: true
+
+  # -- Worker 副本数
+  replicaCount: 1
+
+  # -- Worker 启动参数（默认执行队列监听: ["worker"]）
+  args:
+    - "worker"
+
+  # -- 优雅停机等待时间（秒），保障 BullMQ 正在处理中的 Job 安全完成
+  terminationGracePeriodSeconds: 60
+
+  # -- Worker Pod 附加注解与标签
+  podAnnotations: {}
+  podLabels: {}
+
+  # -- Worker 资源配额
+  resources:
+    limits:
+      cpu: 1000m
+      memory: 1Gi
+    requests:
+      cpu: 100m
+      memory: 256Mi
+
+  extraEnv: []
+  extraVolumeMounts: []
+  extraVolumes: []
+  nodeSelector: {}
+  tolerations: []
+  affinity: {}
+
+# ── Service 暴露配置 ───────────────────────────────────────────────────────
+service:
+  # -- 服务类型：ClusterIP / NodePort / LoadBalancer
+  type: ClusterIP
+  # -- Kubernetes Service 对外暴露端口
+  port: 80
+  # -- 容器内部 Fastify 监听端口
+  targetPort: 4400
+  # -- Service 附加注解
+  annotations: {}
+  # -- 当 type 为 NodePort 时可选指定静态端口
+  nodePort: null
+
+# ── Ingress 外部路由规则 ────────────────────────────────────────────────────
+ingress:
+  # -- 是否开启 Ingress 路由
+  enabled: false
+  # -- IngressClass 控制器（如 traefik, nginx 等）
+  className: ""
+  # -- Ingress 注解（如 cert-manager 自动证书签发）
+  annotations: {}
+    # cert-manager.io/cluster-issuer: letsencrypt-prod
+    # traefik.ingress.kubernetes.io/router.entrypoints: websecure
+  # -- Ingress 域名与路径列表
+  hosts:
+    - host: api.example.com
+      paths:
+        - path: /
+          pathType: Prefix
+  # -- TLS 证书配置
+  tls: []
+    # - secretName: nest-api-tls
+    #   hosts:
+    #     - api.example.com
+
+# ── PodDisruptionBudget 高可用保障 ──────────────────────────────────────────
+podDisruptionBudget:
+  enabled: false
+  minAvailable: 1
+  # maxUnavailable: 1
+
+# ── 业务非敏感配置 (自动注入 ConfigMap) ─────────────────────────────────────
+config:
+  # -- 指定外部已存在的 ConfigMap（设置后将跳过 Chart 内建 ConfigMap 创建）
+  existingConfigMap: ""
+
+  appName: "nest-api"
+  appEnv: "production"
+  nodeEnv: "production"
+  logLevel: "info"
+  tz: "Asia/Shanghai"
+
+  # -- 数据库连接池配置
+  dbPoolMax: 10
+  dbPoolIdleTimeoutMs: 30000
+  dbPoolConnectTimeoutMs: 5000
+
+  # -- 请求网络与限流配置
+  httpTimeoutMs: 15000
+  throttleStorage: "redis"
+
+  # -- 域名与安全信任配置
+  appUrl: ""
+  trustedOrigins: ""
+
+  # -- 驱动选择
+  scoutDriver: "noop"
+  mailTransport: "smtp"
+  mailFromAddress: "no-reply@example.com"
+  mailFromName: "Nest API"
+  filesystemDisk: "local"
+
+  # -- 自定义附加 ConfigMap 变量键值对
+  extraData: {}
+
+# ── 核心敏感密钥配置 (自动注入 Secret) ──────────────────────────────────────
+secret:
+  # -- 指定外部已存在的 Secret（设置后将跳过 Chart 内建 Secret 创建）
+  existingSecret: ""
+
+  # -- 必填：PostgreSQL DSN 统一连接串
+  dbUrl: "postgresql://postgres:postgres@postgres-host:5432/nest_api?schema=public"
+
+  # -- 必填：Redis 统一连接串（用于 BullMQ 队列与分布式限流）
+  redisUrl: "redis://:redis-password@redis-host:6379/0"
+
+  # -- 必填：官方认证 access token HS256 签名密钥（生产环境至少 32 字符）
+  jwtSecret: "change-me-to-a-very-secure-jwt-secret-min-32-chars"
+
+  # -- 必填：TOTP secret 的 AES-256-GCM 加密密钥（生产环境至少 32 字符）
+  mfaEncryptionKeys: "change-me-to-a-very-secure-mfa-key-min-32-chars"
+
+  # -- 必填：验证码 HMAC 签名密钥
+  otpHmacKey: "change-me-to-a-very-secure-otp-hmac-key-min-32-chars"
+
+  # -- 可选：内置 Cookie 签名密钥（>=32 字符）
+  cookieSecret: ""
+
+  # -- 可选：S3 对象存储连接串 (s3://key:secret@endpoint:port/bucket?region=...&publicUrl=...)
+  storageS3Url: ""
+
+  # -- 可选：Centrifugo 实时通信连接串 (centrifugo://api-key:hmac-secret@host:port/api?tls=false)
+  realtimeUrl: ""
+
+  # -- 可选：Meilisearch 搜索引擎连接串 (meilisearch://masterKey@host:7700)
+  searchUrl: ""
+
+  # -- 可选：MQTT 物联网 Broker 连接串 (mqtt://admin:pass@host:1883?clientId=nest-api)
+  mqttUrl: ""
+
+  # -- 可选：邮件 SMTP 服务连接串 (smtp://user:pass@host:587)
+  mailUrl: ""
+
+  # -- 自定义附加 Secret 变量键值对
+  extraData: {}
+

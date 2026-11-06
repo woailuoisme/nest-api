@@ -15,9 +15,8 @@
 
 ```bash
 just dev          # 开发模式 (API + Worker 双进程 + watch)
+just start        # 生产预览 (构建产物 + API/Worker 双进程 + process-compose)
 just build        # 构建到 dist/
-just serve        # 生产构建 HTTP API (CLI 前门: serve，容器默认 CMD)
-just worker       # 生产构建队列 Worker (CLI 前门: worker)
 just type         # tsc --noEmit 类型检查
 just lint         # oxlint 静态检查 (src tests)
 just fix          # oxlint --fix + oxfmt (src tests)
