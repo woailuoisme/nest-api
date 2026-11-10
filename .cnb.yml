@@ -49,35 +49,32 @@ v*:
               --build-arg BUILD_TIME="$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
               --push .
 
+        # 注意：stages 下的元素是 Job（不是嵌套的 Pipeline）。
+        # 容器镜像写在 job 的 `image:` 上；写 `docker:` + 内层 `stages:` 会被静默忽略，
+        # 该 job 变成空阶段（构建仍显示 success，但什么都没执行）。
         - name: Helm chart package & push
-          docker:
-            image: alpine/helm:4
-          stages:
-            - name: Package and push Helm chart to CNB
-              script: |
-                set -euo pipefail
-                VERSION="${CNB_BRANCH##*/}"
-                CHART_VERSION="${VERSION#v}"
-                HELM_REGISTRY="${CNB_HELM_REGISTRY:-helm.cnb.cool}"
-                TARGET_NAMESPACE="${CNB_GROUP_SLUG_LOWERCASE:-${CNB_REPO_SLUG_LOWERCASE}}"
+          image: alpine/helm:4
+          script: |
+            set -euo pipefail
+            VERSION="${CNB_BRANCH##*/}"
+            CHART_VERSION="${VERSION#v}"
+            HELM_REGISTRY="${CNB_HELM_REGISTRY:-helm.cnb.cool}"
+            TARGET_NAMESPACE="${CNB_GROUP_SLUG_LOWERCASE:-${CNB_REPO_SLUG_LOWERCASE}}"
 
-                echo "${CNB_TOKEN}" | helm registry login "${HELM_REGISTRY}" -u "${CNB_TOKEN_USER_NAME:-cnb}" --password-stdin
-                helm package helm/nest-api --version "${CHART_VERSION}" --app-version "${VERSION}" -d .
-                helm push "nest-api-${CHART_VERSION}.tgz" "oci://${HELM_REGISTRY}/${TARGET_NAMESPACE}"
+            echo "${CNB_TOKEN}" | helm registry login "${HELM_REGISTRY}" -u "${CNB_TOKEN_USER_NAME:-cnb}" --password-stdin
+            helm package helm/nest-api --version "${CHART_VERSION}" --app-version "${VERSION}" -d .
+            helm push "nest-api-${CHART_VERSION}.tgz" "oci://${HELM_REGISTRY}/${TARGET_NAMESPACE}"
 
-        - name: Git-Cliff & CNB Release
-          docker:
-            image: orhunp/git-cliff:latest
-          stages:
-            - name: Generate Changelog with git-cliff
-              script: |
-                set -eu
-                git-cliff --latest --strip header -o CHANGELOG.md
+        - name: Generate CHANGELOG
+          image: orhunp/git-cliff:latest
+          script: |
+            set -eu
+            git-cliff --latest --strip header -o CHANGELOG.md
 
-            - name: Create CNB Release
-              type: git:release
-              options:
-                tag: ${CNB_BRANCH}
-                title: "Release ${CNB_BRANCH}"
-                descriptionFromFile: CHANGELOG.md
-                latest: true
+        - name: Create CNB Release
+          type: git:release
+          options:
+            # tag_push 事件下无需传 tag（官方：自动取触发的 Tag 名）
+            title: "Release ${CNB_BRANCH}"
+            descriptionFromFile: CHANGELOG.md
+            latest: true
