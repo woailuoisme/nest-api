@@ -1,10 +1,9 @@
-import { Controller, Get, Header, VERSION_NEUTRAL } from '@nestjs/common';
+import { Controller, Get, VERSION_NEUTRAL } from '@nestjs/common';
 import { ApiExcludeController } from '@nestjs/swagger';
 import { HealthCheck, HealthCheckService } from '@nestjs/terminus';
 import { SkipThrottle } from '@nestjs/throttler';
 
 import { Public } from '@/common/decorators/public.decorator';
-import { BypassTransform } from '@/common/decorators/response.decorator';
 
 import { CentrifugoHealthIndicator } from './indicators/centrifugo-health.indicator';
 import { DatabaseHealthIndicator } from './indicators/database-health.indicator';
@@ -18,11 +17,21 @@ import { StorageHealthIndicator } from './indicators/storage-health.indicator';
 import { WepayHealthIndicator } from './indicators/wepay-health.indicator';
 
 /**
- * 云原生系统健康探针控制器：
- * - `GET /livez`：云原生存活探针 (Liveness Probe)，纯文本 `ok`，极速响应，零外部 I/O
- * - `GET /readyz`：云原生就绪探针 (Readiness Probe)，检测 DB、Redis、存储等全量基础设施依赖及优雅停机状态
+ * 云原生系统健康探针控制器（严格遵循 `@nestjs/terminus` 官方契约）。
  *
- * ⚠️ 基础设施健康探针必须显式 @SkipThrottle()，防止高频 Kubelet 轮询或 wrk 压测误触 429 导致 Pod 重启或摘流。
+ * - `GET /livez`：存活探针，`health.check([])` —— 零外部 I/O，只证明进程与事件循环可调度；
+ * - `GET /readyz`：就绪探针，聚合 DB、Redis、存储、实时、搜索、支付、小程序与优雅停机状态。
+ *
+ * 响应体即 Terminus 官方 `{ status, info, error, details }`：
+ * `info` = 通过的探针，`error` = 失败的探针，`details` = 两者并集
+ * （全部健康时 `info` 与 `details` 内容相同，属官方定义的超集关系，不做裁剪）。
+ * 任一探针 down 或抛异常时，`@HealthCheck()` 自动转为 503 + 同一结构。
+ *
+ * ⚠️ 探针必须显式 `@SkipThrottle()`：Kubelet/负载均衡高频轮询一旦撞上 429，
+ * 会被判定为不健康，进而触发 Pod 重启或摘流。
+ *
+ * ⚠️ 存活探针刻意不带任何依赖检查（含内存阈值）：下游抖动或 GC 峰值不应导致 Pod 被杀，
+ * 这类判定属于就绪探针与 HPA 的职责。
  */
 @ApiExcludeController()
 @Public()
@@ -63,10 +72,9 @@ export class HealthController {
    * 仅验证进程存活与 HTTP 事件循环可调度，不依赖任何外部系统。失败时触发 Pod 重启。
    */
   @Get('livez')
-  @BypassTransform()
-  @Header('Content-Type', 'text/plain')
-  checkLivez(): string {
-    return 'ok';
+  @HealthCheck()
+  checkLivez() {
+    return this.health.check([]);
   }
 
   /**

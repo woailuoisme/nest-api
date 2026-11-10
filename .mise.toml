@@ -8,4 +8,3 @@ yq = "latest" # YAML/JSON processor (jq for YAML)
 
 gitleaks = "latest" # Git secrets & credential leak detector
 
-process-compose = "latest"

@@ -14,8 +14,8 @@
 ## 常用命令
 
 ```bash
-just dev          # 开发模式 (API + Worker 双进程 + watch)
-just start        # 生产预览 (构建产物 + API/Worker 双进程 + process-compose)
+just dev          # 开发模式 (API + Worker 双进程 + watch，Ctrl-C 同时停止)
+just start        # 生产预览 (构建产物 + API/Worker 双进程)
 just build        # 构建到 dist/
 just type         # tsc --noEmit 类型检查
 just lint         # oxlint 静态检查 (src tests)
@@ -35,9 +35,8 @@ just seed         # 清空所有表数据 + 灌种子 (保留表结构)
 just fresh        # 删表重建 + 重跑迁移 + 灌种子 (破坏性)
 just studio       # Drizzle Studio 可视化管理
 
-# 工具与多语言
+# 工具
 just mail         # 编译 MJML 邮件模板为 Handlebars (.hbs)
-just i18n         # 校验 zh/en catalog 键、占位符与复数形式对称性
 
 # CLI (nest-commander)
 just cmd --help           # 查看所有命令 (直接跑 TS 源码)
@@ -313,7 +312,7 @@ tests/
 - **定位**: `rg "pattern" src -C 3` / `fd -e ts "service"` 全文与符号查找。
 - **结构透视**: 200+ 行大文件严禁直接全量 read，先用 `just outline <path>`（单文件签名）、`just outline <path> --items exports`（导出契约）、`just outline <path> --type class --match ".*Controller"`（过滤类）获取紧凑结构。
 - **结构化批量重构**: 对 import/装饰器等有语法结构的重复改动，用 `ast-grep run -p <pattern> --rewrite <replacement> --update-all <path>` 先以 stdin 验证再全量应用。
-- **验证**: 改动前 `rg` 定位所有关联位置防漏改；改动后 `just check`（fix + fmt + type + i18n-check）。
+- **验证**: 改动前 `rg` 定位所有关联位置防漏改；改动后 `just check`（fix + type + secret）。
 
 ## Agent skills
 

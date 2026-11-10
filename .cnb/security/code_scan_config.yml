@@ -1,5 +1,6 @@
 # 代码安全扫描配置
 # 文档: https://docs.cnb.cool/zh/build/configuration.html
+# 项目: nest-api (NestJS 12 Application)
 #
 # 规范: https://docs.cnb.cool/code-security-conf-schema-zh.json
 # 所有扫描能力默认开启，可通过 ignoreFrom 指向 .scanignore 文件来禁用
@@ -29,6 +30,8 @@ tca:
   scan:
     paths:
       - "src/**"
-      - "prisma/**"
+      - "scripts/**"
       - "tests/**"
+      - "drizzle/**"
+      - "helm/**"
     ignoreFrom: ".scanignore"

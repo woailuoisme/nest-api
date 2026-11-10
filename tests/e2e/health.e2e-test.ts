@@ -93,11 +93,11 @@ describe('HealthController (e2e)', () => {
     }
   }
 
-  it('/livez (GET) 应返回 200 与纯文本 ok', async () => {
-    const response = await app.inject({ method: 'GET', url: '/livez' });
-    expect(response.statusCode).toBe(200);
-    expect(response.payload).toBe('ok');
-    expect(response.headers['content-type']).toContain('text/plain');
+  it('/livez (GET) 应返回 200 与 Terminus 官方空检查报告', async () => {
+    const { statusCode, body } = await getJson('/livez');
+    expect(statusCode).toBe(200);
+    // 官方契约：存活探针也走 HealthCheckService.check([])，返回同一四字段结构
+    expect(body).toEqual({ status: 'ok', info: {}, error: {}, details: {} });
   });
 
   it('/livez 必须豁免全局限流 (@SkipThrottle)，连续高频请求不应触发 429 Too Many Requests', async () => {
@@ -106,14 +106,17 @@ describe('HealthController (e2e)', () => {
     const responses = await Promise.all(requests);
     const has429 = responses.some((res) => res.statusCode === 429);
     expect(has429).toBe(false);
-    expect(responses.every((res) => res.statusCode === 200 && res.payload === 'ok')).toBe(true);
+    expect(responses.every((res) => res.statusCode === 200)).toBe(true);
   });
 
-  it('/readyz (GET) 应返回 200 与包含全量依赖指标的 Terminus 健康报告', async () => {
+  it('/readyz (GET) 应返回 200 与 Terminus 官方四字段报告', async () => {
     const { statusCode, body } = await getJson('/readyz');
     expect(statusCode).toBe(200);
     expect(body.status).toBe('ok');
     expectAllIndicators(body.info);
+    // 官方语义：全部健康时 info === details，error 为空对象（超集关系，非冗余字段）
+    expect(body.error).toEqual({});
+    expect(body.details).toEqual(body.info);
   });
 
   it('旧版 /health 端点应已彻底废除并返回 404', async () => {
@@ -138,11 +141,14 @@ describe('HealthController (e2e)', () => {
       // 逐探针明细必须存活：K8s / 运维面板靠 info 与 error 桶定位「哪个探针 down」，
       // 全局异常过滤器不得把健康报告改写为统一错误信封
       expect(body.info).toHaveProperty('database');
+      expect(body.details).toHaveProperty('shutdown');
+      expect(body.details).toHaveProperty('database');
 
       // 验证在停机期间 Liveness 依然保持健康 (200 OK)，防止 K8s 强杀 Pod
       const livezResponse = await app.inject({ method: 'GET', url: '/livez' });
       expect(livezResponse.statusCode).toBe(200);
-      expect(livezResponse.payload).toBe('ok');
+      // 停机期间存活探针仍为 ok（官方空检查报告），避免 K8s 误杀正在排干的 Pod
+      expect(JSON.parse(livezResponse.payload)).toMatchObject({ status: 'ok' });
     } finally {
       setAppShuttingDown(false);
     }

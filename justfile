@@ -6,22 +6,22 @@ default:
 
 # 释放端口占用（默认 PORT=4300，亦可指定：`just kill-port 8080`）
 kill-port port=env("PORT", "4300"):
-    kill -9 $(lsof -ti:{{ port }} 2>/dev/null) 2>/dev/null || true
+    bash scripts/tasks.sh kill-port {{ port }}
 
-# 启动开发服务器（API + Worker 双进程，process-compose 驱动）
-dev *args='': kill-port
-    process-compose up {{ args }}
+# 启动开发服务器（API + Worker 双进程，SWC watch 热更新；Ctrl-C 同时停止）
+dev:
+    bash scripts/tasks.sh dev
 
-# 启动生产全栈预览服务（构建产物 + API/Worker 双进程，process-compose 驱动）
-start *args='': kill-port build
-    process-compose -f process-compose.prod.yaml up {{ args }}
+# 启动生产全栈预览服务（构建产物 + API/Worker 双进程；Ctrl-C 同时停止）
+start:
+    bash scripts/tasks.sh start
 
 # 构建生产产物（SWC）
 build:
-    rm -rf dist && bun x nest build
+    bash scripts/tasks.sh build
 
-# 提交前完整检查（格式化修复 + 类型 + 敏感凭据 + 多语言）
-check: fix type secret i18n
+# 提交前完整检查（格式化和修复 + 类型 + 敏感凭据）
+check: fix type secret
 
 # TypeScript 类型检查
 type:
@@ -64,10 +64,9 @@ e2e:
 gen:
     bun x drizzle-kit generate
 
-# 应用数据库迁移
+# 应用数据库迁移（先修复 journal，再执行 drizzle migrate）
 migrate:
-    bun scripts/repair-migration-journal.ts
-    bun x drizzle-kit migrate
+    bash scripts/tasks.sh migrate
 
 # 清空数据并灌入种子（保留表结构）
 [confirm]
@@ -85,12 +84,8 @@ studio:
 
 # 编译 MJML 邮件模板为 Handlebars (.hbs)
 mail:
-    bash scripts/build-mail.sh
-
-# 多语言 catalog 对称性校验
-i18n:
-    bun scripts/i18n-check.ts
+    bash scripts/tasks.sh mail
 
 # 构建并运行 CLI 命令（如 `just cmd route:list`）
 cmd *args='--help':
-    bun x nest build && node dist/cli.js {{ args }}
+    bash scripts/tasks.sh build && node dist/cli.js {{ args }}

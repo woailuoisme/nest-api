@@ -81,7 +81,8 @@ just seed             # 灌入种子数据（全新库可用 just fresh 一步�
 just dev                 # API + Worker 双进程，SWC 热更新
 ```
 
-> `just dev` 与生产容器拓扑一致：两个进程共用同一份 `dist/`，日志以 `[app]` / `[worker]` 前缀区分，`Ctrl-C` 同时停止。
+> `just dev` 与生产容器拓扑一致：两个进程共用同一份 `dist/`，日志以 `[app]` / `[worker]` 前缀区分。
+> 两个进程都在当前终端前台运行、日志交错输出（按 Pino 的 `context` 区分来源），`Ctrl-C` 同时停止——不需要额外的进程管理工具。
 
 ### 容器运行
 
@@ -101,8 +102,8 @@ docker compose up -d     # 仅 api + worker；依赖组件见 deploy/ 各自编�
 | 客户端 API 文档   | `http://localhost:4300/docs`       | 客户端公共业务接口与在线调试             |
 | 管理后台 API 文档 | `http://localhost:4300/docs/admin` | 管理领域接口（`/v1/admin` 前缀）         |
 | 认证 API 文档     | `http://localhost:4300/docs/auth`  | 注册/登录/令牌/2FA 端点参考              |
-| 存活探针          | `http://localhost:4300/livez`      | 纯文本 `ok`，零外部 I/O                  |
-| 就绪探针          | `http://localhost:4300/readyz`     | 检测 DB、Redis、实时、存储等依赖与停机态 |
+| 存活探针          | `http://localhost:4300/livez`      | `health.check([])`，零外部 I/O            |
+| 就绪探针          | `http://localhost:4300/readyz`     | 检测 DB、Redis、实时、存储等依赖与停机态；返回 Terminus 官方 `{ status, info, error, details }` |
 
 > 文档面板由 `SWAGGER_ENABLED` 控制，生产可显式关闭。
 
@@ -135,7 +136,7 @@ docker compose up -d     # 仅 api + worker；依赖组件见 deploy/ 各自编�
 ```bash
 # 运行与构建
 just dev                  # API + Worker 双进程热更新
-just start                # 生产全栈预览（先构建，再以 process-compose 双进程运行）
+just start                # 生产全栈预览（先构建，再以双进程运行）
 just build                # 生产构建（SWC → dist/）
 
 # 质量门禁
@@ -149,8 +150,7 @@ just test / watch / cov / e2e
 # 数据库
 just gen / migrate / seed / fresh / studio
 
-# 工具与多语言
-just i18n                 # catalog 键 / 占位符 / 复数形式对称性
+# 工具
 just mail                 # MJML → Handlebars 邮件模板
 just cmd <命令>           # 直接运行 TS CLI（如 just cmd route:list）
 just cmd app:init         # 幂等初始化：密钥 / 迁移 / S3 桶

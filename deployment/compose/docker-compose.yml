@@ -1,7 +1,0 @@
-include:
-  - ../docker-compose.yml
-  - centrifugo/docker-compose.yml
-  - meilisearch/docker-compose.yml
-  - imgproxy/docker-compose.yml
-  - mosquitto/docker-compose.yml
-  - otelcol/docker-compose.yml
