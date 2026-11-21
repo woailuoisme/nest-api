@@ -16,6 +16,8 @@ import { createPgPool } from './pg';
     DrizzleModule.forRootAsync({
       inject: [ConfigService],
       useFactory: (config: ConfigService<EnvConfig, true>) => ({
+        // 显式声明：停机经 app.close() → onApplicationShutdown 关闭 db.$client（pg Pool）
+        autoCloseConnection: true,
         db: createDatabase(
           createPgPool(config.get('DB_URL'), {
             max: config.get('DB_POOL_MAX'),

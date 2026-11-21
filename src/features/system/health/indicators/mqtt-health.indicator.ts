@@ -33,8 +33,7 @@ export class MqttHealthIndicator {
     }
 
     // 软依赖容灾降级：报告 degraded 避免导致整机 503
-    return indicator.up({
-      state: 'degraded',
+    return indicator.degraded({
       connection: 'disconnected',
       reconnectAttempts: this.mqttService.getReconnectAttempts(),
       message: 'MQTT client is disconnected or reconnecting',

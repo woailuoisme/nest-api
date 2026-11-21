@@ -89,6 +89,7 @@ describe('MAIL_TRANSPORT', () => {
     JWT_SECRET: 'j'.repeat(32),
     MFA_ENCRYPTION_KEYS: 'm'.repeat(32),
     OTP_HMAC_KEY: 'o'.repeat(32),
+    IDEMPOTENCY_KEYS: 'i'.repeat(32),
     WEPAY_ALLOW_MOCK: 'true',
   };
 
@@ -175,6 +176,7 @@ describe('生产环境强制显式配置（禁止默认值兜底）', () => {
     WEPAY_PRIVATE_KEY: '-----BEGIN PRIVATE KEY-----\nMIIB\n-----END PRIVATE KEY-----',
   };
   const PROD_OTP_KEY = 'o'.repeat(32);
+  const PROD_IDEMPOTENCY_KEY = 'i'.repeat(32);
   const PROD_BASE = {
     APP_ENV: 'production',
     MAIL_URL: 'smtp://mail.example.org:587',
@@ -182,6 +184,7 @@ describe('生产环境强制显式配置（禁止默认值兜底）', () => {
     DB_URL: PROD_DB_URL,
     JWT_SECRET: PROD_JWT_SECRET,
     MFA_ENCRYPTION_KEYS: PROD_MFA_KEY,
+    IDEMPOTENCY_KEYS: PROD_IDEMPOTENCY_KEY,
     OTP_HMAC_KEY: PROD_OTP_KEY,
     ...PROD_PAYMENT,
   };
@@ -194,6 +197,7 @@ describe('生产环境强制显式配置（禁止默认值兜底）', () => {
         MAIL_FROM_ADDRESS: 'no-reply@nest-api.dev',
         JWT_SECRET: PROD_JWT_SECRET,
         MFA_ENCRYPTION_KEYS: PROD_MFA_KEY,
+        IDEMPOTENCY_KEYS: PROD_IDEMPOTENCY_KEY,
         ...PROD_PAYMENT,
       }),
     ).toThrow(/DB_URL/);
@@ -220,9 +224,19 @@ describe('生产环境强制显式配置（禁止默认值兜底）', () => {
         DB_URL: PROD_DB_URL,
         JWT_SECRET: PROD_JWT_SECRET,
         MFA_ENCRYPTION_KEYS: PROD_MFA_KEY,
+        IDEMPOTENCY_KEYS: PROD_IDEMPOTENCY_KEY,
         ...PROD_PAYMENT,
       }),
     ).toThrow(/OTP_HMAC_KEY/);
+  });
+
+  it('生产环境缺少 IDEMPOTENCY_KEYS 时拒绝启动（幂等记录不得明文落库）', () => {
+    const { IDEMPOTENCY_KEYS: _omit, ...withoutIdempotencyKeys } = PROD_BASE;
+    expect(() => envSchema.parse(withoutIdempotencyKeys)).toThrow(/IDEMPOTENCY_KEYS/);
+  });
+
+  it('幂等密钥短于 32 字符时拒绝启动（弱密钥无法保护 PII）', () => {
+    expect(() => envSchema.parse({ IDEMPOTENCY_KEYS: 'tooshort' })).toThrow(/至少 32 字符/);
   });
 
   it('生产环境显式指定 mock 支付驱动时拒绝启动', () => {
@@ -234,6 +248,7 @@ describe('生产环境强制显式配置（禁止默认值兜底）', () => {
         DB_URL: PROD_DB_URL,
         JWT_SECRET: PROD_JWT_SECRET,
         MFA_ENCRYPTION_KEYS: PROD_MFA_KEY,
+        IDEMPOTENCY_KEYS: PROD_IDEMPOTENCY_KEY,
         WEPAY_DRIVER: 'mock',
       }),
     ).toThrow(/mock/);
@@ -248,6 +263,7 @@ describe('生产环境强制显式配置（禁止默认值兜底）', () => {
         DB_URL: PROD_DB_URL,
         JWT_SECRET: PROD_JWT_SECRET,
         MFA_ENCRYPTION_KEYS: PROD_MFA_KEY,
+        IDEMPOTENCY_KEYS: PROD_IDEMPOTENCY_KEY,
       }),
     ).toThrow(/WEPAY_ALLOW_MOCK/);
   });
@@ -260,6 +276,7 @@ describe('生产环境强制显式配置（禁止默认值兜底）', () => {
       DB_URL: PROD_DB_URL,
       JWT_SECRET: PROD_JWT_SECRET,
       MFA_ENCRYPTION_KEYS: PROD_MFA_KEY,
+      IDEMPOTENCY_KEYS: PROD_IDEMPOTENCY_KEY,
       OTP_HMAC_KEY: PROD_OTP_KEY,
       WEPAY_ALLOW_MOCK: 'true',
     });
@@ -275,6 +292,7 @@ describe('生产环境强制显式配置（禁止默认值兜底）', () => {
         DB_URL: PROD_DB_URL,
         JWT_SECRET: PROD_JWT_SECRET,
         MFA_ENCRYPTION_KEYS: PROD_MFA_KEY,
+        IDEMPOTENCY_KEYS: PROD_IDEMPOTENCY_KEY,
         WEPAY_DRIVER: 'real',
         // 只有私钥，缺 APIV3_KEY / APPID / MCHID / SERIAL_NO
         WEPAY_PRIVATE_KEY: '-----BEGIN PRIVATE KEY-----\nMIIB\n-----END PRIVATE KEY-----',

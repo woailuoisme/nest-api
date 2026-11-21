@@ -2,6 +2,8 @@ import { Injectable } from '@nestjs/common';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import { v7 as uuidv7 } from 'uuid';
 
+import { NOTIFICATION_EVENTS } from '@/common/events';
+
 import type { NotificationPayload, SendNotificationDto } from './notifications.dto';
 
 /**
@@ -18,7 +20,7 @@ export class NotificationsService {
    */
   sendToUser(userId: string, dto: Omit<SendNotificationDto, 'userId'>): NotificationPayload {
     const payload = this.createPayload(dto);
-    this.eventEmitter.emit('notification.sent', { userId, payload });
+    this.eventEmitter.emit(NOTIFICATION_EVENTS.SENT, { userId, payload });
     return payload;
   }
 
@@ -27,7 +29,7 @@ export class NotificationsService {
    */
   broadcast(dto: Omit<SendNotificationDto, 'userId'>): NotificationPayload {
     const payload = this.createPayload(dto);
-    this.eventEmitter.emit('notification.broadcast', { payload });
+    this.eventEmitter.emit(NOTIFICATION_EVENTS.BROADCAST, { payload });
     return payload;
   }
 

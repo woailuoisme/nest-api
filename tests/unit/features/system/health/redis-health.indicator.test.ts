@@ -21,12 +21,12 @@ describe('RedisHealthIndicator', () => {
 
   it('should return up status when redis responds PONG', async () => {
     const result = await indicator.isHealthy('redis');
-    expect(result).toEqual({ redis: { status: 'up' } });
+    expect(result).toMatchObject({ redis: { status: 'up' } });
   });
 
   it('should return down status when redis ping throws error', async () => {
     vi.spyOn(mockRedisClient, 'ping').mockRejectedValue(new Error('Connection timeout'));
     const result = await indicator.isHealthy('redis');
-    expect(result).toEqual({ redis: { status: 'down', message: 'Connection timeout' } });
+    expect(result).toMatchObject({ redis: { status: 'down', message: 'Connection timeout' } });
   });
 });

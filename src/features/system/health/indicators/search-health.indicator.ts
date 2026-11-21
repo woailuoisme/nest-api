@@ -28,14 +28,12 @@ export class SearchHealthIndicator {
       }
 
       // 软依赖容灾降级：报告 degraded，避免软依赖瞬断触发 K8s 503 误杀
-      return indicator.up({
-        state: 'degraded',
+      return indicator.degraded({
         driver: health.driver,
         message: health.message ?? 'Search service is unreachable',
       });
     } catch (error) {
-      return indicator.up({
-        state: 'degraded',
+      return indicator.degraded({
         message: (error as Error).message,
       });
     }

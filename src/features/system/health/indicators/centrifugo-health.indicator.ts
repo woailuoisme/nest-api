@@ -24,7 +24,7 @@ export class CentrifugoHealthIndicator {
     const driver = this.realtimeService.getDriver();
 
     try {
-      const healthStatus = await this.realtimeService.checkHealth();
+      const healthStatus = await withDeadline(this.realtimeService.checkHealth(), PROBE_TIMEOUT_MS);
 
       if (healthStatus.status === 'up') {
         return indicator.up({
@@ -37,8 +37,7 @@ export class CentrifugoHealthIndicator {
       }
 
       // 软依赖降级处理：报告 degraded 警告，但避免触发 Terminus 503 熔断
-      return indicator.up({
-        state: 'degraded',
+      return indicator.degraded({
         driver,
         message:
           driver === 'none'
@@ -46,11 +45,27 @@ export class CentrifugoHealthIndicator {
             : (healthStatus.error ?? 'Centrifugo is unreachable'),
       });
     } catch (error) {
-      return indicator.up({
-        state: 'degraded',
+      return indicator.degraded({
         driver,
         message: (error as Error).message,
       });
     }
+  }
+}
+
+const PROBE_TIMEOUT_MS = 1500;
+
+/** 软依赖探测加硬上限：超时按 degraded 处理（底层请求不取消，只限制探针耗时；如需取消应让 transport 接受 AbortSignal） */
+async function withDeadline<T>(promise: Promise<T>, ms: number): Promise<T> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  try {
+    return await Promise.race([
+      promise,
+      new Promise<never>((_, reject) => {
+        timer = setTimeout(() => reject(new Error(`health check timed out after ${ms}ms`)), ms);
+      }),
+    ]);
+  } finally {
+    clearTimeout(timer);
   }
 }

@@ -6,12 +6,14 @@ import { Role } from '@/common/constants/roles';
 import type { CurrentUserPayload } from '@/common/decorators/current-user.decorator';
 import {
   IOT_EVENTS,
+  NOTIFICATION_EVENTS,
   type IotAlarmTriggeredEvent,
   type IotCommandExecutedEvent,
   type IotDeviceStatusChangedEvent,
   type IotTelemetryReceivedEvent,
+  type NotificationBroadcastEvent,
+  type NotificationSentEvent,
 } from '@/common/events';
-import type { NotificationBroadcastEvent, NotificationSentEvent } from '@/common/events/notification.event';
 import type { Database } from '@/database/drizzle/database';
 
 import { REALTIME_CHANNELS } from './channels/realtime-channels.service';
@@ -118,7 +120,7 @@ export class RealtimeEventsService {
   /**
    * 监听领域事件：特定用户通知派发
    */
-  @OnEvent('notification.sent')
+  @OnEvent(NOTIFICATION_EVENTS.SENT)
   async handleNotificationSent(event: NotificationSentEvent): Promise<void> {
     if (!event.userId) return;
     this.logger.debug(`[Realtime] 接收到单播通知事件，准备推送到用户 [${event.userId}]`);
@@ -130,7 +132,7 @@ export class RealtimeEventsService {
   /**
    * 监听领域事件：全站广播通知
    */
-  @OnEvent('notification.broadcast')
+  @OnEvent(NOTIFICATION_EVENTS.BROADCAST)
   async handleNotificationBroadcast(event: NotificationBroadcastEvent): Promise<void> {
     this.logger.debug('[Realtime] 接收到广播通知事件，准备进行全站实时推送');
 

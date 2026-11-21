@@ -15,12 +15,14 @@ describe('CentrifugoHealthIndicator 软依赖健康检查', () => {
   };
   let mockIndicatorBuilder: {
     up: ReturnType<typeof vi.fn>;
+    degraded: ReturnType<typeof vi.fn>;
     down: ReturnType<typeof vi.fn>;
   };
 
   beforeEach(() => {
     mockIndicatorBuilder = {
       up: vi.fn().mockImplementation((data) => ({ centrifugo: { status: 'up', ...data } })),
+      degraded: vi.fn().mockImplementation((data) => ({ centrifugo: { status: 'degraded', ...data } })),
       down: vi.fn().mockImplementation((data) => ({ centrifugo: { status: 'down', ...data } })),
     };
 
@@ -72,12 +74,24 @@ describe('CentrifugoHealthIndicator 软依赖健康检查', () => {
 
     const result = await indicator.isHealthy('centrifugo');
 
-    expect(mockIndicatorBuilder.up).toHaveBeenCalledWith({
-      state: 'degraded',
+    expect(mockIndicatorBuilder.degraded).toHaveBeenCalledWith({
       driver: 'centrifugo',
       message: 'connect ECONNREFUSED 127.0.0.1:8000',
     });
-    expect(result.centrifugo.state).toBe('degraded');
+    expect(result.centrifugo.status).toBe('degraded');
+  });
+
+  it('当 Centrifugo 探测超时时应按 degraded 返回（不拖住就绪探针）', async () => {
+    vi.useFakeTimers();
+    mockRealtimeService.checkHealth.mockReturnValue(new Promise(() => {}));
+
+    const pending = indicator.isHealthy('centrifugo');
+    await vi.advanceTimersByTimeAsync(1600);
+    const result = await pending;
+
+    expect(result.centrifugo.status).toBe('degraded');
+    expect(result.centrifugo.message).toContain('timed out');
+    vi.useRealTimers();
   });
 
   it('当底层调用抛出未知异常时应安全降级报告 degraded', async () => {
@@ -85,12 +99,11 @@ describe('CentrifugoHealthIndicator 软依赖健康检查', () => {
 
     const result = await indicator.isHealthy('centrifugo');
 
-    expect(mockIndicatorBuilder.up).toHaveBeenCalledWith({
-      state: 'degraded',
+    expect(mockIndicatorBuilder.degraded).toHaveBeenCalledWith({
       driver: 'centrifugo',
       message: 'DNS resolution timeout',
     });
-    expect(result.centrifugo.state).toBe('degraded');
+    expect(result.centrifugo.status).toBe('degraded');
   });
 
   it('未配置 REALTIME_URL 时应报告 driver=none，不与「已配置但不可达」混淆', async () => {
@@ -105,11 +118,10 @@ describe('CentrifugoHealthIndicator 软依赖健康检查', () => {
 
     const result = await indicator.isHealthy('centrifugo');
 
-    expect(mockIndicatorBuilder.up).toHaveBeenCalledWith({
-      state: 'degraded',
+    expect(mockIndicatorBuilder.degraded).toHaveBeenCalledWith({
       driver: 'none',
       message: '未配置 REALTIME_URL：实时广播为空操作',
     });
-    expect(result.centrifugo.state).toBe('degraded');
+    expect(result.centrifugo.status).toBe('degraded');
   });
 });

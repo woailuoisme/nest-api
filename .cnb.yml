@@ -45,8 +45,6 @@ v*:
               -f Dockerfile \
               -t "${REGISTRY}:latest" \
               -t "${REGISTRY}:${VERSION}" \
-              --build-arg GIT_COMMIT="${CNB_COMMIT:-none}" \
-              --build-arg BUILD_TIME="$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
               --push .
 
         # 注意：stages 下的元素是 Job（不是嵌套的 Pipeline）。

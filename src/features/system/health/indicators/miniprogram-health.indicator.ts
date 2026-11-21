@@ -34,12 +34,9 @@ export class MiniprogramHealthIndicator {
       };
 
       // 软依赖容灾降级：小程序能力未就绪属于业务功能降级，不应触发 K8s 503 误杀
-      return health.status === 'up' && !mockInProduction
-        ? indicator.up(details)
-        : indicator.up({ state: 'degraded', ...details });
+      return health.status === 'up' && !mockInProduction ? indicator.up(details) : indicator.degraded({ ...details });
     } catch (error) {
-      return indicator.up({
-        state: 'degraded',
+      return indicator.degraded({
         message: (error as Error).message,
       });
     }

@@ -14,12 +14,14 @@ describe('SearchHealthIndicator 搜索引擎健康检查', () => {
   };
   let mockIndicatorBuilder: {
     up: ReturnType<typeof vi.fn>;
+    degraded: ReturnType<typeof vi.fn>;
     down: ReturnType<typeof vi.fn>;
   };
 
   beforeEach(() => {
     mockIndicatorBuilder = {
       up: vi.fn().mockImplementation((data) => ({ search: { status: 'up', ...data } })),
+      degraded: vi.fn().mockImplementation((data) => ({ search: { status: 'degraded', ...data } })),
       down: vi.fn().mockImplementation((data) => ({ search: { status: 'down', ...data } })),
     };
 
@@ -79,12 +81,11 @@ describe('SearchHealthIndicator 搜索引擎健康检查', () => {
 
     const result = await indicator.isHealthy('search');
 
-    expect(mockIndicatorBuilder.up).toHaveBeenCalledWith({
-      state: 'degraded',
+    expect(mockIndicatorBuilder.degraded).toHaveBeenCalledWith({
       driver: 'meilisearch',
       message: 'connect ECONNREFUSED 127.0.0.1:7700',
     });
-    expect(result.search.state).toBe('degraded');
+    expect(result.search.status).toBe('degraded');
   });
 
   it('当检查过程抛出未捕获异常时应安全捕获并上报 degraded 状态', async () => {
@@ -92,10 +93,7 @@ describe('SearchHealthIndicator 搜索引擎健康检查', () => {
 
     const result = await indicator.isHealthy('search');
 
-    expect(mockIndicatorBuilder.up).toHaveBeenCalledWith({
-      state: 'degraded',
-      message: 'Network error',
-    });
-    expect(result.search.state).toBe('degraded');
+    expect(mockIndicatorBuilder.degraded).toHaveBeenCalledWith({ message: 'Network error' });
+    expect(result.search.status).toBe('degraded');
   });
 });

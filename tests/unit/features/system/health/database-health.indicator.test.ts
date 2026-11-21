@@ -18,12 +18,12 @@ describe('DatabaseHealthIndicator', () => {
 
   it('should return up status when raw query succeeds', async () => {
     const result = await indicator.isHealthy('database');
-    expect(result).toEqual({ database: { status: 'up' } });
+    expect(result).toMatchObject({ database: { status: 'up' } });
   });
 
   it('should return down status when database query fails', async () => {
     vi.spyOn(mockDb, 'execute').mockRejectedValue(new Error('Connection lost'));
     const result = await indicator.isHealthy('database');
-    expect(result).toEqual({ database: { status: 'down', message: 'Connection lost' } });
+    expect(result).toMatchObject({ database: { status: 'down', message: 'Connection lost' } });
   });
 });

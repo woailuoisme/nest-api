@@ -19,7 +19,8 @@ import { WepayHealthIndicator } from './indicators/wepay-health.indicator';
 
 @Module({
   // 探针依赖的领域模块显式 import（Media/Iot/Realtime 均为非全局模块）
-  imports: [TerminusModule, MediaModule, IotModule, RealtimeModule],
+  // Terminus 自带 ConsoleLogger 绕开全局 Pino：关掉，失败已体现在 503 与日志中间件
+  imports: [TerminusModule.forRoot({ logger: false }), MediaModule, IotModule, RealtimeModule],
   controllers: [HealthController],
   providers: [
     DatabaseHealthIndicator,

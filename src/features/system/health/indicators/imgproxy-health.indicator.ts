@@ -31,8 +31,7 @@ export class ImgproxyHealthIndicator {
 
     const endpoint = this.imgproxyService.getEndpoint();
     if (!endpoint) {
-      return indicator.up({
-        state: 'degraded',
+      return indicator.degraded({
         driver: 'imgproxy',
         serviceStatus: 'down',
         message: 'imgproxy endpoint is invalid',
@@ -55,15 +54,13 @@ export class ImgproxyHealthIndicator {
         });
       }
 
-      return indicator.up({
-        state: 'degraded',
+      return indicator.degraded({
         driver: 'imgproxy',
         serviceStatus: 'down',
         message: `imgproxy health check returned status ${res.status}`,
       });
     } catch (error) {
-      return indicator.up({
-        state: 'degraded',
+      return indicator.degraded({
         driver: 'imgproxy',
         serviceStatus: 'down',
         message: (error as Error).message,

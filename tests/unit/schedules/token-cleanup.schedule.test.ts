@@ -50,6 +50,7 @@ describe('TokenCleanupSchedule', () => {
         expect.objectContaining({
           name: TokenCleanupJobName.PurgeExpired,
           data: { batchSize: 1000 },
+          opts: expect.objectContaining({ attempts: 3 }),
         }),
       );
     });

@@ -15,12 +15,14 @@ describe('ImgproxyHealthIndicator', () => {
   };
   let mockIndicatorBuilder: {
     up: ReturnType<typeof vi.fn>;
+    degraded: ReturnType<typeof vi.fn>;
     down: ReturnType<typeof vi.fn>;
   };
 
   beforeEach(() => {
     mockIndicatorBuilder = {
       up: vi.fn().mockImplementation((data) => ({ imgproxy: { status: 'up', ...data } })),
+      degraded: vi.fn().mockImplementation((data) => ({ imgproxy: { status: 'degraded', ...data } })),
       down: vi.fn().mockImplementation((data) => ({ imgproxy: { status: 'down', ...data } })),
     };
 
@@ -84,8 +86,7 @@ describe('ImgproxyHealthIndicator', () => {
 
     await indicator.isHealthy('imgproxy');
 
-    expect(mockIndicatorBuilder.up).toHaveBeenCalledWith({
-      state: 'degraded',
+    expect(mockIndicatorBuilder.degraded).toHaveBeenCalledWith({
       driver: 'imgproxy',
       serviceStatus: 'down',
       message: 'imgproxy health check returned status 503',
@@ -99,8 +100,7 @@ describe('ImgproxyHealthIndicator', () => {
 
     await indicator.isHealthy('imgproxy');
 
-    expect(mockIndicatorBuilder.up).toHaveBeenCalledWith({
-      state: 'degraded',
+    expect(mockIndicatorBuilder.degraded).toHaveBeenCalledWith({
       driver: 'imgproxy',
       serviceStatus: 'down',
       message: 'Connection refused',

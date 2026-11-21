@@ -12,21 +12,16 @@ export class RedisHealthIndicator {
   ) {}
 
   async isHealthy(key: string): Promise<HealthIndicatorResult> {
-    const indicator = this.healthIndicatorService.check(key);
-
-    try {
-      if (this.redisClient.status === 'wait') {
-        await this.redisClient.connect();
-      }
-
-      const response = await this.redisClient.ping();
-      if (response !== 'PONG') {
-        throw new Error('Unexpected Redis ping response');
-      }
-
-      return indicator.up();
-    } catch (error) {
-      return indicator.down({ message: (error as Error).message });
-    }
+    return this.healthIndicatorService
+      .check(key)
+      .attempt(async () => {
+        if (this.redisClient.status === 'wait') {
+          await this.redisClient.connect();
+        }
+        if ((await this.redisClient.ping()) !== 'PONG') {
+          throw new Error('Unexpected Redis ping response');
+        }
+      })
+      .withTimeout('1.5s');
   }
 }

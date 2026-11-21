@@ -37,6 +37,9 @@ export class TokenCleanupSchedule implements OnApplicationBootstrap {
         name: TokenCleanupJobName.PurgeExpired,
         data: { batchSize: 1000 },
         opts: {
+          // 瞬时 DB 抖动不应让当天清理直接跳过（逻辑按过期时间分批删除，重试幂等）
+          attempts: 3,
+          backoff: { type: 'exponential', delay: 60_000 },
           removeOnComplete: { count: 100 },
           removeOnFail: { count: 50 },
         },

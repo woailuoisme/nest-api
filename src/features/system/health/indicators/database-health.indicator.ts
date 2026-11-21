@@ -12,12 +12,11 @@ export class DatabaseHealthIndicator {
   ) {}
 
   async isHealthy(key = 'database'): Promise<HealthIndicatorResult> {
-    const indicator = this.healthIndicatorService.check(key);
-    try {
-      await this.db.execute('SELECT 1');
-      return indicator.up();
-    } catch (error) {
-      return indicator.down({ message: (error as Error).message });
-    }
+    return this.healthIndicatorService
+      .check(key)
+      .attempt(async () => {
+        await this.db.execute('SELECT 1');
+      })
+      .withTimeout('1.5s');
   }
 }

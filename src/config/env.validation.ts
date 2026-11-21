@@ -78,7 +78,13 @@ function missingSmsCredentials(data: {
 }
 
 /** 生产环境必须显式配置、不允许默认值兑底的 Key */
-const PRODUCTION_REQUIRED_KEYS = ['DB_URL', 'JWT_SECRET', 'MFA_ENCRYPTION_KEYS', 'OTP_HMAC_KEY'] as const;
+const PRODUCTION_REQUIRED_KEYS = [
+  'DB_URL',
+  'JWT_SECRET',
+  'MFA_ENCRYPTION_KEYS',
+  'OTP_HMAC_KEY',
+  'IDEMPOTENCY_KEYS',
+] as const;
 
 /**
  * 空串视同未配置。
@@ -163,8 +169,15 @@ export const envSchema = z
 
     // 官方认证模块：JWT access token 的 HS256 签名密钥（≥32 字符），生产必须显式配置
     JWT_SECRET: emptyAsUndefined(z.string().min(32).optional()),
-    /** 幂等响应加密密钥（逗号分隔，最新在前，每个 ≥32 字符）；未配置则不加密 */
-    IDEMPOTENCY_KEYS: emptyAsUndefined(z.string().optional()),
+    /** 幂等记录加密密钥（逗号分隔，最新在前，每个 ≥32 字符）。生产必填：响应含 PII，明文落库不可接受 */
+    IDEMPOTENCY_KEYS: emptyAsUndefined(
+      z
+        .string()
+        .refine((value) => value.split(',').every((key) => key.trim().length >= 32), {
+          message: '每个幂等记录加密密钥至少 32 字符，以逗号分隔',
+        })
+        .optional(),
+    ),
     /** 验证码摘要专用密钥（≥32 字符）。缺失时以 JWT_SECRET 做域分离派生；生产必须显式配置 */
     OTP_HMAC_KEY: emptyAsUndefined(z.string().min(32).optional()),
     // TOTP secret 的 AES-256-GCM 加密密钥（逗号分隔，最新在前，每段 ≥32 字符）

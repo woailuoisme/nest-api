@@ -8,7 +8,7 @@ import { MediaModule } from '@/common/media/media.module';
 import { SearchModule } from '@/common/search/search.module';
 import { StorageModule } from '@/common/storage/storage.module';
 import { envSchema } from '@/config/env.validation';
-import { createBullModuleConfig, QUEUE_DEFAULT_JOB_OPTIONS } from '@/database/bull.config';
+import { createBullModuleConfig } from '@/database/bull.config';
 import { DatabaseModule } from '@/database/drizzle/drizzle.module';
 import { DemoProcessor } from '@/jobs/demo/demo.processor';
 import { MailProcessor } from '@/jobs/mail/mail.processor';
@@ -29,9 +29,7 @@ import { LoggerModule } from '@/setup/logger/logger.module';
       inject: [ConfigService],
       useFactory: createBullModuleConfig,
     }),
-    BullModule.registerQueue(
-      ...ALL_QUEUE_NAMES.map((name) => ({ name, defaultJobOptions: QUEUE_DEFAULT_JOB_OPTIONS })),
-    ),
+    BullModule.registerQueue(...ALL_QUEUE_NAMES.map((name) => ({ name }))),
     DatabaseModule,
     StorageModule,
     MailModule.forRoot(),

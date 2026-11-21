@@ -2,7 +2,6 @@ import { BullModule } from '@nestjs/bullmq';
 import { Global, Module } from '@nestjs/common';
 
 import { ALL_QUEUE_NAMES } from '@/common/constants/queues';
-import { QUEUE_DEFAULT_JOB_OPTIONS } from '@/database/bull.config';
 
 import { DemoJobs } from './demo/demo.jobs';
 import { MailJobs } from './mail/mail.jobs';
@@ -16,9 +15,8 @@ import { SearchJobs } from './search/search.jobs';
 @Global()
 @Module({
   imports: [
-    BullModule.registerQueue(
-      ...ALL_QUEUE_NAMES.map((name) => ({ name, defaultJobOptions: QUEUE_DEFAULT_JOB_OPTIONS })),
-    ),
+    // retention 由 forRoot 的 defaultJobOptions 统一下发（见 database/bull.config.ts）
+    BullModule.registerQueue(...ALL_QUEUE_NAMES.map((name) => ({ name }))),
   ],
   providers: [MailJobs, DemoJobs, SearchJobs],
   exports: [MailJobs, DemoJobs, SearchJobs],

@@ -5,6 +5,10 @@
  * 无法验证租约的原子抢占、CAS 谓词与 DB 时钟语义。本文件直接驱动真实实现与真实 SQL，覆盖：
  * 新键抢占、在途互斥、完成后回放、CAS 失配、**过期行必须被接管**、释放后可重新抢占。
  *
+ * 未直接使用官方 `idempotencyStoreContract`：该套件的过期用例靠伪造 JS `Date` 推进时间，
+ * 而本 store 的租约可见性统一由 DB 时钟（`NOW()`）判定，两者不兼容；此处以等价用例覆盖同样语义，
+ * 并补一条官方套件强调的并发抢占断言。
+ *
  * 目标库取自 `DB_URL`（缺失时回退本机默认地址）；**库不可达或 idempotency_keys 表尚未迁移时整体跳过**，
  * 可安全留在默认单元测试集。读取 `.env` 使用 `dotenv.parse` 而非 `dotenv/config`：不修改 `process.env`。
  */
@@ -118,6 +122,22 @@ describe.skipIf(!connection)('DrizzleIdempotencyStore（真实 PostgreSQL 集成
 
     const takenOver = await store.acquire(key, 'owner-new', '/v1/orders:hash-d', 30_000);
     expect(takenOver.state).toBe('acquired');
+  });
+
+  it('并发抢占：32 个调用方同时抢同一键，有且仅有一个 acquired，其余为 in-flight', async () => {
+    const key = newKey('race');
+    const fingerprint = '/v1/orders:hash-race';
+
+    const results = await Promise.all(
+      Array.from({ length: 32 }, (_, index) => store.acquire(key, `owner-${index}`, fingerprint, 30_000)),
+    );
+
+    expect(results.filter((result) => result.state === 'acquired')).toHaveLength(1);
+    expect(results.filter((result) => result.state === 'in-flight')).toHaveLength(31);
+    // 指纹必须被所有落败方读到同一份，否则说明写入被部分覆盖
+    for (const result of results) {
+      if (result.state !== 'acquired') expect(result.fingerprint).toBe(fingerprint);
+    }
   });
 
   it('release 成功后可重新抢占，且不会误删已完成的回放记录', async () => {

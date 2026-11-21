@@ -17,12 +17,14 @@ describe('MqttHealthIndicator (MQTT Broker 健康检查指示器)', () => {
   };
   let mockIndicatorBuilder: {
     up: ReturnType<typeof vi.fn>;
+    degraded: ReturnType<typeof vi.fn>;
     down: ReturnType<typeof vi.fn>;
   };
 
   beforeEach(() => {
     mockIndicatorBuilder = {
       up: vi.fn().mockImplementation((data) => ({ mqtt: { status: 'up', ...data } })),
+      degraded: vi.fn().mockImplementation((data) => ({ mqtt: { status: 'degraded', ...data } })),
       down: vi.fn().mockImplementation((data) => ({ mqtt: { status: 'down', ...data } })),
     };
 
@@ -77,12 +79,11 @@ describe('MqttHealthIndicator (MQTT Broker 健康检查指示器)', () => {
 
     const result = await indicator.isHealthy('mqtt');
 
-    expect(mockIndicatorBuilder.up).toHaveBeenCalledWith({
-      state: 'degraded',
+    expect(mockIndicatorBuilder.degraded).toHaveBeenCalledWith({
       connection: 'disconnected',
       reconnectAttempts: 3,
       message: 'MQTT client is disconnected or reconnecting',
     });
-    expect(result.mqtt.status).toBe('up');
+    expect(result.mqtt.status).toBe('degraded');
   });
 });
