@@ -17,12 +17,12 @@ import { StorageHealthIndicator } from './indicators/storage-health.indicator';
 import { WepayHealthIndicator } from './indicators/wepay-health.indicator';
 
 /**
- * 云原生系统健康探针控制器（严格遵循 `@nestjs/terminus` 官方契约）。
+ * 云原生系统健康探针控制器。
  *
- * - `GET /livez`：存活探针，`health.check([])` —— 零外部 I/O，只证明进程与事件循环可调度；
- * - `GET /readyz`：就绪探针，聚合 DB、Redis、存储、实时、搜索、支付、小程序与优雅停机状态。
+ * - `GET /livez`：存活探针，直接返回极简 `{ status: 'ok' }` —— 零外部 I/O，只证明进程与事件循环可调度；
+ * - `GET /readyz`：就绪探针，严格遵循 `@nestjs/terminus` 官方契约，聚合 DB、Redis、存储、实时、搜索、支付、小程序与优雅停机状态。
  *
- * 响应体即 Terminus 官方 `{ status, info, error, details }`：
+ * `/readyz` 响应体即 Terminus 官方 `{ status, info, error, details }`：
  * `info` = 通过的探针，`error` = 失败的探针，`details` = 两者并集
  * （全部健康时 `info` 与 `details` 内容相同，属官方定义的超集关系，不做裁剪）。
  * 任一探针 down 或抛异常时，`@HealthCheck()` 自动转为 503 + 同一结构。
@@ -72,9 +72,8 @@ export class HealthController {
    * 仅验证进程存活与 HTTP 事件循环可调度，不依赖任何外部系统。失败时触发 Pod 重启。
    */
   @Get('livez')
-  @HealthCheck()
   checkLivez() {
-    return this.health.check([]);
+    return { status: 'ok' };
   }
 
   /**

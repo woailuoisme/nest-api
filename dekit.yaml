@@ -1,0 +1,10 @@
+tasks:
+  dev/api:
+    cmd: [bun, x, nest, start, --watch, --entryFile, cli, --, serve]
+  dev/worker:
+    cmd: [bun, x, nest, start, --watch, --entryFile, cli, --, worker]
+
+  prod/api:
+    cmd: [node, dist/cli.js, serve]
+  prod/worker:
+    cmd: [node, dist/cli.js, worker]

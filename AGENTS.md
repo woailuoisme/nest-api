@@ -245,6 +245,7 @@ tests/
   - **禁写 `@ApiErrorResponse`**: 全局统一异常过滤器 (`HttpExceptionFilter`) 已经 100% 接管所有错误状态码与统一错误响应信封结构，Controller 层**严禁/无需声明任何 `@ApiErrorResponse`**，以保持控制器注解精简清爽。
 - **工具库标准 (es-toolkit 优先规范)**:
   - **唯一首选**: 项目全面拥抱 `es-toolkit` (2~3x 极速、纯 ESM、类型安全)。严禁引入 Lodash / Underscore / Ramda 等老旧或体积庞大的工具库。
+
   - **按需引入与场景速查表**:
 
     | 场景领域                | 推荐 API                                                                      | 典型应用范式                                                                                                                                             |

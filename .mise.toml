@@ -1,10 +1,8 @@
 [tools]
-bun = "latest" # Fast all-in-one JavaScript/TypeScript runtime & package manager
-
-just = "latest" # Handy command runner
-
+bun = "latest"      # Fast all-in-one JavaScript/TypeScript runtime & package manager
+atlas = 'latest'
+just = "latest"     # Handy command runner
 hadolint = "latest" # Dockerfile linter
-yq = "latest" # YAML/JSON processor (jq for YAML)
-
+yq = "latest"       # YAML/JSON processor (jq for YAML)
 gitleaks = "latest" # Git secrets & credential leak detector
-
+dekit = 'latest'

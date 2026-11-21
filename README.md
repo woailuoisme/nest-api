@@ -1,4 +1,4 @@
-# nest-api <!-- rumdl-disable-line first-line-heading -->
+# nest-api
 
 现代、开箱即用的 NestJS 12 + Fastify 5 企业级后端脚手架，纯 ESM 架构。
 集成 @nestjs/authentication 认证、Drizzle ORM、BullMQ 队列、Centrifugo 实时中枢、MQTT 5.0 物联网总线、
@@ -22,16 +22,16 @@ Meilisearch 检索、imgproxy 媒体处理、幂等与弹性治理，以及 Vite
 
 ## 技术栈
 
-| 层次               | 选型                                                  |
-| :----------------- | :---------------------------------------------------- |
-| 运行时             | Bun ≥ 1.2 + Node ≥ 24，纯 ESM                         |
-| 核心框架           | NestJS 12 + Fastify 5                                 |
+| 层次               | 选型                                                                                        |
+| :----------------- | :------------------------------------------------------------------------------------------ |
+| 运行时             | Bun ≥ 1.2 + Node ≥ 24，纯 ESM                                                               |
+| 核心框架           | NestJS 12 + Fastify 5                                                                       |
 | 持久层             | Drizzle ORM 1.0 RC（`@nestjs/drizzle` + node-postgres）+ PostgreSQL（原生 `uuidv7()` 主键） |
-| 认证授权           | @nestjs/authentication 0.1                            |
-| 缓存与队列         | Redis + BullMQ 6                                      |
-| 实时 / 检索 / 物联 | Centrifugo / Meilisearch / MQTT 5.0                   |
-| 校验与文档         | Zod 4 Standard Schema + OpenAPI 3.1（Scalar UI）      |
-| 构建与质量         | SWC + oxlint + oxfmt + Gitleaks + Vitest 5 + Just     |
+| 认证授权           | @nestjs/authentication 0.1                                                                  |
+| 缓存与队列         | Redis + BullMQ 6                                                                            |
+| 实时 / 检索 / 物联 | Centrifugo / Meilisearch / MQTT 5.0                                                         |
+| 校验与文档         | Zod 4 Standard Schema + OpenAPI 3.1（Scalar UI）                                            |
+| 构建与质量         | SWC + oxlint + oxfmt + Gitleaks + Vitest 5 + Just                                           |
 
 ---
 
@@ -97,12 +97,12 @@ docker compose up -d     # 仅 api + worker；依赖组件见 deploy/ 各自编�
 
 ## 服务与控制台
 
-| 服务              | 地址                               | 说明                                     |
-| :---------------- | :--------------------------------- | :--------------------------------------- |
-| 客户端 API 文档   | `http://localhost:4300/docs`       | 客户端公共业务接口与在线调试             |
-| 管理后台 API 文档 | `http://localhost:4300/docs/admin` | 管理领域接口（`/v1/admin` 前缀）         |
-| 认证 API 文档     | `http://localhost:4300/docs/auth`  | 注册/登录/令牌/2FA 端点参考              |
-| 存活探针          | `http://localhost:4300/livez`      | `health.check([])`，零外部 I/O            |
+| 服务              | 地址                               | 说明                                                                                            |
+| :---------------- | :--------------------------------- | :---------------------------------------------------------------------------------------------- |
+| 客户端 API 文档   | `http://localhost:4300/docs`       | 客户端公共业务接口与在线调试                                                                    |
+| 管理后台 API 文档 | `http://localhost:4300/docs/admin` | 管理领域接口（`/v1/admin` 前缀）                                                                |
+| 认证 API 文档     | `http://localhost:4300/docs/auth`  | 注册/登录/令牌/2FA 端点参考                                                                     |
+| 存活探针          | `http://localhost:4300/livez`      | `health.check([])`，零外部 I/O                                                                  |
 | 就绪探针          | `http://localhost:4300/readyz`     | 检测 DB、Redis、实时、存储等依赖与停机态；返回 Terminus 官方 `{ status, info, error, details }` |
 
 > 文档面板由 `SWAGGER_ENABLED` 控制，生产可显式关闭。

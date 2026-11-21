@@ -1121,8 +1121,11 @@ Centrifugo 使用基于 JSON 的协议帧通信。借助 [Bruno](https://www.use
 #### 请求 1：用户登录 (`POST /v1/auth/sign-in/email`)
 
 - **URL**: `{{baseUrl}}/v1/auth/sign-in/email`
+
 - **Method**: `POST`
+
 - **Headers**: `Content-Type: application/json`
+
 - **Body**:
 
   ```json
@@ -1147,9 +1150,12 @@ Centrifugo 使用基于 JSON 的协议帧通信。借助 [Bruno](https://www.use
 #### 请求 2：获取长连接 Connection Token (`GET /v1/realtime/token`)
 
 - **URL**: `{{baseUrl}}/v1/realtime/token?protocol=websocket`
+
 - **Method**: `GET`
+
 - **Headers**:
   - `Authorization`: `Bearer {{bearerToken}}`
+
 - **Post Response Script**:
 
   ```javascript
@@ -1167,8 +1173,11 @@ Centrifugo 使用基于 JSON 的协议帧通信。借助 [Bruno](https://www.use
 > 💡 **开发者福利**：无需启动 Centrifugo 容器即可在本地直接验证 NestJS 后端频道授权规则是否符合预期！
 
 - **URL**: `{{baseUrl}}/v1/realtime/proxy/subscribe`
+
 - **Method**: `POST`
+
 - **Headers**: `Content-Type: application/json`
+
 - **Body**:
 
   ```json
@@ -1193,10 +1202,13 @@ Centrifugo 使用基于 JSON 的协议帧通信。借助 [Bruno](https://www.use
 #### 请求 4 (备用换票模式)：申请私有频道 Subscription Token (`POST /v1/realtime/subscribe`)
 
 - **URL**: `{{baseUrl}}/v1/realtime/subscribe`
+
 - **Method**: `POST`
+
 - **Headers**:
   - `Authorization`: `Bearer {{bearerToken}}`
   - `Content-Type`: `application/json`
+
 - **Body**:
 
   ```json

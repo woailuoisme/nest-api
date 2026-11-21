@@ -123,12 +123,15 @@ flowchart TD
 工业物联网必须准确感知设备非正常离线（如车间动力电跳闸、网线断开、工控机死机）。
 
 - **主题**：`devices/{tenantId}/{deviceId}/status`
+
 - **QoS 策略**：**QoS 1**，且必须设置 **`retain: true`**（让新上线的监控端立即读到最新状态）。
+
 - **MQTT 客户端连接配置**：设备在建立 MQTT 连接时，向 Broker 注册如下**遗嘱消息 (Last Will and Testament, LWT)**：
   - **遗嘱主题**：`devices/{tenantId}/{deviceId}/status`
   - **遗嘱 Payload**：`{"status":"offline","reason":"network_disruption","timestamp":1726053600000}`
   - **遗嘱 QoS**：`1`
   - **遗嘱 Retain**：`true`
+
 - **设备正常上线 Payload**：
 
   ```json
@@ -159,11 +162,13 @@ flowchart TD
 #### 1. 平台下发指令数据包 (Request)
 
 - **发布主题**：`devices/{tenantId}/{deviceId}/command`（租户取自 `IOT_DEVICE_TENANTS` 注册表，未登记则为 `default`）
+
 - **MQTT 5.0 Header Properties**：
   - `responseTopic`: `app/rpc/{podId}/reply`（指向当前发起请求的 Pod 私有通道）
   - `correlationData`: `b3f1c9d2-4e8a-4b91-9c8e-2f7a6b5c4d3e`（全局唯一关联 ID）
   - `userProperties`: `{"tenantId":"acme-factory","operator":"admin","dispatchAt":"1726053600000"}`
   - `messageExpiryInterval`: `10`（10 秒内设备未接收则 Broker 自动抛弃，防止堆积下发）
+
 - **指令 Payload**：
 
   ```json
@@ -183,8 +188,10 @@ flowchart TD
 现场网关接收到指令并由 PLC 执行完毕后，必须原样提取 MQTT 5.0 属性中的 `responseTopic` 与 `correlationData` 发送应答：
 
 - **发布目标**：`responseTopic`（即 `app/rpc/{podId}/reply`）
+
 - **MQTT 5.0 Header Properties**：
   - `correlationData`: 原样带回请求包中的二进制/字符串 ID
+
 - **响应 Payload**：
 
   ```json

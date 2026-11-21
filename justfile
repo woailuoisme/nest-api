@@ -1,24 +1,41 @@
 set shell := ["bash", "-uc"]
 set dotenv-load
 
+app_port := env("APP_PORT", "4300")
+
 default:
     @just --list
 
 # 释放端口占用（默认 PORT=4300，亦可指定：`just kill-port 8080`）
 kill-port port=env("PORT", "4300"):
-    bash scripts/tasks.sh kill-port {{ port }}
+    lsof -ti:{{ port }} | xargs kill -9 2>/dev/null || true
 
-# 启动开发服务器（API + Worker 双进程，SWC watch 热更新；Ctrl-C 同时停止）
+# 启动开发服务器（dekit 管理 API + Worker 双进程并进入 TUI）
 dev:
-    bash scripts/tasks.sh dev
+    dekit start 'dev/*'
+    dekit attach
 
-# 启动生产全栈预览服务（构建产物 + API/Worker 双进程；Ctrl-C 同时停止）
-start:
-    bash scripts/tasks.sh start
+# 启动生产全栈预览服务（dekit 构建产物并拉起 API + Worker）
+start: build
+    dekit start 'prod/*'
+    dekit attach
+
+# 停止 dekit 托管的所有进程
+down:
+    dekit down
+
+# 查看 dekit 任务状态
+ps:
+    dekit ls
+
+# 附加到 dekit TUI 控制台
+attach:
+    dekit attach
 
 # 构建生产产物（SWC）
 build:
-    bash scripts/tasks.sh build
+    if [ -d dist ]; then find dist -mindepth 1 -delete; fi
+    bun x nest build
 
 # 提交前完整检查（格式化和修复 + 类型 + 敏感凭据）
 check: fix type secret
@@ -66,7 +83,8 @@ gen:
 
 # 应用数据库迁移（先修复 journal，再执行 drizzle migrate）
 migrate:
-    bash scripts/tasks.sh migrate
+    bun scripts/repair-migration-journal.ts
+    bun x drizzle-kit migrate
 
 # 清空数据并灌入种子（保留表结构）
 [confirm]
@@ -84,8 +102,19 @@ studio:
 
 # 编译 MJML 邮件模板为 Handlebars (.hbs)
 mail:
-    bash scripts/tasks.sh mail
+    for file in src/common/mail/templates/src/*.mjml; do \
+        name="$(basename "$file" .mjml)"; \
+        bun x mjml "$file" -o "src/common/mail/templates/${name}.hbs" --config.allowIncludes true; \
+        echo "compiled ${name}.hbs"; \
+    done
 
 # 构建并运行 CLI 命令（如 `just cmd route:list`）
-cmd *args='--help':
-    bash scripts/tasks.sh build && node dist/cli.js {{ args }}
+cmd *args='--help': build
+    node dist/cli.js {{ args }}
+
+# 压测（wrk）
+wrk path="/livez" *args="":
+    wrk -t4 -c200 -d30s --latency {{args}} "http://127.0.0.1:{{app_port}}{{path}}"
+
+oha:
+	oha -z 30s -c 200 --latency-correction http://127.0.0.1:{{app_port}}/livez
